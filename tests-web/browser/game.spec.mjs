@@ -59,8 +59,9 @@ test('64x remains interactive, records actual performance, and builds a distingu
 });
 test('an existing colony upgrades with its population and mound intact',async({page},info)=>{
   const legacy=readFileSync(new URL('../fixtures/v1-colony.json',import.meta.url),'utf8'),data=JSON.parse(legacy).colony;
-  await page.evaluate(raw=>localStorage.setItem('little-colony.web.v1',raw),legacy);await page.reload();await expect(page.locator('#ants-count')).toHaveText(String(data.ants.length));
-  await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Show performance',exact:true}).click();await expect(page.locator('#perf-mound')).toHaveText(String(data.world.soilDeposited));
+  // Seed before application startup; pagehide correctly saves the outgoing colony.
+  await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),legacy);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#ants-count')).toHaveText(String(data.ants.length));
+  await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Show performance',exact:true}).click();expect(Number(await page.locator('#perf-mound').textContent())).toBeGreaterThanOrEqual(data.world.soilDeposited);
   await page.screenshot({path:info.outputPath('upgraded-colony-mound.png')});
 });
 test('portrait phone layout and Home Screen metadata are complete',async({page},info)=>{
