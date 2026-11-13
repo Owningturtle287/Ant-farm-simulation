@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../dist');
 const port=Number(process.env.PORT||4173),base='/Ant-farm-simulation/';
 const types={'.html':'text/html; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.webmanifest':'application/manifest+json','.svg':'image/svg+xml','.png':'image/png'};
-const server=http.createServer(async(request,response)=>{
+export function createStaticServer(){return http.createServer(async(request,response)=>{
   try{
     if(!['GET','HEAD'].includes(request.method)){response.writeHead(405);response.end();return;}
     let name=decodeURIComponent(new URL(request.url,'http://localhost').pathname);
@@ -16,5 +16,7 @@ const server=http.createServer(async(request,response)=>{
     if(!file.startsWith(root+path.sep) || !(await stat(file)).isFile()){response.writeHead(404);response.end('Not found');return;}
     const data=await readFile(file);response.writeHead(200,{'Content-Type':types[path.extname(file)]||'application/octet-stream','Cache-Control':'no-cache'});response.end(request.method==='HEAD'?undefined:data);
   }catch{response.writeHead(404);response.end('Not found');}
-});
-server.listen(port,'0.0.0.0',()=>console.log(`Local: http://localhost:${port}${base}`));
+});}
+if(process.argv[1] && path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+  createStaticServer().listen(port,'0.0.0.0',()=>console.log(`Local: http://localhost:${port}${base}`));
+}

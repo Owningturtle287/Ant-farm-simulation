@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {createStaticServer} from '../../scripts/serve-web.mjs';
 test.beforeEach(async({page})=>{
   await page.goto('./');await page.getByRole('button',{name:'Enter the clearing'}).click();await expect(page.locator('#game')).toHaveAttribute('data-ready','true');
 });
@@ -14,14 +15,25 @@ test('colony controls, inspection, food placement, and safe reset',async({page},
   await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Start a new colony',exact:true}).click();await expect(page.getByRole('dialog',{name:'A new beginning?'})).toBeVisible();await page.getByRole('button',{name:'Keep my colony'}).click();
   expect(errors).toEqual([]);
 });
-test('local saves restore and the complete app reopens offline under the repository subpath',async({page,context})=>{
-  await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
-  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')));expect(saved.colony.ants.length).toBe(29);
-  await page.reload();await expect(page.locator('#ants-count')).toHaveText('29');
-  await page.evaluate(async()=>{await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true}));});
-  await context.setOffline(true);await page.reload({waitUntil:'domcontentloaded'});await expect(page.getByRole('heading',{name:'The first clearing'})).toBeVisible();await expect(page.locator('#game')).toHaveAttribute('data-ready','true');
-  const blocked=await page.evaluate(async()=>{try{await fetch('./offline-probe?'+Date.now(),{cache:'no-store'});return false;}catch{return true;}});expect(blocked).toBe(true);
-  await page.getByRole('button',{name:'Open menu'}).click();await expect(page.locator('#offline-state')).toHaveText(/offline/i);await expect(page.locator('#offline-state')).not.toContainText('unavailable');await context.setOffline(false);
+test('local saves restore and the complete app reopens without its origin under the repository subpath',async({page,context,browserName})=>{
+  const origin=createStaticServer();await new Promise(resolve=>origin.listen(0,'127.0.0.1',resolve));
+  const url=`http://127.0.0.1:${origin.address().port}/Ant-farm-simulation/`;
+  const stop=async()=>{if(!origin.listening)return;const closed=new Promise((resolve,reject)=>origin.close(error=>error?reject(error):resolve()));origin.closeAllConnections();await closed;};
+  try{
+    await page.goto(url);await page.getByRole('button',{name:'Enter the clearing'}).click();
+    await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
+    const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')));expect(saved.colony.ants.length).toBe(29);
+    await page.reload();await expect(page.locator('#ants-count')).toHaveText('29');
+    await page.evaluate(async()=>{await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true}));});
+    // WebKit's offline flag rejects even literal service-worker responses:
+    // https://github.com/microsoft/playwright/issues/42775
+    // Stop the actual origin for WebKit; Chromium also exercises offline emulation.
+    if(browserName==='webkit'){await stop();expect(origin.listening).toBe(false);}else await context.setOffline(true);
+    const response=await page.reload({waitUntil:'domcontentloaded'});expect(response.fromServiceWorker()).toBe(true);
+    await expect(page.getByRole('heading',{name:'The first clearing'})).toBeVisible();await expect(page.locator('#game')).toHaveAttribute('data-ready','true');
+    const blocked=await page.evaluate(async()=>{try{await fetch('./offline-probe?'+Date.now(),{cache:'no-store'});return false;}catch{return true;}});expect(blocked).toBe(true);
+    await page.getByRole('button',{name:'Open menu'}).click();await expect(page.locator('#offline-state')).toHaveText(/offline/i);await expect(page.locator('#offline-state')).not.toContainText('unavailable');
+  }finally{await context.setOffline(false);await stop();}
 });
 test('portrait phone layout and Home Screen metadata are complete',async({page},info)=>{
   await page.setViewportSize({width:390,height:844});await expect(page.getByRole('button',{name:'Open menu'})).toBeInViewport();await expect(page.getByRole('button',{name:'Place food',exact:true})).toBeInViewport();

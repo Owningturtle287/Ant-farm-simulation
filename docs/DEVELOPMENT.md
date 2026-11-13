@@ -9,6 +9,7 @@ The primary delivery is now the GitHub Pages web app in `web/`, deployed by `.gi
 - Run `node --test tests-web/sim.test.mjs` and build with `node scripts/build-web.mjs`. Browser tests check Chromium and WebKit, phone layouts, controls, save restoration, Home Screen metadata, and actual offline reload under `/Ant-farm-simulation/`.
 - All production asset URLs must remain relative. Do not change the live bookmark URL during normal updates. Preserve local save compatibility when changing the model.
 - iPhone hardware performance and real Home Screen installation remain separate manual checks. CI uses desktop Chromium and emulated iPhone WebKit.
+- Chromium checks reopening with network offline emulation. WebKit checks reopening after the actual origin server is stopped, requiring a service-worker response and a failed uncached network probe. This avoids [Playwright's upstream offline-emulation bug](https://github.com/microsoft/playwright/issues/42775); it does not claim that origin loss and airplane mode are identical disruptions.
 
 ## Earlier native v0.1 foundation
 
