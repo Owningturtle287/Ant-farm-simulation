@@ -15,7 +15,7 @@ final class ColonyScene: SKScene {
     private var antNodes: [Int: SKSpriteNode] = [:]
     private var carryNodes: [Int: SKSpriteNode] = [:]
     private var antTextures: [String: [SKTexture]] = [:]
-    private var revision = -1
+    private var chunkVersions: [Cell: Int] = [:]
     private var lastTime: TimeInterval = 0
     private var sinceDetails: TimeInterval = 1
     private var lastTouch: CGPoint?
@@ -47,7 +47,7 @@ final class ColonyScene: SKScene {
     override func willMove(from view: SKView) { if let pinch { view.removeGestureRecognizer(pinch) } }
     func resetCamera() { worldCamera.position = CGPoint(x:0,y:-100); worldCamera.setScale(1.05); controller?.following = false }
     func resetWorld() {
-        chunks.values.forEach { $0.removeFromParent() }; chunks = [:]; revision = -1
+        chunks.values.forEach { $0.removeFromParent() }; chunks = [:]; chunkVersions = [:]
         antNodes.values.forEach { $0.removeFromParent() }; antNodes = [:]
         carryNodes.values.forEach { $0.removeFromParent() }; carryNodes = [:]
     }
@@ -125,11 +125,11 @@ final class ColonyScene: SKScene {
         let maxX = Int(floor((worldCamera.position.x+halfWidth)/(tile*16)))
         let minY = Int(floor((-worldCamera.position.y-halfHeight)/(tile*16)))
         let maxY = Int(floor((-worldCamera.position.y+halfHeight)/(tile*16)))
-        let changed = revision != world.terrainRevision
         var visible: Set<Cell> = []
         for cy in minY...maxY { for cx in minX...maxX {
             let key = Cell(cx,cy); visible.insert(key)
-            if chunks[key] == nil || changed {
+            let expected = world.chunkRevisions[key] ?? 0
+            if chunks[key] == nil || chunkVersions[key] != expected {
                 let texture = terrainTexture(world,key:key)
                 let node: SKSpriteNode
                 if let old = chunks[key] { node = old; node.texture = texture }
@@ -139,10 +139,12 @@ final class ColonyScene: SKScene {
                     node.position = CGPoint(x:(CGFloat(cx*16)+7.5)*tile,y:-(CGFloat(cy*16)+7.5)*tile)
                     terrainLayer.addChild(node); chunks[key] = node
                 }
+                chunkVersions[key] = expected
             }
         } }
-        for key in Array(chunks.keys) where !visible.contains(key) { chunks.removeValue(forKey:key)?.removeFromParent() }
-        revision = world.terrainRevision
+        for key in Array(chunks.keys) where !visible.contains(key) {
+            chunks.removeValue(forKey:key)?.removeFromParent(); chunkVersions.removeValue(forKey:key)
+        }
     }
 
     private func terrainTexture(_ world: World, key: Cell) -> SKTexture {

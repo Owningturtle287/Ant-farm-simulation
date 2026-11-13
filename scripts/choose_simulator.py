@@ -11,3 +11,6 @@ choices.sort(key=lambda entry: ('iOS-18-5' not in entry[0], 'iPhone 16' != entry
 device = choices[0][1]
 with open(os.environ['GITHUB_ENV'],'a') as env: env.write('SIMULATOR_UDID='+device['udid']+'\n')
 print('Selected',device['name'],choices[0][0])
+if device.get('state') != 'Booted':
+    # Warm the simulator while the app is compiling instead of waiting until tests.
+    subprocess.run(['xcrun','simctl','boot',device['udid']], check=True)

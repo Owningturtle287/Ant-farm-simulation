@@ -54,9 +54,6 @@ struct GameView: View {
         .sheet(isPresented:$game.showGuide) { guide }
         .sheet(isPresented:$game.showColony) { colonySheet }
         .sheet(isPresented:$game.showSettings) { settingsSheet }
-        .confirmationDialog("Start a new colony? Your current colony will be replaced.",isPresented:$confirmReset,titleVisibility:.visible) {
-            Button("Start new colony",role:.destructive) { game.newColony(); game.showSettings = false }
-        }
         .task(id:game.notice) {
             guard game.notice != nil else { return }
             try? await Task.sleep(nanoseconds:5_000_000_000)
@@ -287,5 +284,8 @@ struct GameView: View {
                 .navigationTitle("A little care").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement:.topBarTrailing) { Button("Done") { game.showSettings = false } } }
         }.tint(Theme.green)
+        .confirmationDialog("Start a new colony? Your current colony will be replaced.",isPresented:$confirmReset,titleVisibility:.visible) {
+            Button("Start new colony",role:.destructive) { game.newColony(); game.showSettings = false }
+        }
     }
 }

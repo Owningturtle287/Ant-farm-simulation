@@ -48,7 +48,7 @@ open AntFarm.xcodeproj
 
 Select the **AntFarm** scheme in Xcode. For a physical phone, choose your signing team and a matching bundle identifier/provisioning setup.
 
-Actions uses **macOS 15 / Xcode 16.4** to run simulation tests, build the simulator and physical-device app, exercise UI controls, capture actual simulator screenshots, and upload the device IPA. Optional manual signed builds use Apple credentials stored in GitHub secrets.
+Actions uses **macOS 15 / Xcode 16.4** to run simulation tests, build the simulator and physical-device app, exercise UI controls, capture actual simulator screenshots, and upload the device IPA. Main builds also attempt signed export when Apple credentials are configured in GitHub secrets; signed builds can be requested manually as well.
 
 The tests cover complete resource / digging / birth loops across multiple seeds, soil conservation, walkable routes, deterministic replay, save/load continuation, recovery from a corrupt primary save, and starvation. An XCUITest checks pause, speed, ant inspection, follow, and resource placement.
 

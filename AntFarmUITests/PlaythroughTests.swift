@@ -18,12 +18,17 @@ final class PlaythroughTests: XCTestCase {
         app.buttons["antRow0"].tap()
         XCTAssertTrue(app.staticTexts["selectedAntName"].waitForExistence(timeout:5))
         XCTAssertEqual(app.staticTexts["selectedAntName"].label,"Queen Aurelia")
-        app.buttons["followAnt"].tap()
         let profile = XCTAttachment(screenshot:app.screenshot()); profile.name = "Individual ant"; profile.lifetime = .keepAlways; add(profile)
-        app.buttons["Close ant profile"].tap()
+        if !app.buttons["followAnt"].isHittable { app.scrollViews.firstMatch.swipeUp() }
+        app.buttons["followAnt"].tap()
+        app.buttons["toolNest"].tap()
         app.buttons["toolFood"].tap()
         app.coordinate(withNormalizedOffset:CGVector(dx:0.32,dy:0.45)).tap()
         XCTAssertTrue(app.staticTexts["notice"].waitForExistence(timeout:5))
         XCTAssertEqual(app.staticTexts["notice"].label,"Food placed. Let the scouts find it.")
+        app.buttons["toolMore"].tap()
+        app.buttons["Start a new colony"].tap()
+        XCTAssertTrue(app.buttons["Start new colony"].waitForExistence(timeout:5))
+        app.buttons["Cancel"].tap()
     }
 }

@@ -17,7 +17,7 @@ For a signed IPA, an Apple Developer account, distribution certificate, and ad h
 - `P12_PASSWORD`: its password.
 - `BUILD_PROVISION_PROFILE_BASE64`: Base64-encoded ad hoc profile.
 
-Then run the workflow manually on `main` and enable `signed_adhoc`. Download the `signed-iphone` artifact only after that job succeeds and install it through a supported ad hoc installation process. Never paste certificates or passwords into source files, issues, or logs.
+Successful pushes to `main` attempt signed export automatically when all three secrets are present. You can also run the workflow manually on `main` and enable `signed_adhoc`. Download the `signed-iphone` artifact only after that job succeeds and install it through a supported ad hoc installation process. Never paste certificates or passwords into source files, issues, or logs.
 
 This repository also opens directly in Xcode 16.4 or later. Choose the AntFarm scheme, select your signing team, and run on your registered phone. Minimum OS: iOS 17; landscape; iPhone only.
 

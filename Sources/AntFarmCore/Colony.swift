@@ -141,7 +141,10 @@ public struct Colony: Codable {
         ant.energy = max(0.03,ant.energy-dt*0.0008)
         if food < 0.1 || water < 0.1 { ant.health = max(0,ant.health-dt*0.0015) }
         else { ant.health = min(1,ant.health+dt*0.0008) }
-        if ant.caste == .queen { return }
+        if ant.caste == .queen {
+            if food > 0 && water > 0 { ant.energy = min(1,ant.energy+dt*0.002) }
+            return
+        }
 
         // A deposited tile can invalidate a route. Recover to its new surface, never remain inside soil.
         if !world.isWalkable(ant.cell) {
@@ -212,7 +215,8 @@ public struct Colony: Codable {
             if rng.int(0...4) == 0 { chooseJob(&ant) }
             else { send(&ant,to:Cell(rng.int(-12 ... -8),rng.int(9...10))) }
         case .patrolling:
-            send(&ant,to:Cell(rng.int(-10...10),0)); ant.busyUntil = time+2
+            if ant.energy < 0.30 { chooseJob(&ant) }
+            else { send(&ant,to:Cell(rng.int(-10...10),0)); ant.busyUntil = time+2 }
         case .queen: break
         }
     }

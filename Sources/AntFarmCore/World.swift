@@ -43,6 +43,7 @@ public struct World: Codable {
     public var construction: [Cell] = []
     public var plannedRooms = 0
     public var terrainRevision = 0
+    public var chunkRevisions: [Cell: Int] = [:]
     public var soilExcavated = 0
     public var soilDeposited = 0
     public var pheromones: [Cell: Double] = [:]
@@ -142,7 +143,7 @@ public struct World: Codable {
         guard cell.y > 0, isSolid(cell), cell.adjacent.contains(where: { isWalkable($0) }) else { return false }
         excavated.insert(cell)
         construction.removeAll { $0 == cell }
-        terrainRevision += 1; soilExcavated += 1
+        markChanged(cell); soilExcavated += 1
         return true
     }
 
@@ -158,7 +159,7 @@ public struct World: Codable {
 
     public mutating func depositSoil(at cell: Cell) {
         guard cell == Cell(cell.x,surface(at:cell.x)-1), abs(cell.x) >= 3 else { return }
-        deposits.insert(cell); soilDeposited += 1; terrainRevision += 1
+        deposits.insert(cell); soilDeposited += 1; markChanged(cell)
         // Move resource patches to the new surface, preserving their identity.
         for i in patches.indices where patches[i].cell.x == cell.x {
             patches[i].cell.y = surface(at:cell.x)-1
@@ -172,6 +173,15 @@ public struct World: Codable {
         } else {
             patches.append(ResourcePatch(id: (patches.map(\.id).max() ?? 0)+1,
                 cell: Cell(cell.x,surface(at:cell.x)-1), kind: kind, amount: 80))
+        }
+    }
+
+    private mutating func markChanged(_ cell: Cell) {
+        terrainRevision += 1
+        for touched in [cell] + cell.adjacent {
+            let cx = touched.x >= 0 ? touched.x/16 : (touched.x-15)/16
+            let cy = touched.y >= 0 ? touched.y/16 : (touched.y-15)/16
+            chunkRevisions[Cell(cx,cy)] = terrainRevision
         }
     }
 }

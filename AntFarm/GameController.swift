@@ -67,6 +67,7 @@ final class GameController: ObservableObject {
 
     func save(explicit: Bool = false) {
         guard !smokeTest, !saveBlocked || explicit else { return }
+        wallSinceSave = 0
         do {
             try store.save(engine); saveLabel = "Colony saved"; wallSinceSave = 0; saveBlocked = false
         } catch { saveLabel = "Save failed"; notice = "Couldn't save your colony. Please check available storage." }
