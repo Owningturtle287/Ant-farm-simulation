@@ -1,5 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {createStaticServer} from '../../scripts/serve-web.mjs';
+import {readFileSync} from 'node:fs';
 test.beforeEach(async({page})=>{
   await page.goto('./');await page.getByRole('button',{name:'Enter the clearing'}).click();await expect(page.locator('#game')).toHaveAttribute('data-ready','true');
 });
@@ -22,8 +23,8 @@ test('local saves restore and the complete app reopens without its origin under 
   try{
     await page.goto(url);await page.getByRole('button',{name:'Enter the clearing'}).click();
     await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
-    const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')));expect(saved.colony.ants.length).toBe(29);
-    await page.reload();await expect(page.locator('#ants-count')).toHaveText('29');
+    const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')));expect(saved.colony.ants.length).toBe(13);expect(saved.version).toBe(2);
+    await page.reload();await expect(page.locator('#ants-count')).toHaveText('13');
     await page.evaluate(async()=>{await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true}));});
     // WebKit's offline flag rejects even literal service-worker responses:
     // https://github.com/microsoft/playwright/issues/42775
@@ -34,6 +35,33 @@ test('local saves restore and the complete app reopens without its origin under 
     const blocked=await page.evaluate(async()=>{try{await fetch('./offline-probe?'+Date.now(),{cache:'no-store'});return false;}catch{return true;}});expect(blocked).toBe(true);
     await page.getByRole('button',{name:'Open menu'}).click();await expect(page.locator('#offline-state')).toHaveText(/offline/i);await expect(page.locator('#offline-state')).not.toContainText('unavailable');
   }finally{await context.setOffline(false);await stop();}
+});
+test('reproduction settings persist and small new colonies respect the selected start size',async({page})=>{
+  await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Colony & reproduction',exact:true}).click();
+  await page.locator('#egg-rate').selectOption('0');await page.locator('#brood-rate').selectOption('4');await page.locator('#starting-workers').selectOption('6');await page.locator('#population-cap').selectOption('250');
+  await page.getByRole('button',{name:'Back to the colony',exact:true}).click();await page.reload();
+  await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Colony & reproduction',exact:true}).click();
+  await expect(page.locator('#egg-rate')).toHaveValue('0');await expect(page.locator('#brood-rate')).toHaveValue('4');await expect(page.locator('#population-cap')).toHaveValue('250');
+  await expect(page.locator('#ants-count')).toHaveText('13');await page.getByRole('button',{name:'Back to the colony',exact:true}).click();
+  await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Start a new colony',exact:true}).click();await page.getByRole('button',{name:'Start new colony',exact:true}).click();await expect(page.locator('#ants-count')).toHaveText('7');
+});
+test('64x remains interactive, records actual performance, and builds a distinguishable mound',async({page},info)=>{
+  for(const speed of [1,2,4,8,16,32])await page.getByRole('button',{name:'Simulation speed: '+speed+' times',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Simulation speed: 64 times',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Show performance',exact:true}).click();
+  await expect(page.getByRole('complementary',{name:'Live performance'})).toBeVisible();
+  await expect.poll(async()=>Number(await page.locator('#perf-fps').textContent()),{timeout:15000}).toBeGreaterThan(0);
+  await expect.poll(async()=>Number(await page.locator('#perf-mound').textContent()),{timeout:15000}).toBeGreaterThan(0);
+  await expect(page.locator('#perf-speed')).toContainText('/ 64×');await page.screenshot({path:info.outputPath('living-soil-mound.png')});
+  await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.getByRole('button',{name:'Resume simulation',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Terrain guide',exact:true}).click();await expect(page.getByRole('heading',{name:'Loose mound soil',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Compact clay',exact:true})).toBeVisible();
+  await page.screenshot({path:info.outputPath('terrain-guide.png')});
+});
+test('an existing colony upgrades with its population and mound intact',async({page},info)=>{
+  const legacy=readFileSync(new URL('../fixtures/v1-colony.json',import.meta.url),'utf8'),data=JSON.parse(legacy).colony;
+  await page.evaluate(raw=>localStorage.setItem('little-colony.web.v1',raw),legacy);await page.reload();await expect(page.locator('#ants-count')).toHaveText(String(data.ants.length));
+  await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Show performance',exact:true}).click();await expect(page.locator('#perf-mound')).toHaveText(String(data.world.soilDeposited));
+  await page.screenshot({path:info.outputPath('upgraded-colony-mound.png')});
 });
 test('portrait phone layout and Home Screen metadata are complete',async({page},info)=>{
   await page.setViewportSize({width:390,height:844});await expect(page.getByRole('button',{name:'Open menu'})).toBeInViewport();await expect(page.getByRole('button',{name:'Place food',exact:true})).toBeInViewport();

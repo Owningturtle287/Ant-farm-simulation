@@ -15,21 +15,26 @@ The first online visit caches the game for offline reopening. Progress saves loc
 
 ## Playable features
 
-- Animated pixel ants, forest, soil, tunnels, chambers, and a growing surface mound.
-- A queen, workers, patrolling soldiers, brood development, and population growth.
-- Autonomous foraging, source memory, pheromone signals, food/water transport, and excavation.
+- Animated pixel ants and layered terrain: dark rooted topsoil, pale sand, compact clay, deep mineral soil, and stone. Bare, coarse excavated mound soil stays visibly distinct from grass.
+- A queen, minor workers, and later major workers. Eggs, larvae, and pupae develop through local care, protein, and nest conditions.
+- Flexible tasks shaped by demand, age, individual thresholds, and successful experience. Local recruitment, fallible source memories, distinct food/water trails, rest, grooming, and crowding.
+- Excavation responds to soil compaction and moisture; transported soil retains its material origin. New space is requested as the colony grows.
 - Tap ants for personal stats, job, experience, and behavior explanations.
-- Drag / pinch navigation, ant following, pause, and 1× / 2× / 4× speed.
+- Drag / pinch navigation, ant following, pause, and 1× / 2× / 4× / 8× / 16× / 32× / 64× time lapse.
+- Separate egg-laying and brood-development controls, configurable starting size, and a population ceiling.
+- Optional live FPS, simulation/drawing cost, actual speed, and population readings with JSON export. No telemetry leaves your device.
 - Food/water placement, colony roster, local autosaves, recovery copy, and JSON export.
 - Portrait and landscape phone layouts, Home Screen icon, and offline reopening.
 
-Population is capped at **120 ants**. Advanced learning, predators, combat, reproductive drones, weather, very large populations, and persistent world streaming remain future milestones. The colony rests while the page is closed or hidden.
+New colonies start with **12 workers and one queen**, plus three brood. The default population ceiling is **120**, adjustable to 60, 250, or 500. Higher ceilings are experimental; they do not establish a tested iPhone capacity. Existing saves keep their ants and terrain.
+
+This is a generalized, accelerated soil-nesting ant model. Its biological time and physical scale are gameplay approximations. Exact species calibration, richer colony communication, predators, reproductive flights, weather, and persistent world streaming remain future milestones. The colony rests while the page is closed, hidden, or a menu is open. See [model and research notes](docs/REALISM.md).
 
 ## GitHub Actions
 
 **Deploy Little Colony** checks the simulation, builds the offline app, and runs Chromium and WebKit browser checks. Passing builds deploy to GitHub Pages.
 
-The workflow's **deploy** box and run summary contain the clickable live URL. Browser artifacts contain screenshots and test evidence. Future pushes that change web code update the same bookmark address.
+The workflow's **deploy** box and run summary contain the clickable live URL. Browser artifacts contain screenshots and test evidence. The `simulation-performance` artifact records repeatable CPU-only samples at 13, 60, 120, 250, and 500 ants; it is not an iPhone rendering or battery benchmark. Future pushes that change web code update the same bookmark address.
 
 Asset and service-worker URLs respect the repository subpath. Each build fingerprints its offline cache, replacing this game's old cache versions.
 
@@ -39,6 +44,7 @@ No external runtime libraries or network services are needed to play.
 
 ```sh
 node --test tests-web/sim.test.mjs
+node scripts/benchmark-sim.mjs
 node scripts/build-web.mjs
 node scripts/serve-web.mjs
 ```

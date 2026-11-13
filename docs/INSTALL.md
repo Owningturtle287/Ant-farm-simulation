@@ -25,6 +25,12 @@ Save the live address to your phone. It stays the same when new versions deploy.
 
 ## Controls
 
-Drag to explore; pinch or scroll to zoom. Tap an ant for its profile; repeated taps cycle through overlapping ants. Choose Food or Water, then tap to place a source on the surface. Trails shows scent signals; Nest returns home; Colony opens the roster. Pause and 1× / 2× / 4× control the pace. More contains saving, Home Screen instructions, help, and a confirmed new-colony action.
+Drag to explore; pinch or scroll to zoom. Tap an ant for its profile; repeated taps cycle through overlapping ants. Choose Food or Water, then tap to place a source on the surface. Trails shows scent signals; Nest returns home; Colony opens the roster. Pause and the speed button control the pace through **1×, 2×, 4×, 8×, 16×, 32×, and 64×**.
+
+**More → Colony & reproduction** sets egg laying, brood development, the next colony’s starting worker count, and the population ceiling. Turning laying off does not stop existing brood from developing. A lower ceiling never removes existing ants. New colonies default to 12 workers and one queen; updates preserve existing colonies.
+
+**More → Show performance** displays FPS, simulation/drawing cost, actual versus requested speed, and population. Export readings for later device testing. Higher populations may achieve less than the requested time lapse; the app prioritizes usable controls. **More → Terrain guide** explains material textures.
+
+More also contains saving, Home Screen instructions, help, and a confirmed new-colony action.
 
 Portrait and landscape both work. Turning your phone sideways gives a wider cutaway view.

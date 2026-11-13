@@ -3,9 +3,9 @@ name: Deploy Little Colony
 on:
   push:
     branches: [main]
-    paths: ['web/**', 'tests-web/**', 'scripts/*-web.mjs', 'package.json', 'playwright.config.mjs', '.github/workflows/pages.yml']
+    paths: ['web/**', 'tests-web/**', 'scripts/*-web.mjs', 'scripts/benchmark-sim.mjs', 'package.json', 'playwright.config.mjs', '.github/workflows/pages.yml']
   pull_request:
-    paths: ['web/**', 'tests-web/**', 'scripts/*-web.mjs', 'package.json', 'playwright.config.mjs', '.github/workflows/pages.yml']
+    paths: ['web/**', 'tests-web/**', 'scripts/*-web.mjs', 'scripts/benchmark-sim.mjs', 'package.json', 'playwright.config.mjs', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -28,6 +28,14 @@ jobs:
           node-version: '22'
       - name: Verify the living colony and save recovery
         run: node --test tests-web/sim.test.mjs
+      - name: Record repeatable simulation capacity samples
+        run: node scripts/benchmark-sim.mjs simulation-benchmark.json
+      - name: Upload CPU simulation measurements
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulation-performance
+          path: simulation-benchmark.json
+          retention-days: 30
       - name: Build offline web app
         run: node scripts/build-web.mjs
       - name: Configure GitHub Pages
