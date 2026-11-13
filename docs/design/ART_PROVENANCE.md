@@ -1,0 +1,13 @@
+# Reference artwork provenance
+
+File: [ReferenceWorld.png](../../AntFarm/Resources/ReferenceWorld.png), 1672×941 pixels.
+
+Created with the built-in image generation tool for this milestone. Original scene; no third-party game assets were supplied. It is a single concept image, not an animation atlas or scientific anatomy reference. The native design scene overlays selection and inspection using separately authored coordinates. Future simulation will use independently authored tiles and ant animation assets that preserve the visual direction.
+
+## Generation prompt
+
+> Use case: stylized-concept. Asset type: representative visual target for a native iPhone ant-farm game, not a sprite sheet and not a finished gameplay screenshot. Create one beautiful, original, extremely crisp retro pixel-art 2D SIDE-VIEW CUTAWAY ant colony environment, landscape 16:9 composition, visually readable on a phone. Terraria-like viewpoint and pixel craft, but original assets. Surface occupies upper quarter: pale muted blue sky, distant sage foliage, short grasses, little pebbles, a believable low mound of excavated earth with an entrance. Below is warm terracotta topsoil fading into deep plum-brown soil, irregular stepped pixel edges, branching connected narrow tunnels and a few spacious rounded irregular chambers, tiny cream brood clustered in nursery, a large dark reddish-brown queen, smaller rust workers and broad-headed major workers. Ant silhouettes have three distinct body segments, six legs and antennae, horizontal side view, a few carry soil pellets or tiny pale food fragments. Small food store, visible roots and stones embedded in dirt. Emphasize the continuity from entrance to lower chambers; solid dirt genuinely surrounds tunnels. Restrained hand-placed pixel clusters; no gradients, no blur, no antialiasing, no 3D, no isometric view. Earthy dark aubergine shadows, amber highlights, sage greens, cream brood, minimal cyan moisture accents. Cozy scientific observation mood, readable contrast and subtle depth. Keep upper-left and lower edge fairly uncluttered so native HUD can be overlaid later. NO TEXT, no UI, no phone frame, no labels, no arrows, no logos, no watermark. This is concept art showing the future visual quality, not biological scale documentation.
+
+## Known limitations
+
+The concept has illustrative ant anatomy and stylized resource/brood shapes. These are reference art, not approved production sprites. The actual colony simulation, pixel-perfect animation atlas, and behavior-driven visuals are future milestones. The sample metadata deliberately does not claim exact visible image counts or biological measurements.

@@ -1,0 +1,292 @@
+{
+  "width": 1672,
+  "height": 941,
+  "image": "ReferenceWorld",
+  "species": "Pheidole pallidula",
+  "samplePopulation": 72,
+  "sampleBrood": 31,
+  "ants": [
+    {
+      "id": "Q-001",
+      "caste": "Queen",
+      "job": "Reproduction",
+      "x": 1245,
+      "y": 749,
+      "action": "Resting in the queen chamber",
+      "reason": "A worker has delivered food.",
+      "carriedItem": "None",
+      "ageDays": 142,
+      "health": 93,
+      "energy": 66,
+      "hydration": 80
+    },
+    {
+      "id": "C-001",
+      "caste": "Minor worker",
+      "job": "Scout",
+      "x": 1134,
+      "y": 169,
+      "action": "Exploring the entrance",
+      "reason": "Checking a recently marked route.",
+      "carriedItem": "None",
+      "ageDays": 19,
+      "health": 94,
+      "energy": 68,
+      "hydration": 81
+    },
+    {
+      "id": "C-007",
+      "caste": "Minor worker",
+      "job": "Digger",
+      "x": 1023,
+      "y": 285,
+      "action": "Carrying excavated soil",
+      "reason": "Returning a soil pellet to the surface.",
+      "carriedItem": "Soil pellet",
+      "ageDays": 9,
+      "health": 95,
+      "energy": 70,
+      "hydration": 82
+    },
+    {
+      "id": "C-012",
+      "caste": "Minor worker",
+      "job": "Nurse",
+      "x": 186,
+      "y": 518,
+      "action": "Tending brood",
+      "reason": "Responding to nearby larvae.",
+      "carriedItem": "None",
+      "ageDays": 6,
+      "health": 96,
+      "energy": 72,
+      "hydration": 83
+    },
+    {
+      "id": "C-014",
+      "caste": "Minor worker",
+      "job": "Nurse",
+      "x": 354,
+      "y": 508,
+      "action": "Moving brood",
+      "reason": "Relocating a larva within the nursery.",
+      "carriedItem": "Larva",
+      "ageDays": 8,
+      "health": 97,
+      "energy": 74,
+      "hydration": 84
+    },
+    {
+      "id": "C-018",
+      "caste": "Minor worker",
+      "job": "Nurse",
+      "x": 479,
+      "y": 551,
+      "action": "Inspecting the nursery",
+      "reason": "Contact with brood stimulated care.",
+      "carriedItem": "None",
+      "ageDays": 11,
+      "health": 98,
+      "energy": 76,
+      "hydration": 85
+    },
+    {
+      "id": "C-027",
+      "caste": "Minor worker",
+      "job": "Forager",
+      "x": 801,
+      "y": 352,
+      "action": "Returning with food",
+      "reason": "Following a familiar route home.",
+      "carriedItem": "Food fragment",
+      "ageDays": 12,
+      "health": 92,
+      "energy": 74,
+      "hydration": 81
+    },
+    {
+      "id": "C-031",
+      "caste": "Major / soldier",
+      "job": "Food handler",
+      "x": 803,
+      "y": 516,
+      "action": "Checking the central passage",
+      "reason": "Responding to nearby traffic.",
+      "carriedItem": "None",
+      "ageDays": 21,
+      "health": 93,
+      "energy": 80,
+      "hydration": 87
+    },
+    {
+      "id": "C-036",
+      "caste": "Minor worker",
+      "job": "Food handler",
+      "x": 1264,
+      "y": 443,
+      "action": "Storing a food fragment",
+      "reason": "A nearby store has available space.",
+      "carriedItem": "Food fragment",
+      "ageDays": 17,
+      "health": 94,
+      "energy": 82,
+      "hydration": 88
+    },
+    {
+      "id": "C-038",
+      "caste": "Major / soldier",
+      "job": "Nest maintenance",
+      "x": 404,
+      "y": 728,
+      "action": "Inspecting a passage",
+      "reason": "Checking a heavily used junction.",
+      "carriedItem": "None",
+      "ageDays": 24,
+      "health": 95,
+      "energy": 84,
+      "hydration": 89
+    },
+    {
+      "id": "C-041",
+      "caste": "Minor worker",
+      "job": "Digger",
+      "x": 584,
+      "y": 686,
+      "action": "Transporting soil",
+      "reason": "Leaving the current excavation face.",
+      "carriedItem": "Soil pellet",
+      "ageDays": 10,
+      "health": 96,
+      "energy": 86,
+      "hydration": 90
+    },
+    {
+      "id": "C-045",
+      "caste": "Minor worker",
+      "job": "Forager",
+      "x": 1058,
+      "y": 587,
+      "action": "Returning with food",
+      "reason": "The remembered nest route is accessible.",
+      "carriedItem": "Food fragment",
+      "ageDays": 18,
+      "health": 97,
+      "energy": 88,
+      "hydration": 80
+    },
+    {
+      "id": "C-051",
+      "caste": "Minor worker",
+      "job": "Nurse",
+      "x": 878,
+      "y": 797,
+      "action": "Checking the brood",
+      "reason": "Responding to a local care stimulus.",
+      "carriedItem": "None",
+      "ageDays": 5,
+      "health": 98,
+      "energy": 90,
+      "hydration": 81
+    },
+    {
+      "id": "C-062",
+      "caste": "Minor worker",
+      "job": "Nurse",
+      "x": 1119,
+      "y": 834,
+      "action": "Carrying brood",
+      "reason": "Moving a larva to a nearby cluster.",
+      "carriedItem": "Larva",
+      "ageDays": 7,
+      "health": 99,
+      "energy": 92,
+      "hydration": 82
+    }
+  ],
+  "trail": [
+    {
+      "x": 1117,
+      "y": 204
+    },
+    {
+      "x": 1091,
+      "y": 228
+    },
+    {
+      "x": 1054,
+      "y": 254
+    },
+    {
+      "x": 1017,
+      "y": 278
+    },
+    {
+      "x": 979,
+      "y": 299
+    },
+    {
+      "x": 936,
+      "y": 319
+    },
+    {
+      "x": 892,
+      "y": 335
+    },
+    {
+      "x": 848,
+      "y": 344
+    },
+    {
+      "x": 799,
+      "y": 361
+    },
+    {
+      "x": 751,
+      "y": 374
+    },
+    {
+      "x": 706,
+      "y": 390
+    },
+    {
+      "x": 663,
+      "y": 407
+    },
+    {
+      "x": 622,
+      "y": 424
+    },
+    {
+      "x": 582,
+      "y": 446
+    },
+    {
+      "x": 550,
+      "y": 474
+    },
+    {
+      "x": 564,
+      "y": 506
+    },
+    {
+      "x": 591,
+      "y": 537
+    },
+    {
+      "x": 635,
+      "y": 557
+    },
+    {
+      "x": 684,
+      "y": 555
+    },
+    {
+      "x": 733,
+      "y": 544
+    },
+    {
+      "x": 778,
+      "y": 534
+    }
+  ]
+}
