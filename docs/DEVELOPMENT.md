@@ -1,4 +1,16 @@
-# Continue from v0.1
+# Continue from the browser / Home Screen version
+
+The primary delivery is now the GitHub Pages web app in `web/`, deployed by `.github/workflows/pages.yml`. Its stable URL can be bookmarked or added to an iPhone Home Screen. The earlier Swift prototype is retained below as historical implementation guidance.
+
+- `web/sim.mjs` ports the colony model, navigation, resource loops, brood, and soil accounting into a seeded JavaScript core. It also records soil abandoned by ants that die while hauling.
+- `web/persistence.mjs` owns the web save envelope, primary/backup recovery, and blocked autosave when prior progress is unreadable. Web saves are distinct from native saves.
+- `web/render.mjs` draws original pixel art and invalidates changed terrain chunks. `web/app.mjs` connects touch controls, UI, game clock, and browser lifecycle.
+- `web/sw.js` caches the complete app under its repository scope. `scripts/build-web.mjs` fingerprints source files into each service-worker cache version and produces `dist/`.
+- Run `node --test tests-web/sim.test.mjs` and build with `node scripts/build-web.mjs`. Browser tests check Chromium and WebKit, phone layouts, controls, save restoration, Home Screen metadata, and actual offline reload under `/Ant-farm-simulation/`.
+- All production asset URLs must remain relative. Do not change the live bookmark URL during normal updates. Preserve local save compatibility when changing the model.
+- iPhone hardware performance and real Home Screen installation remain separate manual checks. CI uses desktop Chromium and emulated iPhone WebKit.
+
+## Earlier native v0.1 foundation
 
 The first stopping point is the complete small-colony loop: resources are discovered, carried, consumed, and converted into population growth and underground space. Excavated soil is physically accounted for in cargo and surface deposits.
 

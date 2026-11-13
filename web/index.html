@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101e1c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Little Colony">
+  <meta name="description" content="A living pixel-art ant farm. Explore, forage, dig, and watch your colony grow.">
+  <meta name="app-build" content="__BUILD_ID__">
+  <title>Little Colony · Ant Farm</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
+  <link rel="icon" type="image/svg+xml" href="./icons/ant.svg">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+  <symbol id="i-ant" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><ellipse cx="12" cy="5" rx="3" ry="3"/><ellipse cx="12" cy="12" rx="2.5" ry="3"/><ellipse cx="12" cy="20" rx="4" ry="3"/><path d="M9 3 7 1m8 2 2-2M9 10 4 7m5 6-6 1m7 2-5 5m10-11 5-3m-5 6 6 1m-7 2 5 5"/></g></symbol>
+  <symbol id="i-food" viewBox="0 0 24 24"><path d="M20 19C8 24 2 15 3 3c5 5 19 0 17 16ZM4 5c1 9 10 5 15 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-water" viewBox="0 0 24 24"><path d="M12 2S5 11 5 16a7 7 0 0 0 14 0c0-5-7-14-7-14Z" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-brood" viewBox="0 0 24 24"><g fill="currentColor"><ellipse cx="7" cy="6" rx="3" ry="4"/><ellipse cx="17" cy="6" rx="3" ry="4"/><ellipse cx="7" cy="18" rx="3" ry="4"/><ellipse cx="17" cy="18" rx="3" ry="4"/></g></symbol>
+  <symbol id="i-trails" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="4" r="3"/><circle cx="18" cy="20" r="3"/><path d="M6 7c0 7 12 3 12 10"/></g></symbol>
+  <symbol id="i-nest" viewBox="0 0 24 24"><path d="M3 8V3h5m8 0h5v5m0 8v5h-5m-8 0H3v-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="4" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="20" cy="12" r="1.8"/></g></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m5 5 14 14M19 5 5 19" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+</defs></svg>
+<main id="game" aria-label="Little Colony ant farm">
+  <canvas id="world" aria-label="Ant colony. Drag to explore, pinch or scroll to zoom, and tap an ant to inspect it." tabindex="0"></canvas>
+  <header class="hud panel">
+    <div class="identity"><span class="eyebrow"><i></i>LITTLE COLONY</span><h1>The first clearing</h1><span id="day" class="day">Day 1</span></div>
+    <div class="resources" aria-label="Colony resources">
+      <div class="resource cream"><div><svg><use href="#i-ant"/></svg><strong id="ants-count">29</strong></div><span>ANTS</span></div>
+      <div class="resource green"><div><svg><use href="#i-food"/></svg><strong id="food-count">65</strong></div><span>FOOD</span></div>
+      <div class="resource blue"><div><svg><use href="#i-water"/></svg><strong id="water-count">55</strong></div><span>WATER</span></div>
+      <div class="resource amber"><div><svg><use href="#i-brood"/></svg><strong id="brood-count">6</strong></div><span>BROOD</span></div>
+    </div>
+    <div class="pace"><button id="speed" aria-label="Simulation speed: 1 times">1×</button><button id="pause" aria-label="Pause simulation"><span id="pause-icon">Ⅱ</span></button></div>
+  </header>
+  <div id="pause-badge" class="pause-badge panel" hidden>PAUSED</div>
+  <aside id="inspector" class="panel inspector" aria-label="Ant profile" hidden>
+    <div class="inspector-heading"><span class="eyebrow">ANT PROFILE</span><button id="close-profile" class="icon-button" aria-label="Close ant profile"><svg><use href="#i-close"/></svg></button></div>
+    <div class="profile-body">
+      <div class="ant-heading"><svg class="portrait"><use href="#i-ant"/></svg><div><h2 id="ant-name"></h2><span id="ant-caste" class="eyebrow muted"></span></div></div>
+      <p id="ant-task" class="ant-task"></p>
+      <div class="meter"><div><span>Energy</span><span id="energy-value"></span></div><div class="track"><i id="energy-bar"></i></div></div>
+      <div class="meter"><div><span>Health</span><span id="health-value"></span></div><div class="track"><i id="health-bar" class="health"></i></div></div>
+      <div class="personal-stats"><div><span>AGE</span><strong id="ant-age"></strong></div><div><span>EXPERIENCE</span><strong id="ant-experience"></strong></div><div><span>TRIPS</span><strong id="ant-trips"></strong></div></div>
+      <p id="ant-reason" class="muted reason"></p>
+      <button id="follow" class="secondary full">Follow this ant</button>
+    </div>
+  </aside>
+  <section class="bottom">
+    <div id="journal" class="panel journal"><span id="save-status" class="eyebrow">AUTOSAVE ON</span><p id="event">A new colony takes root.</p></div>
+    <div class="bottom-center"><div id="placement" class="panel placement" hidden><span id="placement-text"></span><button id="cancel-tool">Cancel</button></div><div id="toast" class="panel toast" role="status" hidden></div>
+      <nav class="panel tools" aria-label="Colony controls">
+        <button data-tool="food" aria-label="Place food" aria-pressed="false"><svg><use href="#i-food"/></svg><span>Food</span></button>
+        <button data-tool="water" aria-label="Place water" aria-pressed="false"><svg><use href="#i-water"/></svg><span>Water</span></button><i class="separator"></i>
+        <button id="trails" aria-label="Show pheromone trails" aria-pressed="false"><svg><use href="#i-trails"/></svg><span>Trails</span></button>
+        <button id="home" aria-label="Return to nest"><svg><use href="#i-nest"/></svg><span>Nest</span></button>
+        <button id="roster-button" aria-label="Open colony roster"><svg><use href="#i-ant"/></svg><span>Colony</span></button>
+        <button id="menu-button" aria-label="Open menu"><svg><use href="#i-more"/></svg><span>More</span></button>
+      </nav>
+    </div>
+  </section>
+  <div class="zoom-tools panel"><button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-out" aria-label="Zoom out">−</button></div>
+</main>
+<dialog id="guide" class="panel guide-dialog" aria-labelledby="guide-title">
+  <div class="dialog-heading"><span class="eyebrow">WELCOME TO THE CLEARING</span><button data-close="guide" class="icon-button" aria-label="Close guide"><svg><use href="#i-close"/></svg></button></div>
+  <h2 id="guide-title">A whole world, one small colony.</h2><p class="intro muted">Give them a little care, then watch their world take shape.</p>
+  <div class="guide-grid">
+    <article><svg><use href="#i-nest"/></svg><h3>Look a little closer</h3><p>Drag to explore. Pinch to zoom. Tap an ant to meet it.</p></article>
+    <article><svg><use href="#i-food"/></svg><h3>Leave a little care</h3><p>Choose Food or Water, then tap the world. Scouts will find it.</p></article>
+    <article><svg><use href="#i-ant"/></svg><h3>Let the colony build</h3><p>Workers dig, raise brood, and carry earth up to the mound.</p></article>
+  </div>
+  <button id="enter" class="primary full">Enter the clearing</button><p class="guide-note muted">Saves on this device. The colony rests while the app is closed.</p>
+</dialog>
+<dialog id="roster" class="panel roster-dialog" aria-labelledby="roster-title">
+  <div class="dialog-heading"><div><span class="eyebrow">LIFE IN THE CLEARING</span><h2 id="roster-title">Your colony</h2></div><button data-close="roster" class="icon-button" aria-label="Close colony roster"><svg><use href="#i-close"/></svg></button></div>
+  <div id="colony-summary" class="colony-summary"></div><p id="soil-stats" class="muted"></p><div id="ant-list" class="ant-list"></div>
+</dialog>
+<dialog id="menu" class="panel menu-dialog" aria-labelledby="menu-title">
+  <div class="dialog-heading"><h2 id="menu-title">A little care</h2><button data-close="menu" class="icon-button" aria-label="Close menu"><svg><use href="#i-close"/></svg></button></div>
+  <div class="menu-actions"><button id="save-now" class="secondary">Save colony now</button><button id="install-button" class="secondary">Save to my Home Screen</button><button id="help" class="secondary">How to play</button><button id="export" class="secondary">Export colony backup</button><button id="reset" class="danger">Start a new colony</button></div>
+  <p id="offline-state" class="offline-state muted" role="status">Preparing offline play…</p><p class="muted small">First clearing · v0.2<br>Population is capped at 120 ants. Soldiers patrol; advanced learning, predators, and weather are future chapters.</p>
+</dialog>
+<dialog id="install" class="panel install-dialog" aria-labelledby="install-title">
+  <div class="dialog-heading"><span class="eyebrow">YOUR OWN LITTLE CLEARING</span><button data-close="install" class="icon-button" aria-label="Close installation guide"><svg><use href="#i-close"/></svg></button></div>
+  <img src="./icons/icon-192.png" alt="Little Colony pixel ant icon" width="64" height="64"><h2 id="install-title">Keep your colony close.</h2>
+  <ol><li>Open this game in <strong>Safari</strong>.</li><li>Tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.</li><li>Turn on <strong>Open as Web App</strong> if shown, then tap <strong>Add</strong>.</li></ol>
+  <p class="muted">Open the new Little Colony icon to play. After the first visit finishes caching, the game also opens offline.</p><button data-close="install" class="primary full">Back to the clearing</button>
+</dialog>
+<dialog id="reset-confirm" class="panel confirm-dialog" aria-labelledby="reset-title"><h2 id="reset-title">A new beginning?</h2><p class="muted">This replaces your current colony on this device.</p><div class="confirm-actions"><button data-close="reset-confirm" class="secondary">Keep my colony</button><button id="confirm-reset" class="danger">Start new colony</button></div></dialog>
+<noscript><div class="no-script">Little Colony needs JavaScript enabled to run the simulation.</div></noscript>
+<script type="module" src="./app.mjs"></script>
+</body></html>

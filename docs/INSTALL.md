@@ -1,35 +1,30 @@
-# Install Little Colony on iPhone
+# Open Little Colony on iPhone
 
-The GitHub Actions workflow builds the actual native iPhone app. A browser preview and an iPhone simulator build are not substitutes for the device IPA.
+**[Play Little Colony](https://owningturtle287.github.io/Ant-farm-simulation/)**
 
-1. Open this repository's Actions tab and the latest successful **Little Colony · iPhone** run for `main`.
-2. Under Artifacts, download `LittleColony-0.1-unsigned-iphone-<commit>` and extract the ZIP.
-3. Re-sign and install `LittleColony-unsigned.ipa` using your existing trusted iOS sideloading process. This build is deliberately unsigned; downloading it in Safari does not install it. Signing validity and renewal requirements depend on that process and account.
-4. Open **Little Colony**, turn your phone sideways, and enter the clearing.
+1. Open the link in **Safari** on your iPhone.
+2. Tap **Share → Add to Home Screen**.
+3. If shown, turn on **Open as Web App**.
+4. Tap **Add**, then open the **Little Colony** icon.
 
-GitHub may require you to sign in to download Actions artifacts. These artifacts are retained for 30 days.
+A regular Safari bookmark also works. The Home Screen icon gives you the standalone app experience.
 
-## Signed ad hoc builds
+## Offline and saves
 
-For a signed IPA, an Apple Developer account, distribution certificate, and ad hoc provisioning profile covering `com.owningturtle.antfarm` and the target phone are needed. Configure repository secrets through GitHub's own settings:
+The first online visit caches the game files. The More menu shows **Ready for offline play** when this finishes. After that, the Home Screen app can reopen without a connection.
 
-- `BUILD_CERTIFICATE_BASE64`: Base64-encoded distribution `.p12` certificate.
-- `P12_PASSWORD`: its password.
-- `BUILD_PROVISION_PROFILE_BASE64`: Base64-encoded ad hoc profile.
+The colony saves every 20 seconds and when the page is hidden or closed. It rests while closed. Saves belong to this browser/device; clearing website data removes them. **More → Export colony backup** keeps an extra JSON copy.
 
-Successful pushes to `main` attempt signed export automatically when all three secrets are present. You can also run the workflow manually on `main` and enable `signed_adhoc`. Download the `signed-iphone` artifact only after that job succeeds and install it through a supported ad hoc installation process. Never paste certificates or passwords into source files, issues, or logs.
+A corrupt primary save is recovered from its valid backup. If both copies are unreadable, automatic overwriting is blocked until an explicit save or confirmed new colony.
 
-This repository also opens directly in Xcode 16.4 or later. Choose the AntFarm scheme, select your signing team, and run on your registered phone. Minimum OS: iOS 17; landscape; iPhone only.
+## The link in GitHub Actions
 
-## Play
+Open the **[Deploy Little Colony workflow](https://github.com/Owningturtle287/Ant-farm-simulation/actions/workflows/pages.yml)** and its latest successful run. Its **deploy** job shows the live GitHub Pages address. The run summary also contains **Open Little Colony**.
 
-- Drag the world to explore; pinch to zoom.
-- Tap an ant for its profile. Repeated taps cycle through overlapping ants.
-- Food / Water: select a tool, then tap to place a source at that horizontal position on the surface.
-- Trails: display pheromone signals.
-- Nest: return the camera home.
-- Colony: inspect the population and select an individual.
-- Pause and 1× / 2× / 4×: control the pace.
-- More: save, read the guide, or start a new colony after confirmation.
+Save the live address to your phone. It stays the same when new versions deploy.
 
-The colony autosaves every 20 seconds and when leaving the app. Simulation pauses in menus and while closed. There is no offline catch-up in v0.1.
+## Controls
+
+Drag to explore; pinch or scroll to zoom. Tap an ant for its profile; repeated taps cycle through overlapping ants. Choose Food or Water, then tap to place a source on the surface. Trails shows scent signals; Nest returns home; Colony opens the roster. Pause and 1× / 2× / 4× control the pace. More contains saving, Home Screen instructions, help, and a confirmed new-colony action.
+
+Portrait and landscape both work. Turning your phone sideways gives a wider cutaway view.

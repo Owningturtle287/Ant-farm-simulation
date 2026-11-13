@@ -4,7 +4,9 @@ on:
   push:
     branches: [main, 'codex/**']
     tags: ['v*']
+    paths: ['AntFarm/**', 'AntFarm.xcodeproj/**', 'Sources/**', 'Tests/**', 'AntFarmUITests/**', 'Package.swift', 'scripts/*.py', 'scripts/signed-build.sh', '.github/workflows/ios.yml']
   pull_request:
+    paths: ['AntFarm/**', 'AntFarm.xcodeproj/**', 'Sources/**', 'Tests/**', 'AntFarmUITests/**', 'Package.swift', 'scripts/*.py', 'scripts/signed-build.sh', '.github/workflows/ios.yml']
   workflow_dispatch:
     inputs:
       signed_adhoc:

@@ -1,0 +1,13 @@
+{
+  "name": "little-colony-ant-farm",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-web.mjs",
+    "dev": "node scripts/serve-web.mjs",
+    "test": "node --test tests-web/sim.test.mjs",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {"@playwright/test":"1.62.1"}
+}
