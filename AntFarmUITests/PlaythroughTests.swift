@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 final class PlaythroughTests: XCTestCase {
     @MainActor
@@ -8,9 +9,7 @@ final class PlaythroughTests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         XCTAssertTrue(app.buttons["toolColony"].waitForExistence(timeout:15))
         XCTAssertGreaterThan(app.frame.width,app.frame.height,"The game window must be landscape.")
-        let initialScreen = XCUIScreen.main.screenshot()
-        XCTAssertGreaterThan(initialScreen.image.size.width,initialScreen.image.size.height,"Capture the landscape screen, not portrait application crop bounds.")
-        let opening = XCTAttachment(screenshot:initialScreen); opening.name = "First clearing"; opening.lifetime = .keepAlways; add(opening)
+        attachLandscape("First clearing")
         app.buttons["pauseButton"].tap()
         XCTAssertEqual(app.buttons["pauseButton"].label,"Resume simulation")
         app.buttons["pauseButton"].tap()
@@ -21,7 +20,7 @@ final class PlaythroughTests: XCTestCase {
         app.buttons["antRow0"].tap()
         XCTAssertTrue(app.staticTexts["selectedAntName"].waitForExistence(timeout:5))
         XCTAssertEqual(app.staticTexts["selectedAntName"].label,"Queen Aurelia")
-        let profile = XCTAttachment(screenshot:XCUIScreen.main.screenshot()); profile.name = "Individual ant"; profile.lifetime = .keepAlways; add(profile)
+        attachLandscape("Individual ant")
         if !app.buttons["followAnt"].isHittable { app.scrollViews.firstMatch.swipeUp() }
         app.buttons["followAnt"].tap()
         app.buttons["toolNest"].tap()
@@ -33,5 +32,19 @@ final class PlaythroughTests: XCTestCase {
         app.buttons["Start a new colony"].tap()
         XCTAssertTrue(app.buttons["Start new colony"].waitForExistence(timeout:5))
         app.buttons["Cancel"].tap()
+    }
+
+    @MainActor
+    private func attachLandscape(_ name: String) {
+        let screen = XCUIScreen.main.screenshot().image
+        XCTAssertGreaterThan(screen.size.width,screen.size.height,"The captured screen must be landscape.")
+        // Resolve UIImage orientation into actual pixels before XCTest exports PNG data.
+        let format = UIGraphicsImageRendererFormat(); format.scale = screen.scale
+        let normalized = UIGraphicsImageRenderer(size:screen.size,format:format).image { _ in
+            screen.draw(at:.zero)
+        }
+        XCTAssertGreaterThan(normalized.cgImage!.width,normalized.cgImage!.height)
+        let attachment = XCTAttachment(image:normalized)
+        attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
     }
 }
