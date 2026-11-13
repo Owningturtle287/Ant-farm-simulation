@@ -1,181 +1,71 @@
-# Ant Farm Simulator
+# Little Colony · Ant Farm Simulator
 
-A planned native iPhone ant-colony simulation with an expanding 2D pixel-art world: surface mound, underground tunnels, chambers, and individually inspectable ants.
+A native iPhone ant-farm game in an original retro pixel-art cutaway. This is the first playable implementation: a small living colony that forages, carries water, excavates rooms, builds a surface mound, and raises brood.
 
-**Status:** fresh-start planning. This README replaces the previous placeholder. Game implementation has not been restarted.
+## Get the iPhone build
 
-## Repository and delivery
+Open **[GitHub Actions](https://github.com/Owningturtle287/Ant-farm-simulation/actions/workflows/ios.yml)** and download the iPhone artifact from a successful run. See **[installation instructions](docs/INSTALL.md)** for unsigned re-signing and optional signed ad hoc builds.
 
-- Source of truth: this repository, starting from `main`.
-- At inspection, `main` contained only this README; there was no application code to remove from that branch.
-- The earlier `codex/steps-1-2-foundation` branch is superseded as an implementation starting point. Its code will not be merged into the fresh rebuild. Git history and that branch remain available as reference.
-- The existing iOS Foundation Actions run failed in native fixture/interaction checks. Simulator launch and device packaging were skipped. A working delivery pipeline must be demonstrated before expanding the game.
-- GitHub stores the source; GitHub Actions builds, checks, and packages the native app. The simulation runs locally on the iPhone.
+The native app requires **iOS 17 or later** and runs in landscape. GitHub hosts the source and downloadable builds; the game runs offline on your phone.
 
-## Product direction
+## What is playable
 
-- Landscape-first side-on cutaway showing the surface and underground together.
-- Original retro pixel art with the readability and exploration feel of Terraria.
-- Smooth walking, turning, climbing, digging, carrying, and interaction animations.
-- A queen and small starting colony that can forage, raise brood, build, and expand.
-- Food, water, usable nest space, materials, population, and environmental conditions influence growth.
-- Tap an ant to inspect its identity, caste, current job, age, needs, health, experience, and current behavior.
-- Drag and pinch to explore; select and follow an ant; pause and adjust simulation speed.
-- Proposed sandbox controls let the player provide resources and influence conditions while ants perform colony work autonomously.
-- Select one biological reference species before implementing caste and reproductive rules. Treat caste separately from changeable worker jobs.
+- A queen, 26 workers, two patrolling soldiers, and an initial brood.
+- Autonomous exploration, local resource discovery, remembered sources, pheromone signals, food and water transport.
+- Real excavation and soil accounting: workers carry removed earth into a growing mound.
+- A construction plan that adds underground space as the colony needs it.
+- Eggs, larvae, pupae, emerging workers, resource consumption, starvation, and queen loss.
+- Individually inspectable ants with caste, task, age, energy, health, experience, trips, and a reason for their behavior.
+- Animated procedural pixel sprites, textured soil, tunnel walls, trees, grass, clouds, and original app artwork.
+- Drag / pinch camera controls, ant following, dense-cluster selection, pause, and 1× / 2× / 4× speed.
+- Food and water placement, optional pheromone display, a colony roster, and a first-run guide.
+- Versioned local autosaves, atomic writes, backup recovery, and explicit confirmation before a new colony.
 
-## Architecture
+## Controls
 
-The proposed stack is Swift, SpriteKit for the game scene, and SwiftUI for menus and inspector panels.
+Drag to explore. Pinch to zoom. Tap an ant to open its profile; repeated taps cycle through overlapping ants.
 
-Keep these systems separate:
-
-| System | Responsibility |
+| Control | Action |
 | --- | --- |
-| Simulation core | Fixed-step world and ant state, seeded randomness, resource accounting, colony lifecycle, decisions |
-| Terrain and navigation | Procedural chunks, excavation, deposits, chamber connectivity, routes that respond to terrain changes |
-| Behavior and learning | Local sensing, pheromones, needs, task selection, individual memory, bounded adaptation |
-| Presentation | Pixel art, animation, camera, effects, audio, touch selection, UI |
-| Persistence | Versioned saves, chunk storage, backup recovery, migration, optional offline catch-up |
-| Delivery | Automated checks, simulator and device builds, artifact labeling, signing, release packaging |
+| Food / Water | Select a resource, then tap the world to place it on the surface |
+| Trails | Show pheromone signals |
+| Nest | Return the camera home |
+| Colony | Open the population roster and select an individual |
+| More | Save, open the guide, or start a new colony |
+| Pause / speed | Pause or run at 1×, 2×, or 4× |
 
-Simulation data must not depend on visible SpriteKit nodes. Rendering and simulation update rates can differ.
+The colony rests while the app is closed. Menus pause simulation. Autosaves run every 20 seconds and when leaving the app.
 
-"Unlimited" means no designed map boundary. Generate terrain on demand, retain persistent changes, and load only relevant chunks. Storage, memory, and processing remain finite. Population capacity will be measured on supported devices.
+## Build and verification
 
-## Build milestones
+No third-party game dependencies are required.
 
-Each milestone has a concrete deliverable and an exit check. Keep changes scoped to one milestone at a time, and update this plan with verified results.
+```sh
+python3 scripts/generate_project.py
+swift test --parallel
+open AntFarm.xcodeproj
+```
 
-### 1. Fresh foundation and reliable GitHub Actions
+Select the **AntFarm** scheme in Xcode. For a physical phone, choose your signing team and a matching bundle identifier/provisioning setup.
 
-**Deliver:** a minimal native app, documented project layout, a testable simulation core, and a reproducible CI workflow.
+Actions uses **macOS 15 / Xcode 16.4** to run simulation tests, build the simulator and physical-device app, exercise UI controls, capture actual simulator screenshots, and upload the device IPA. Optional manual signed builds use Apple credentials stored in GitHub secrets.
 
-- Establish the minimum iOS version, oldest supported test iPhone, and provisional performance budget.
-- Create fresh application, simulation, test, asset, and documentation directories.
-- Pin and document the Xcode/toolchain combination used by Actions.
-- Run meaningful core checks and an iOS build on pushes and pull requests.
-- Add a small simulator launch check before expanding UI testing.
-- Package a correctly labeled unsigned device IPA; keep simulator artifacts separate.
-- Add a separately controlled signed distribution path when credentials and provisioning are available.
+The tests cover complete resource / digging / birth loops across multiple seeds, soil conservation, walkable routes, deterministic replay, save/load continuation, recovery from a corrupt primary save, and starvation. An XCUITest checks pause, speed, ant inspection, follow, and resource placement.
 
-**Exit check:** a green Actions run produces the expected artifacts; validate the intended installation route on an actual iPhone when device access is available. Report simulator verification separately from physical-device verification.
+## Good stopping point for v0.1
 
-### 2. Visual direction, animation, and touch controls
+This version establishes a working colony loop and a reusable native foundation. It deliberately caps population at **120 ants**. The terrain can be queried and generated beyond the starting scene, and construction adds deeper rooms, but large-world storage streaming and very large populations are not finished.
 
-**Deliver:** a small interactive scene establishing the final visual language.
+Behavior is a game abstraction, not a complete biological brain. Source memory and pheromones are present; sophisticated individual learning is a later milestone. Soldiers patrol; predators, combat, drones, mating flights, disease, detailed weather/fluid physics, sound/haptics beyond placement feedback, and offline catch-up remain future work.
 
-- Create an original palette, terrain scale, ant silhouettes, UI style, and animation standards.
-- Show a mound, tunnel, chamber, vegetation, and sample ants.
-- Implement drag, pinch, camera bounds for the sample, follow mode, and ant inspection.
-- Use generous touch targets and disambiguation for overlapping ants.
-- Preserve crisp pixels at supported zoom levels while keeping movement smooth.
+Physical-device installation, thermal behavior, and battery use require testing on actual iPhones. CI simulator success must be reported separately from those checks.
 
-**Exit check:** the scene is readable on a phone, ants are easy to select, and the camera and basic animation feel polished. Clearly distinguish demonstration animation from working simulation.
+## Project layout
 
-### 3. Expandable terrain, excavation, and movement
-
-**Deliver:** a chunked world with real terrain modification and navigable passages.
-
-- Generate repeatable terrain from a world seed.
-- Load and unload chunks without losing edits.
-- Implement floors, slopes, walls, and ceiling traversal.
-- Update navigation after digging, obstruction, or deposits.
-- Track removed soil: excavation produces material that ants carry and deposit into the mound.
-- Begin with affordable soil and moisture rules; defer detailed fluid physics until the core simulation performs well.
-
-**Exit check:** ants dig a connected passage and move the excavated soil above ground; revisiting unloaded areas preserves their state.
-
-### 4. Individual ant behavior
-
-**Deliver:** autonomous ants with persistent identities, needs, and comprehensible decisions.
-
-- Add caste, job, age, health, energy, food needs, carried items, experience, and memory.
-- Combine local sensory information, pheromone cues, internal needs, and task priorities.
-- Implement exploration, resource discovery, carrying, returning home, recruitment, and recovery from blocked routes.
-- Model the queen and reproductive ants according to the selected species.
-- Add developer overlays for routes, pheromones, and the reason behind a decision.
-
-**Exit check:** ants complete resource trips and adapt to obstacles without passing through solid ground, becoming permanently stuck, or relying on hidden knowledge of all resources.
-
-### 5. First complete small colony
-
-**Deliver:** the first genuinely playable simulation.
-
-Connect foraging, feeding, brood development, population growth, resource demand, and excavation. Include food storage, brood care, waste handling, mortality, inspection, and basic save/load.
-
-**Exit check:** a modest colony survives and develops across several fixed seeds. Resource shortages and failures have identifiable causes. This milestone must be interesting to watch before increasing scale.
-
-### 6. Need-driven nest construction and lifecycle depth
-
-**Deliver:** colonies that expand their mound and underground layout in response to conditions.
-
-- Represent demand for nursery space, storage, waste areas, entrances, and connecting routes.
-- Use crowding, travel cost, moisture, and local work signals to influence construction.
-- Let individual ants perform the excavation, transport, and deposition.
-- Add species-appropriate specialization, defense, and reproductive behavior.
-- Keep construction heuristics explicit so their effects can be tested and tuned.
-
-**Exit check:** expansion supports colony needs, maintains usable paths, and produces varied nests without endless purposeless digging.
-
-### 7. Individual learning and adaptation
-
-**Deliver:** experience that changes behavior in measurable ways.
-
-- Remember productive locations, useful routes, repeated failures, and relevant hazards.
-- Use bounded updates to preferences and confidence.
-- Combine remembered information with pheromone cues.
-- Allow forgetting and renewed exploration when conditions change.
-- Preserve each ant's learning state in saves.
-
-This is a biologically informed behavioral model, not a claim to reproduce a complete ant brain. Large neural models and per-ant language-model calls are outside the initial design.
-
-**Exit check:** experienced ants improve in controlled scenarios and can abandon an unproductive learned route after the environment changes.
-
-### 8. Scale, persistence, and device performance
-
-**Deliver:** measured colony capacity, reliable long sessions, and durable progress.
-
-- Render only relevant terrain and visible entities.
-- Stagger decisions and reuse suitable navigation information.
-- Update distant activity less frequently while preserving identities, resource accounting, and important events.
-- Benchmark increasing populations on real hardware; target smooth 60 fps at normal speed on the chosen baseline device, subject to measured feasibility.
-- Measure heat, battery use, memory, load time, and save size.
-- Add autosaves, backup recovery, save migration, and interruption handling.
-- Define optional bounded offline catch-up; do not depend on continuous execution while iOS suspends the app.
-
-**Exit check:** extended sessions remain within documented device budgets, and saved colonies restore correctly after interruption and updates.
-
-### 9. Polish and release
-
-**Deliver:** a cohesive, tested build distributed through GitHub Actions.
-
-Refine animation transitions, antenna movement, carrying poses, digging effects, lighting, audio, haptics, interface feedback, onboarding, and simulation balance.
-
-Validate resource starvation, blocked passages, population spikes, fast-forward, dense ant selection, large saves, application interruptions, and installation.
-
-**Exit check:** the release build passes the defined gameplay, save compatibility, installation, and performance checks. Publish its version, commit, change notes, artifact link, and installation instructions.
-
-## Actions deployment design
-
-| Trigger | Planned behavior |
-| --- | --- |
-| Pull request / development branch | Core checks, build validation, small simulator smoke check, diagnostic results |
-| Successful main build | Downloadable preview artifacts labeled by version and commit |
-| Manual signed build | Validate supplied signing configuration, archive/export, upload signed IPA |
-| Release tag | Repeat required checks and package versioned release assets through Actions |
-
-Do not report a build as installable merely because an IPA file exists.
-
-- A simulator app does not run on a physical iPhone.
-- An unsigned IPA requires an appropriate re-signing/install process.
-- Ad hoc distribution requires valid Apple signing and provisioning for the registered device.
-- The earlier workflow referenced signing secrets, but their availability has not been verified.
-- Actions artifact links have retention limits. Versioned release assets can provide longer-lived download links.
-- Keep signing material in repository/environment secrets, never source files or logs.
-
-## First substantial playable target
-
-A polished small colony that digs tunnels, transports soil into a mound, gathers food, raises brood, supports individual ant inspection, and saves correctly.
-
-Complete that loop before expanding world complexity or promising a particular maximum population.
+- `Sources/AntFarmCore/`: deterministic simulation, terrain, navigation, and saves.
+- `AntFarm/`: native game scene, pixel rendering, controls, and interface.
+- `Tests/AntFarmCoreTests/`: simulation and persistence checks.
+- `AntFarmUITests/`: native interaction smoke test.
+- `scripts/`: reproducible Xcode project/art generation and build helpers.
+- `.github/workflows/ios.yml`: iPhone validation and downloadable builds.
+- `docs/ROADMAP.md`: the staged plan for later expansion.

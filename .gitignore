@@ -1,0 +1,9 @@
+.build/
+build/
+*.log
+.DS_Store
+xcuserdata/
+*.xcuserstate
+*.mobileprovision
+*.p12
+*.keychain-db
