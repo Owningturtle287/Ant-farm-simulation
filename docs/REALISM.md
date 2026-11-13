@@ -23,7 +23,7 @@ The map generates material beyond the visible area and stores altered cells, but
 
 These sources support mechanisms and future calibration, not the exact game coefficients:
 
-- [Gordon, 2010: The organization of work in social insect colonies](https://pmc.ncbi.nlm.nih.gov/articles/PMC2817103/) — flexible task allocation, physiological thresholds, age, and interactions.
+- [Robinson, Feinerman & Franks, 2009: Flexible task allocation and the organization of work in ants](https://pmc.ncbi.nlm.nih.gov/articles/PMC2817103/) — flexible task allocation, physiological thresholds, age, and interactions.
 - [Empirical response-threshold study](https://pmc.ncbi.nlm.nih.gov/articles/PMC6586672/) — variation between workers and colony task allocation.
 - [Worker age and caste dynamics](https://pmc.ncbi.nlm.nih.gov/articles/PMC7039887/) — age-related behavior and worker differences, rather than fixed universal jobs.
 - [Soil moisture and particle mechanics in excavation](https://pubmed.ncbi.nlm.nih.gov/25954041/) — substrate properties influence construction.
