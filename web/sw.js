@@ -7,9 +7,10 @@ self.addEventListener('fetch',event=>{
   const url=new URL(event.request.url);
   if(event.request.method!=='GET' || url.origin!==ROOT.origin || !url.pathname.startsWith(ROOT.pathname))return;
   if(event.request.mode==='navigate'){
-    event.respondWith(fetch(event.request).then(response=>{
-      if(!response.ok)throw Error('Navigation unavailable');return response;
-    }).catch(()=>caches.open(CACHE).then(cache=>cache.match(new URL('index.html',ROOT).href))));
+    // Serve one coherent installed build, including during offline navigation.
+    // The browser checks the versioned worker for updates independently.
+    event.respondWith(caches.open(CACHE).then(async cache=>
+      (await cache.match(new URL('index.html',ROOT).href)) || fetch(event.request)));
   }else event.respondWith(caches.open(CACHE).then(async cache=>{
     const cached=await cache.match(event.request);if(cached)return cached;
     const response=await fetch(event.request);if(response.ok)await cache.put(event.request,response.clone());return response;

@@ -105,9 +105,12 @@ function frame(now){
   if(now-lastSave>20000)save();
   if($('game').dataset.ready!=='true')$('game').dataset.ready='true';requestAnimationFrame(frame);
 }
-function networkState(){const cached=$('offline-state').dataset.cached==='true';$('offline-state').textContent=!navigator.onLine?(cached?'Offline · your colony is ready to play.':'Offline · open once online to cache the game.'):(cached?'Ready for offline play · saves stay on this device.':'Preparing offline play…');}
+function networkState(){const cached=$('offline-state').dataset.cached==='true' || !!navigator.serviceWorker?.controller;$('offline-state').textContent=!navigator.onLine?(cached?'Offline · your colony is ready to play.':'Offline · open once online to cache the game.'):(cached?'Ready for offline play · saves stay on this device.':'Preparing offline play…');}
 for(const event of ['online','offline'])window.addEventListener(event,networkState);
-if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js',{scope:'./'}).then(()=>navigator.serviceWorker.ready).then(()=>{$('offline-state').dataset.cached='true';networkState();}).catch(()=>{$('offline-state').textContent='Online play ready. Offline caching is unavailable in this browser.';});}
+if('serviceWorker' in navigator){
+  networkState();
+  navigator.serviceWorker.register('./sw.js',{scope:'./',updateViaCache:'none'}).then(()=>navigator.serviceWorker.ready).then(()=>{$('offline-state').dataset.cached='true';networkState();}).catch(()=>{if(navigator.serviceWorker.controller)networkState();else $('offline-state').textContent='Online play ready. Offline caching is unavailable in this browser.';});
+}
 else $('offline-state').textContent='Online play ready. Home Screen access works through your browser.';
 updateTools();updateUI();requestAnimationFrame(frame);
 let seen;try{seen=storage?.getItem('little-colony.guide');}catch{}
