@@ -46,7 +46,7 @@ public struct World: Codable {
     public var soilExcavated = 0
     public var soilDeposited = 0
     public var pheromones: [Cell: Double] = [:]
-    public let nest = Cell(0, 11)
+    public var nest: Cell { Cell(0, 11) }
 
     public init(seed: UInt64) {
         self.seed = seed
@@ -83,7 +83,9 @@ public struct World: Codable {
 
     public func isWalkable(_ cell: Cell) -> Bool {
         guard !isSolid(cell) else { return false }
-        return cell.y > 0 || cell.y == surface(at: cell.x) - 1
+        // The cutaway exposes a back wall underground. Above ground, ants can
+        // walk on the surface or cling to a mound's vertical sides.
+        return cell.y > 0 || cell.y == surface(at: cell.x) - 1 || cell.adjacent.contains(where:isSolid)
     }
 
     public func neighbors(of cell: Cell) -> [Cell] {

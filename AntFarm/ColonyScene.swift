@@ -187,6 +187,7 @@ final class ColonyScene: SKScene {
             else {
                 node = SKSpriteNode(texture:antTextures[ant.caste.rawValue]![0])
                 node.size = ant.caste == .queen ? CGSize(width:31,height:18) : ant.caste == .soldier ? CGSize(width:21,height:12) : CGSize(width:18,height:10)
+                node.position = point(ant.position)
                 antNodes[ant.id] = node; antLayer.addChild(node)
             }
             let goal = point(ant.position)

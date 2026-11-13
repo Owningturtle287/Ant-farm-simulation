@@ -45,6 +45,15 @@ final class ColonyTests: XCTestCase {
         XCTAssertEqual(a.rng.state,b.rng.state)
     }
 
+    func testWorkersCanClimbATallMoundWithoutLosingAccess() throws {
+        var world = World(seed:9)
+        for y in [-2,-1,0] { world.deposits.insert(Cell(3,y)) }
+        XCTAssertTrue(world.isWalkable(Cell(2,-1)),"Ants can cling to the mound wall")
+        let route = try XCTUnwrap(world.path(from:world.nest,to:Cell(4,0)))
+        XCTAssertTrue(route.contains { $0.y < -1 })
+        XCTAssertTrue(route.allSatisfy(world.isWalkable))
+    }
+
     func testSaveRoundTripContinuesSimulationAndRecoversBackup() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at:directory) }

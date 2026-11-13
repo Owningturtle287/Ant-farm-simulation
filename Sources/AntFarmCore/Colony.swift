@@ -221,7 +221,12 @@ public struct Colony: Codable {
         // Dig tasks use target for the solid work tile, so callers restore it after routing.
         ant.target = cell
         if let path = world.path(from:ant.cell,to:cell) { ant.route = path }
-        else { ant.route = []; ant.task = .resting; ant.busyUntil = time+2 }
+        else {
+            ant.route = []
+            // A temporarily inaccessible destination must never discard cargo.
+            if ant.carried == 0 { ant.task = .resting }
+            ant.busyUntil = time+2
+        }
     }
 
     private mutating func chooseJob(_ ant: inout Ant) {
