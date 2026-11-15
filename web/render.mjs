@@ -80,11 +80,18 @@ export class Renderer {
     const c=this.ctx,w=this.width,h=this.height,ground=this.screen([0,.5])[1],scale=this.camera.zoom;
     c.fillStyle='#241e1a';c.fillRect(0,0,w,h);
     const gradient=c.createLinearGradient(0,ground-220*scale,0,ground);gradient.addColorStop(0,'#91b6a3');gradient.addColorStop(1,'#c0d2b6');c.fillStyle=gradient;c.fillRect(0,0,w,h);
-    const from=Math.floor((this.camera.x-w/this.unit/2)/22)-1,to=from+Math.ceil(w/this.unit/22)+3;
-    for(let i=from;i<=to;i++) {
-      const [x]=this.screen([i*22,0]);c.fillStyle=i%2?'#86aa90':'#789d85';
-      c.beginPath();c.moveTo(x-150*scale,h);c.lineTo(x-100*scale,ground-35*scale);c.lineTo(x-20*scale,ground-70*scale);c.lineTo(x+70*scale,ground-50*scale);c.lineTo(x+170*scale,h);c.fill();
-      if(i%2) {const cloudX=x-80*scale,cloudY=ground-145*scale-Math.abs(i%3)*16*scale;c.fillStyle='#e5e6ce88';for(let j=0;j<4;j++)c.fillRect(Math.round(cloudX+j*19*scale),Math.round(cloudY-j%2*4*scale),32*scale,(10+j%2*7)*scale);}
+    // One continuous stepped skyline avoids seams between distant hill sprites.
+    for(let layer=0;layer<2;layer++){
+      const step=Math.max(6,12*scale),phase=(world.seed%1000)*.01+this.camera.x*.018;
+      c.fillStyle=layer?'#86aa90':'#9bb9a0';c.beginPath();c.moveTo(0,h);
+      for(let px=0;px<=w+step;px+=step){
+        const elevation=(55-layer*14+Math.sin(px*.007+phase+layer*2)*18+Math.sin(px*.017+phase*.5)*8)*scale;
+        const y=Math.round(ground-elevation);c.lineTo(px,y);c.lineTo(px+step,y);
+      }c.lineTo(w+step,h);c.closePath();c.fill();
+    }
+    for(let i=0;i<Math.ceil(w/(240*scale));i++){
+      const x=((i*271+world.seed%170)*scale-this.camera.x*2)%(w+200*scale),y=ground-(140+i%3*13)*scale;
+      c.fillStyle='#e5e6ce66';for(let j=0;j<4;j++)c.fillRect(Math.round(x+j*19*scale),Math.round(y-j%2*4*scale),32*scale,(10+j%2*7)*scale);
     }
   }
   surfaceLife(world,clock){
