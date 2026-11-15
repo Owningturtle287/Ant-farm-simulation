@@ -2,30 +2,36 @@
 
 The primary delivery is the GitHub Pages app in `web/`, deployed by `.github/workflows/pages.yml` to the same bookmark address. Preserve existing progress and the deployment pipeline when updating it.
 
-## v0.3 web architecture and contracts
+## v0.4 web architecture and contracts
 
 - `biology.mjs` owns seeded randomness, individual traits, age/stage helpers, defaults, and bounded growth controls. New colonies have 12 workers, one queen, and three brood; the default ceiling is 120, with experimental options up to 500.
-- `materials.mjs` generates layered substrate and local moisture/temperature estimates. Compaction affects dig duration. Deposited spoil is a separate material and retains its origin.
+- `materials.mjs` generates layered substrate and local moisture/temperature estimates. All depths are equally diggable. Deposited spoil is a separate visual material and retains its origin. `ecology.mjs` owns seeded contours, grass harvest/regrowth, basin detection, rain scheduling, accumulation, and evaporation. Separate saved randomness keeps weather deterministic.
 - `sim.mjs` owns persistent colony/world state, local discovery and recruitment, bounded learning, demand-sensitive task decisions, nursing, construction, and mass accounting. No DOM or renderer state belongs in the model. All random simulation choices must use the saved seeded generator.
 - Terrain navigation knows open geometry; resource discovery does not know distant availability. Avoid granting ants omniscient source updates. Chamber planning is still a colony-level abstraction; see `REALISM.md`.
 - Preserve soil accounting: excavated = deposited + soil carried by living ants + abandoned soil. Failed routing must retain cargo. Lowering a population ceiling never culls existing ants.
-- `clock.mjs` advances the same fixed 0.1-second ticks at every speed through 64×. A six-millisecond per-frame simulation budget and bounded backlog preserve interaction under load; actual speed may fall below requested speed. Do not replace this with larger biology steps.
+- `clock.mjs` advances the same fixed 0.1-second ticks at every speed through 128×. A six-millisecond per-frame simulation budget and bounded backlog preserve interaction under load; actual speed may fall below requested speed. Do not replace this with larger biology steps.
 - `render.mjs` caches visible 16-cell chunks with neighboring invalidation. Spoil must never receive grass. At high time lapse, draw current positions directly so smoothing does not cut across solid terrain between distant snapshots.
 - `app.mjs` owns controls, local performance sampling/export, pause state, and browser lifecycle. The optional performance panel runs with the simulation. Dialogs and background suspension pause it; there is no offline catch-up.
-- `persistence.mjs` writes envelope version 2 and reads versions 1 and 2 under the unchanged `little-colony.web.v1` key. The actual pre-update fixture in `tests-web/fixtures/v1-colony.json` verifies preservation of ants, terrain, mound, and elapsed time. Modern saves must continue seeded behavior exactly. A valid backup recovers a corrupt primary; unreadable progress blocks automatic overwrite.
+- `persistence.mjs` writes envelope version 3 and reads versions 1, 2, and 3 under the unchanged `little-colony.web.v1` key. Actual pre-update fixtures in `tests-web/fixtures/v1-colony.json` and `v2-colony.json` verify preservation of ants, terrain, mound, and elapsed time. Modern saves must continue seeded behavior exactly, including weather and in-flight brood. Old saves retain a flat `terrainVersion: 0`; newly created colonies use contoured `terrainVersion: 1`. Never reshape established terrain during migration. A valid backup recovers a corrupt primary; unreadable progress blocks automatic overwrite.
 - `sw.js` precaches every runtime module, icon, and document under the repository scope. `build-web.mjs` fingerprints source files into the cache version and builds `dist/`. New runtime files must be added to the explicit cache list. All production asset URLs remain relative.
 
 ## Verification and performance
 
-Run `npm test`, `npm run benchmark`, and `npm run build`. The simulation suite checks multi-seed resource/excavation/emergence loops, migration, deterministic save continuation, recovery, shortages, local recruitment/care, fallible memories, substrate mechanics, sensible construction demand, soil conservation, and fixed-step time lapse.
+Run `npm test`, `npm run benchmark`, and `npm run build`. The simulation suite checks multi-seed resource/excavation/emergence loops, migration, deterministic save continuation, recovery, shortages, local recruitment/care, fallible memories, soft earth at every depth, sensible construction demand, soil conservation, fixed-step time lapse, seed depletion/regrowth, rain basins, queen movement/laying, physical egg transport, and queen provisioning outside the central store.
 
-Browser checks cover Chromium and WebKit, phone layouts, settings persistence, 64× interaction, material/mound screenshots, legacy saves, Home Screen metadata, and actual offline reopening under `/Ant-farm-simulation/`. CI must pass before Pages deploys.
+Browser checks cover Chromium and WebKit, phone layouts, settings persistence, 128× interaction, rain/grassland/mound and nursery screenshots, legacy saves, Home Screen metadata, and actual offline reopening under `/Ant-farm-simulation/`. CI must pass before Pages deploys.
 
 Chromium checks reopening with network offline emulation. WebKit checks reopening after its actual origin server is stopped, requiring a service-worker response and failed uncached network probe. This avoids [Playwright's upstream offline-emulation bug](https://github.com/microsoft/playwright/issues/42775); it does not claim origin loss and airplane mode are identical disruptions.
 
 The `simulation-performance` Actions artifact samples CPU simulation ticks at 13, 60, 120, 250, and 500 adults with a fixed seed. It separates warm-up costs and records median/p95 timings. This short initial-nest benchmark omits rendering and long-session terrain growth. Compare runs on the same hardware; these measurements are not physical iPhone capacity results.
 
 For device tests: use More → Show performance and Export readings. Record the phone model/OS manually alongside JSON, requested speed, actual speed, FPS, frame cost, simulation/drawing cost, population, brood, and excavated space. Test growing colonies and long sessions in both orientations. Check thermals and battery before claiming a supported maximum population. No telemetry is uploaded by the game.
+
+## Behavior contracts
+
+Movement uses `destination` for the walkable route endpoint, separately from a solid dig target. Do not route diggers to the solid tile they plan to remove. Cargo has an explicit `cargoKind`; food/water must never become excavated soil during replanning. Purposeful resting/grooming and busy intervals are not stalled routes. The movement auditor only resets active work after actual lack of positional progress.
+
+The queen's position is independent of the central store. Attendants must visit the store and then reach her before feeding. Newly laid brood exists at her current position. `carriedBy` and each carrier's `carryingBrood` must agree; release brood on carrier death and avoid adult emergence during transit. Nursery candidate scores are cached for five seconds with terrain-revision invalidation and included in save state to preserve deterministic continuation.
 
 ## Next increments
 

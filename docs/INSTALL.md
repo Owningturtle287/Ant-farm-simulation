@@ -25,7 +25,7 @@ Save the live address to your phone. It stays the same when new versions deploy.
 
 ## Controls
 
-Drag to explore; pinch or scroll to zoom. Tap an ant for its profile; repeated taps cycle through overlapping ants. Choose Food or Water, then tap to place a source on the surface. Trails shows scent signals; Nest returns home; Colony opens the roster. Pause and the speed button control the pace through **1×, 2×, 4×, 8×, 16×, 32×, and 64×**.
+Drag to explore; pinch or scroll to zoom. Tap an ant for its profile; repeated taps cycle through overlapping ants. Choose Food or Water, then tap to place a source on the surface. Trails shows scent signals; Nest returns home; Colony opens the roster. Pause and the speed button control the pace through **1×, 2×, 4×, 8×, 16×, 32×, 64×, and 128×**.
 
 **More → Colony & reproduction** sets egg laying, brood development, the next colony’s starting worker count, and the population ceiling. Turning laying off does not stop existing brood from developing. A lower ceiling never removes existing ants. New colonies default to 12 workers and one queen; updates preserve existing colonies.
 
@@ -34,3 +34,9 @@ Drag to explore; pinch or scroll to zoom. Tap an ant for its profile; repeated t
 More also contains saving, Home Screen instructions, help, and a confirmed new-colony action.
 
 Portrait and landscape both work. Turning your phone sideways gives a wider cutaway view.
+
+## Rain & renewal update
+
+Refresh or reopen online to load v0.4. New colonies generate rolling ground and unique uneven mounds; existing colonies keep their established terrain. Use **More → Start a new colony** only when you want to replace your current colony. Export a backup first if you want to retain a copy.
+
+Grain appears on grass heads. Harvested clumps wither, then regrow after a delay. Rain falls intermittently and fills low spots; puddles shrink as ants drink and water evaporates. All earth is diggable, with no rock barriers. White eggs, pale segmented larvae, and tan pupae have distinct sprites. Nurses carry new eggs from the queen to the nursery. Open **Colony** for stage counts, brood deliveries, and the queen’s current laying target.

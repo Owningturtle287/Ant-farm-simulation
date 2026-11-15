@@ -23,7 +23,7 @@ test('local saves restore and the complete app reopens without its origin under 
   try{
     await page.goto(url);await page.getByRole('button',{name:'Enter the clearing'}).click();
     await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
-    const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')));expect(saved.colony.ants.length).toBe(13);expect(saved.version).toBe(2);
+    const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')));expect(saved.colony.ants.length).toBe(13);expect(saved.version).toBe(3);
     await page.reload();await expect(page.locator('#ants-count')).toHaveText('13');
     await page.evaluate(async()=>{await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true}));});
     // WebKit's offline flag rejects even literal service-worker responses:
@@ -45,16 +45,16 @@ test('reproduction settings persist and small new colonies respect the selected 
   await expect(page.locator('#ants-count')).toHaveText('13');await page.getByRole('button',{name:'Back to the colony',exact:true}).click();
   await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Start a new colony',exact:true}).click();await page.getByRole('button',{name:'Start new colony',exact:true}).click();await expect(page.locator('#ants-count')).toHaveText('7');
 });
-test('64x remains interactive, records actual performance, and builds a distinguishable mound',async({page},info)=>{
-  for(const speed of [1,2,4,8,16,32])await page.getByRole('button',{name:'Simulation speed: '+speed+' times',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Simulation speed: 64 times',exact:true})).toBeVisible();
+test('128x remains interactive, records actual performance, and builds a distinguishable mound',async({page},info)=>{
+  for(const speed of [1,2,4,8,16,32,64])await page.getByRole('button',{name:'Simulation speed: '+speed+' times',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Simulation speed: 128 times',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Show performance',exact:true}).click();
   await expect(page.getByRole('complementary',{name:'Live performance'})).toBeVisible();
   await expect.poll(async()=>Number(await page.locator('#perf-fps').textContent()),{timeout:15000}).toBeGreaterThan(0);
   await expect.poll(async()=>Number(await page.locator('#perf-mound').textContent()),{timeout:15000}).toBeGreaterThan(0);
-  await expect(page.locator('#perf-speed')).toContainText('/ 64×');await page.screenshot({path:info.outputPath('living-soil-mound.png')});
+  await expect(page.locator('#perf-speed')).toContainText('/ 128×');await page.screenshot({path:info.outputPath('living-soil-mound.png')});
   await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.getByRole('button',{name:'Resume simulation',exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Terrain guide',exact:true}).click();await expect(page.getByRole('heading',{name:'Loose mound soil',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Compact clay',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Terrain guide',exact:true}).click();await expect(page.getByRole('heading',{name:'Loose mound soil',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Diggable earth',exact:true})).toBeVisible();
   await page.screenshot({path:info.outputPath('terrain-guide.png')});
 });
 test('an existing colony upgrades with its population and mound intact',async({page},info)=>{
@@ -72,4 +72,14 @@ test('portrait phone layout and Home Screen metadata are complete',async({page},
   const manifest=await page.evaluate(async()=>fetch(document.querySelector('link[rel="manifest"]').href).then(r=>r.json()));expect(manifest.display).toBe('standalone');expect(manifest.start_url).toBe('./');
   expect(await page.locator('link[rel="apple-touch-icon"]').getAttribute('href')).toBe('./icons/apple-touch-icon.png');
   for(const icon of manifest.icons){const response=await page.request.get(icon.src);expect(response.ok()).toBe(true);}
+});
+
+test('rainy grassland, nursery stages, and queen production information survive reopening',async({page},info)=>{
+  const raw=readFileSync(new URL('../fixtures/v3-living.json',import.meta.url),'utf8');
+  await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();
+  await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#weather')).toContainText('Rain');
+  await page.screenshot({path:info.outputPath('rain-grass-and-brood.png')});
+  await page.getByRole('button',{name:'Open colony roster'}).click();await expect(page.locator('#brood-breakdown')).toContainText('eggs');await expect(page.locator('#brood-breakdown')).toContainText('larvae');await expect(page.locator('#brood-breakdown')).toContainText('pupae');await expect(page.locator('#queen-laying')).toContainText('eggs / colony day');
+  await page.screenshot({path:info.outputPath('brood-and-laying-info.png')});
+  await page.getByRole('button',{name:'Close colony roster'}).click();await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Terrain guide',exact:true}).click();await expect(page.getByRole('heading',{name:'Rain & puddles',exact:true})).toBeVisible();await expect(page.getByText('Pupa · tan ant shape',{exact:true})).toBeVisible();
 });

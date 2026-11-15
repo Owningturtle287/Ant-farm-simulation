@@ -1,4 +1,4 @@
-import {Colony,antName,casteLabel,taskLabels,reason,distance,adultDays,DAY} from './sim.mjs';
+import {Colony,antName,casteLabel,taskLabels,reason,distance,adultDays,DAY,broodStage} from './sim.mjs';
 import {SPEEDS} from './biology.mjs';
 import {advanceSimulation,PerformanceMonitor} from './clock.mjs';
 import {SaveStore} from './persistence.mjs';
@@ -6,7 +6,7 @@ import {Renderer} from './render.mjs';
 const $=id=>document.getElementById(id), canvas=$('world');
 let storage,store,colony,saveError;
 try {storage=window.localStorage;store=new SaveStore(storage);const loaded=store.load();colony=loaded?.colony;if(loaded?.recovered)saveError='Recovered your colony from its backup.';}catch(error){saveError=error.message;}
-colony??=new Colony();
+colony??=new Colony(Date.now()>>>0);
 const renderer=new Renderer(canvas),state={speed:1,paused:false,trails:false,selected:null,following:false,tool:null};
 const monitor=new PerformanceMonitor();
 let last=performance.now(),accumulator=0,lastUI=0,lastSave=last,toastTimer,hidden=document.hidden,lastAlive=colony.alive;
@@ -32,6 +32,7 @@ function updateTools(){
 function updateUI(){
   $('ants-count').textContent=colony.ants.length;$('food-count').textContent=Math.floor(colony.food);$('water-count').textContent=Math.floor(colony.water);$('brood-count').textContent=colony.brood.length;
   const clockMinutes=Math.floor((colony.time%DAY)/DAY*1440);
+  $('weather').textContent=colony.world.weather.raining?'Rain · puddles filling':'Dry weather · grassland';
   $('day').textContent=`Day ${colony.day} · ${String(Math.floor(clockMinutes/60)).padStart(2,'0')}:${String(clockMinutes%60).padStart(2,'0')}`;$('event').textContent=colony.events[0]?.text??'Life, one small step at a time.';
   $('pause-badge').hidden=!state.paused;$('pause').setAttribute('aria-label',state.paused?'Resume simulation':'Pause simulation');$('pause-icon').textContent=state.paused?'▶':'Ⅱ';
   $('speed').textContent=state.speed+'×';$('speed').setAttribute('aria-label',`Simulation speed: ${state.speed} times`);
@@ -47,13 +48,16 @@ function updateUI(){
 }
 function performanceSnapshot(){return {...monitor.values,requestedSpeed:state.speed,ants:colony.ants.length,brood:colony.brood.length,populationCap:colony.settings.populationCap,soilDeposited:colony.world.soilDeposited,openCells:colony.world.excavated.size,cachedChunks:renderer.chunks.size,pathCalls:colony.world.runtime.pathCalls,routingMs:colony.world.runtime.pathCalls?colony.world.runtime.pathMs/colony.world.runtime.pathCalls:0};}
 function updatePerformance(){
-  const m=performanceSnapshot();$('perf-fps').textContent=m.fps.toFixed(0);$('perf-frame').textContent=m.frameMs.toFixed(1)+' ms';$('perf-tick').textContent=m.tickMs.toFixed(2)+' ms';$('perf-draw').textContent=m.drawMs.toFixed(2)+' ms';$('perf-speed').textContent=m.effective.toFixed(1)+'× / '+m.requestedSpeed+'×';$('perf-population').textContent=m.ants+' / '+m.populationCap;$('perf-mound').textContent=m.soilDeposited;$('perf-routing').textContent=m.routingMs.toFixed(2)+' ms';
+  const m=performanceSnapshot();$('perf-fps').textContent=m.fps.toFixed(0);$('perf-frame').textContent=m.frameMs.toFixed(1)+' ms';$('perf-tick').textContent=m.tickMs.toFixed(2)+' ms';$('perf-draw').textContent=m.drawMs.toFixed(2)+' ms';$('perf-speed').textContent=m.effective.toFixed(1)+'× / '+m.requestedSpeed+'×';$('perf-population').textContent=m.ants+' / '+m.populationCap;$('perf-mound').textContent=m.soilDeposited;$('perf-routing').textContent=m.routingMs.toFixed(2)+' ms';$('perf-recoveries').textContent=colony.world.runtime.recoveries;
 }
 function syncSettings(){
   for(const [id,field] of [['egg-rate','eggRate'],['brood-rate','broodRate'],['starting-workers','startingWorkers'],['population-cap','populationCap']])$(id).value=String(colony.settings[field]);
   $('cap-note').textContent=colony.ants.length>=colony.settings.populationCap?'The ceiling pauses further growth; your existing ants remain.':'The ceiling controls growth. Changing it never removes existing ants.';
 }
 function buildRoster(){
+  const counts={egg:0,larva:0,pupa:0};for(const b of colony.brood)counts[broodStage(b)]++;
+  $('brood-breakdown').textContent=`${counts.egg} eggs · ${counts.larva} larvae · ${counts.pupa} pupae · ${colony.broodMoved} brood deliveries`;
+  $('queen-laying').textContent=`Queen laying target: ${(DAY/colony.eggInterval).toFixed(1)} eggs / colony day · ${colony.eggsLaid} laid. Capacity and resources can pause laying.`;
   $('colony-summary').replaceChildren();
   for(const [label,value] of [['Workers',colony.ants.filter(a=>a.caste==='worker').length],['Brood',colony.brood.length],['New ants',colony.births],['Day',colony.day]]){
     const div=document.createElement('div'),strong=document.createElement('strong'),span=document.createElement('span');strong.textContent=value;span.textContent=label;div.append(strong,span);$('colony-summary').append(div);
@@ -88,9 +92,9 @@ $('enter').addEventListener('click',()=>{try{storage?.setItem('little-colony.gui
 $('reset').addEventListener('click',()=>openDialog('reset-confirm'));
 $('confirm-reset').addEventListener('click',()=>{colony=new Colony(Date.now()>>>0,colony.settings);state.selected=null;state.following=false;state.paused=false;accumulator=0;lastAlive=true;renderer.reset();monitor.reset();closeDialog('reset-confirm');save(true);updateUI();toast('A small colony takes root.');});
 $('export').addEventListener('click',()=>{
-  const blob=new Blob([JSON.stringify({version:2,savedAt:Date.now(),colony})],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='little-colony-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Colony backup exported.');
+  const blob=new Blob([JSON.stringify({version:3,savedAt:Date.now(),colony})],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='little-colony-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Colony backup exported.');
 });
-$('export-performance').addEventListener('click',()=>{const blob=new Blob([JSON.stringify({version:'0.3',recordedAt:new Date().toISOString(),...performanceSnapshot(),settings:colony.settings,viewport:{width:renderer.width,height:renderer.height,dpr:renderer.dpr}},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='little-colony-performance.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Performance readings exported.');});
+$('export-performance').addEventListener('click',()=>{const blob=new Blob([JSON.stringify({version:'0.4',recordedAt:new Date().toISOString(),...performanceSnapshot(),settings:colony.settings,viewport:{width:renderer.width,height:renderer.height,dpr:renderer.dpr}},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='little-colony-performance.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Performance readings exported.');});
 $('install-button').addEventListener('click',()=>openDialog('install'));
 for(const [id,factor] of [['zoom-in',1.25],['zoom-out',.8]])$(id).addEventListener('click',()=>{state.following=false;renderer.zoom(factor);});
 const pointers=new Map();let start=null,lastPoint=null,moved=false,pinchDistance=0;
@@ -105,7 +109,7 @@ canvas.addEventListener('pointermove',event=>{
 canvas.addEventListener('pointerup',event=>{
   const p=localPoint(event);pointers.delete(event.pointerId);
   if(!moved && pointers.size===0){const world=renderer.world(p);
-    if(state.tool){const kind=state.tool;colony.place(kind,world[0]);state.tool=null;updateTools();toast(kind==='food'?'Food placed. Let the scouts find it.':'Water placed. Workers will bring it home.');}
+    if(state.tool){const kind=state.tool;colony.place(kind,world[0]);state.tool=null;updateTools();toast(kind==='food'?'Food placed. Let the scouts harvest the grain.':'Water placed. Workers will bring it home.');}
     else{const ants=colony.ants.filter(a=>distance(renderer.screen(a.pos),p)<26).sort((a,b)=>a.id-b.id),current=ants.findIndex(a=>a.id===state.selected);select(ants.length?ants[(current+1)%ants.length].id:null);}
   }
   if(pointers.size===1){lastPoint=[...pointers.values()][0];moved=true;}else{start=null;lastPoint=null;}pinchDistance=0;

@@ -13,3 +13,6 @@ test-results/
 playwright-report/
 .openai/
 benchmark-local.json
+
+.checkpoint-v03/
+qa-v04/

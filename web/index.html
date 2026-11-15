@@ -29,7 +29,7 @@
 <main id="game" aria-label="Little Colony ant farm">
   <canvas id="world" aria-label="Ant colony. Drag to explore, pinch or scroll to zoom, and tap an ant to inspect it." tabindex="0"></canvas>
   <header class="hud panel">
-    <div class="identity"><span class="eyebrow"><i></i>LITTLE COLONY</span><h1>The first clearing</h1><span id="day" class="day">Day 1</span></div>
+    <div class="identity"><span class="eyebrow"><i></i>LITTLE COLONY</span><h1>The first clearing</h1><span id="day" class="day">Day 1</span><span id="weather" class="weather">Dry weather · grassland</span></div>
     <div class="resources" aria-label="Colony resources">
       <div class="resource cream"><div><svg><use href="#i-ant"/></svg><strong id="ants-count">13</strong></div><span>ANTS</span></div>
       <div class="resource green"><div><svg><use href="#i-food"/></svg><strong id="food-count">12</strong></div><span>FOOD</span></div>
@@ -69,7 +69,7 @@
   <div class="zoom-tools panel"><button id="zoom-in" aria-label="Zoom in">+</button><button id="zoom-out" aria-label="Zoom out">−</button></div>
   <aside id="performance-panel" class="panel performance-panel" aria-label="Live performance" hidden>
     <div class="dialog-heading"><span class="eyebrow">LIVE PERFORMANCE</span><button id="close-performance" class="icon-button" aria-label="Close performance"><svg><use href="#i-close"/></svg></button></div>
-    <dl><div><dt>FPS</dt><dd id="perf-fps">—</dd></div><div><dt>Frame</dt><dd id="perf-frame">—</dd></div><div><dt>Simulation / tick</dt><dd id="perf-tick">—</dd></div><div><dt>Drawing / frame</dt><dd id="perf-draw">—</dd></div><div><dt>Actual / target</dt><dd id="perf-speed">—</dd></div><div><dt>Ants / ceiling</dt><dd id="perf-population">—</dd></div><div><dt>Soil deposited</dt><dd id="perf-mound">0</dd></div><div><dt>Routing average</dt><dd id="perf-routing">—</dd></div></dl>
+    <dl><div><dt>FPS</dt><dd id="perf-fps">—</dd></div><div><dt>Frame</dt><dd id="perf-frame">—</dd></div><div><dt>Simulation / tick</dt><dd id="perf-tick">—</dd></div><div><dt>Drawing / frame</dt><dd id="perf-draw">—</dd></div><div><dt>Actual / target</dt><dd id="perf-speed">—</dd></div><div><dt>Ants / ceiling</dt><dd id="perf-population">—</dd></div><div><dt>Soil deposited</dt><dd id="perf-mound">0</dd></div><div><dt>Routing average</dt><dd id="perf-routing">—</dd></div><div><dt>Route recoveries</dt><dd id="perf-recoveries">0</dd></div></dl>
     <button id="export-performance" class="secondary full">Export readings</button>
   </aside>
 </main>
@@ -78,19 +78,19 @@
   <h2 id="guide-title">A whole world, one small colony.</h2><p class="intro muted">Give them a little care, then watch their world take shape.</p>
   <div class="guide-grid">
     <article><svg><use href="#i-nest"/></svg><h3>Look a little closer</h3><p>Drag to explore. Pinch to zoom. Tap an ant to meet it.</p></article>
-    <article><svg><use href="#i-food"/></svg><h3>Leave a little care</h3><p>Choose Food or Water, then tap the world. Scouts will find it.</p></article>
-    <article><svg><use href="#i-ant"/></svg><h3>Let the colony build</h3><p>Workers dig, raise brood, and carry earth up to the mound.</p></article>
+    <article><svg><use href="#i-food"/></svg><h3>Leave a little care</h3><p>Harvest grass seed. Empty plants wither, then regrow. Rain gathers in low spots. You can also place food or water.</p></article>
+    <article><svg><use href="#i-ant"/></svg><h3>Let the colony build</h3><p>Workers dig soft earth, carry new eggs to the nursery, and tend larvae and pupae.</p></article>
   </div>
   <button id="enter" class="primary full">Enter the clearing</button><p class="guide-note muted">Saves on this device. The colony rests while the app is closed.</p>
 </dialog>
 <dialog id="roster" class="panel roster-dialog" aria-labelledby="roster-title">
   <div class="dialog-heading"><div><span class="eyebrow">LIFE IN THE CLEARING</span><h2 id="roster-title">Your colony</h2></div><button data-close="roster" class="icon-button" aria-label="Close colony roster"><svg><use href="#i-close"/></svg></button></div>
-  <div id="colony-summary" class="colony-summary"></div><p id="soil-stats" class="muted"></p><div id="ant-list" class="ant-list"></div>
+  <div id="colony-summary" class="colony-summary"></div><p id="brood-breakdown" class="brood-breakdown"></p><p id="queen-laying" class="muted small"></p><p id="soil-stats" class="muted"></p><div id="ant-list" class="ant-list"></div>
 </dialog>
 <dialog id="menu" class="panel menu-dialog" aria-labelledby="menu-title">
   <div class="dialog-heading"><h2 id="menu-title">A little care</h2><button data-close="menu" class="icon-button" aria-label="Close menu"><svg><use href="#i-close"/></svg></button></div>
   <div class="menu-actions"><button id="settings-button" class="secondary">Colony &amp; reproduction</button><button id="performance-button" class="secondary">Show performance</button><button id="materials-button" class="secondary">Terrain guide</button><button id="save-now" class="secondary">Save colony now</button><button id="install-button" class="secondary">Save to my Home Screen</button><button id="help" class="secondary">How to play</button><button id="export" class="secondary">Export colony backup</button><button id="reset" class="danger">Start a new colony</button></div>
-  <p id="offline-state" class="offline-state muted" role="status">Preparing offline play…</p><p class="muted small">Living soil · v0.3<br>A generalized soil-nesting ant model. Growth follows resources, brood care, and nest conditions. Use Colony &amp; reproduction to control growth.</p>
+  <p id="offline-state" class="offline-state muted" role="status">Preparing offline play…</p><p class="muted small">Rain &amp; renewal · v0.4<br>A harvester-inspired soil-nesting colony. Growth follows resources, brood care, and nest conditions. Use Colony &amp; reproduction to control growth.</p>
 </dialog>
 <dialog id="settings" class="panel settings-dialog" aria-labelledby="settings-title">
   <div class="dialog-heading"><div><span class="eyebrow">GROW AT YOUR OWN PACE</span><h2 id="settings-title">Colony &amp; reproduction</h2></div><button data-close="settings" class="icon-button" aria-label="Close colony settings"><svg><use href="#i-close"/></svg></button></div>
@@ -100,13 +100,14 @@
     <label>Starting workers · next new colony<select id="starting-workers"><option value="6">6 workers + queen</option><option value="12">12 workers + queen</option><option value="20">20 workers + queen</option><option value="30">30 workers + queen</option></select></label>
     <label>Population ceiling<select id="population-cap"><option value="60">60 ants</option><option value="120">120 ants · default</option><option value="250">250 ants · testing</option><option value="500">500 ants · testing</option></select></label>
   </div>
-  <p class="muted small">Egg laying and development are separate. Existing brood can still emerge when laying is off. Food, protein, care, moisture, and temperature continue to affect development.</p>
-  <p class="muted small settings-note">At normal development, the model spans about 28 colony days under ideal conditions. Each colony day is compressed into ten minutes at 1×. Use higher time speeds to observe longer periods.</p>
+  <p class="muted small">Egg laying and development are separate. Existing brood can still emerge when laying is off. Seed nutrition, care, moisture, and temperature continue to affect development.</p>
+  <p class="muted small settings-note">At normal development, the model spans about 38 colony days under ideal conditions. Each colony day is compressed into ten minutes at 1×. Use higher time speeds to observe longer periods.</p>
   <p id="cap-note" class="muted small">Changing the ceiling never removes existing ants.</p><button data-close="settings" class="primary full">Back to the colony</button>
 </dialog>
 <dialog id="materials" class="panel materials-dialog" aria-labelledby="materials-title">
   <div class="dialog-heading"><div><span class="eyebrow">LAYERS OF THE CLEARING</span><h2 id="materials-title">Terrain guide</h2></div><button data-close="materials" class="icon-button" aria-label="Close terrain guide"><svg><use href="#i-close"/></svg></button></div>
-  <div class="material-list"><article><i class="swatch spoil"></i><div><h3>Loose mound soil</h3><p>Fresh, coarse pellets with mineral fragments. Excavated earth has a bare surface, without a grass cap.</p></div></article><article><i class="swatch topsoil"></i><div><h3>Organic topsoil</h3><p>Dark earth, roots, and organic fragments beneath undisturbed grass.</p></div></article><article><i class="swatch sand"></i><div><h3>Sandy subsoil</h3><p>Fine, pale grains. Relatively easy to excavate and carry.</p></div></article><article><i class="swatch clay"></i><div><h3>Compact clay</h3><p>Dense, horizontal seams. Digging takes longer, especially in poor moisture conditions.</p></div></article><article><i class="swatch rock"></i><div><h3>Stone &amp; deep mineral soil</h3><p>Angular stone interrupts deeper layers. Ants must choose another direction around rock.</p></div></article></div>
+  <div class="material-list"><article><i class="swatch spoil"></i><div><h3>Loose mound soil</h3><p>Bare, coarse pellets outside the entrance. Carrying distance, slopes, and colony-specific preferences produce uneven mounds.</p></div></article><article><i class="swatch topsoil"></i><div><h3>Rooted dirt</h3><p>Dark soil under grass. Harvested clumps turn brown, then sprout and produce grain again.</p></div></article><article><i class="swatch earth"></i><div><h3>Diggable earth</h3><p>Soft soil continues at every depth. There are no stone barriers or harder layers.</p></div></article><article><i class="swatch water"></i><div><h3>Rain &amp; puddles</h3><p>Rainwater gathers in local depressions. Puddles shrink through collection and evaporation and refill during later rain.</p></div></article></div>
+  <div class="brood-key"><span><i class="egg-dot"></i>Egg · white oval</span><span><i class="larva-dot"></i>Larva · pale, segmented</span><span><i class="pupa-dot"></i>Pupa · tan ant shape</span></div>
 </dialog>
 <dialog id="install" class="panel install-dialog" aria-labelledby="install-title">
   <div class="dialog-heading"><span class="eyebrow">YOUR OWN LITTLE CLEARING</span><button data-close="install" class="icon-button" aria-label="Close installation guide"><svg><use href="#i-close"/></svg></button></div>
