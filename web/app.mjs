@@ -10,6 +10,7 @@ let storage,store,colony,saveError;
 try {storage=window.localStorage;store=new SaveStore(storage);const loaded=store.load();colony=loaded?.colony;if(loaded?.recovered)saveError='Recovered your colony from its backup.';}catch(error){saveError=error.message;}
 colony??=new Colony(Date.now()>>>0);
 const renderer=new Renderer(canvas),state={speed:1,paused:false,trails:false,selected:null,following:false,tool:null};
+renderer.home(colony.world);
 const monitor=new PerformanceMonitor();
 let last=performance.now(),accumulator=0,lastUI=0,lastSave=last,toastTimer,hidden=document.hidden,lastAlive=colony.alive;
 const dialogs=[...document.querySelectorAll('dialog')];
@@ -84,7 +85,7 @@ $('speed').addEventListener('click',()=>{state.speed=SPEEDS[(SPEEDS.indexOf(stat
 document.querySelectorAll('[data-tool]').forEach(b=>b.addEventListener('click',()=>{state.tool=state.tool===b.dataset.tool?null:b.dataset.tool;state.selected=null;state.following=false;updateTools();updateUI();}));
 $('cancel-tool').addEventListener('click',()=>{state.tool=null;updateTools();});
 $('trails').addEventListener('click',()=>{state.trails=!state.trails;updateTools();});
-$('home').addEventListener('click',()=>{renderer.home();select(null);});
+$('home').addEventListener('click',()=>{renderer.home(colony.world);select(null);});
 $('close-profile').addEventListener('click',()=>select(null));
 $('follow').addEventListener('click',()=>{state.following=!state.following;const a=selectedAnt();if(a && state.following)Object.assign(renderer.camera,renderer.focus(a));updateUI();});
 $('roster-button').addEventListener('click',()=>{buildRoster();openDialog('roster');});

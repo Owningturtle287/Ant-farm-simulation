@@ -23,8 +23,13 @@ export function chamberCells(center,rx,ry,seed){
   }return out;
 }
 export function densityAt(x,y,solid){
-  const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy;
-  return (solid(ix,iy)?1:0)*(1-fx)*(1-fy)+(solid(ix+1,iy)?1:0)*fx*(1-fy)+(solid(ix,iy+1)?1:0)*(1-fx)*fy+(solid(ix+1,iy+1)?1:0)*fx*fy;
+  const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy,a=solid(ix,iy)?1:0,b=solid(ix+1,iy)?1:0,c=solid(ix,iy+1)?1:0,d=solid(ix+1,iy+1)?1:0;
+  const value=a*(1-fx)*(1-fy)+b*fx*(1-fy)+c*(1-fx)*fy+d*fx*fy;
+  if(value<.5)return value;
+  // Valid diagonal movement has a rounded capsule, so raster bridges do not read as staircases.
+  if(!a&&!d&&(!b||!c)){const t=Math.max(0,Math.min(1,(fx+fy)*.5));if((fx-t)**2+(fy-t)**2<.46**2)return 0;}
+  if(!b&&!c&&(!a||!d)){const t=Math.max(0,Math.min(1,(1-fx+fy)*.5));if((fx-(1-t))**2+(fy-t)**2<.46**2)return 0;}
+  return value;
 }
 export function terrainMask(world,cx,cy){
   const size=16*CONTOUR_SAMPLES,result=new Uint8Array(size*size),grid=new Uint8Array(18*18),ox=cx*16-.5,oy=cy*16-.5;

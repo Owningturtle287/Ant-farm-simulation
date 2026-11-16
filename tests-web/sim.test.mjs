@@ -328,3 +328,8 @@ test('legacy wide surface breaches are narrowed with existing soil while preserv
   for(const e of w.entrances){assert.ok(w.walkable(e.mouth));assert.ok(w.path(w.nest,e.mouth));const open=Array.from({length:9},(_,i)=>e.mouth[0]+i-4).filter(x=>!w.solid([x,w.baseSurface(x)]));assert.ok(open.length<=1);}
   assert.equal(w.soilDeposited,d.world.soilDeposited);assert.ok(c.ants.every(a=>w.walkable(a.cell)));
 });
+
+test('diagonal contour capsules smooth valid turns while retaining solid cell centers',()=>{
+  const solid=(x,y)=>!(x===y&&x>=0&&x<=1)&&!(x===0&&y===1);assert.equal(densityAt(.8,.2,solid),0);assert.equal(densityAt(1,0,solid),1);assert.equal(densityAt(0,0,solid),0);
+  const blocked=(x,y)=>!(x===y&&x>=0&&x<=1);assert.ok(densityAt(.8,.2,blocked)>=.5,'Two solid corner flanks must not become a visual shortcut.');
+});

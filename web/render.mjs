@@ -33,7 +33,13 @@ export class Renderer {
     this.dpr=Math.min(2,window.devicePixelRatio||1);this.canvas.width=Math.round(rect.width*this.dpr);this.canvas.height=Math.round(rect.height*this.dpr);
   }
   get unit() { return 14*this.camera.zoom; }
-  home() { this.camera={x:0,y:0,zoom:Math.max(.68,Math.min(1.3,this.width/960))}; }
+  home(world=null) {
+    this.camera={x:0,y:0,zoom:Math.max(.68,Math.min(1.3,this.width/960))};if(!world?.deposits.size)return;
+    let minX=0,maxX=0,minY=0,maxY=15;for(const ids of [world.excavated,world.deposits])for(const id of ids){const [x,y]=cell(id);minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);}
+    const top=this.width>550?110:170,bottom=this.height-96;
+    this.camera.zoom=Math.max(.35,Math.min(this.camera.zoom,(this.width-48)/((maxX-minX+6)*14),Math.max(100,bottom-top)/((maxY-minY+6)*14)));
+    this.camera.x=(minX+maxX)/2;this.camera.y=minY-3-(top-this.height*.30)/this.unit;
+  }
   reset() {this.chunks.clear();this.positions.clear();this.home();}
   screen([x,y]) {return [this.width/2+(x-this.camera.x)*this.unit,this.height*.30+(y-this.camera.y)*this.unit];}
   world([x,y]) {return [(x-this.width/2)/this.unit+this.camera.x,(y-this.height*.30)/this.unit+this.camera.y];}
@@ -54,19 +60,19 @@ export class Renderer {
     const filled=(x,y)=>x>=0&&x<maskSize&&y>=0&&y<maskSize?mask[y*maskSize+x]:densityAt(ox+(x+.5)/CONTOUR_SAMPLES,oy+(y+.5)/CONTOUR_SAMPLES,solid)>=.5;
     const cells=[];for(let ly=0;ly<16;ly++)for(let lx=0;lx<16;lx++){
       const wx=cx*16+lx,wy=cy*16+ly,type=world.deposits.has(key([wx,wy]))||wy<world.baseSurface(wx)?'spoil':baseMaterial([wx,wy],world.seed,world.baseSurface(wx));
-      cells.push({wx,wy,type,base:palette[type].colors[0],wall:world.coveredMound([wx,wy]),grass:type==='topsoil'&&wy===world.baseSurface(wx)&&!world.patches.some(p=>p.origin==='grass'&&p.stage==='dead'&&Math.abs(p.cell[0]-wx)<=1)});
+      cells.push({wx,wy,type,base:palette[type].colors[0],wall:world.coveredMound([wx,wy])||(wy<world.baseSurface(wx)&&wy>world.surface(wx)),grass:type==='topsoil'&&wy===world.baseSurface(wx)&&!world.patches.some(p=>p.origin==='grass'&&p.stage==='dead'&&Math.abs(p.cell[0]-wx)<=1)});
     }
     for(let y=0;y<size;y++)for(let x=0;x<size;x++){
       const mx=x>>1,my=y>>1,inside=mask[my*maskSize+mx],info=cells[(y>>4)*16+(x>>4)],gx=cx*size+x,gy=cy*size+y,h=hashCell([gx,gy],world.seed),idx=(y*size+x)*4;
       let color,shade=0;
       if(inside){
-        color=info.base;shade=((h>>>8)%13)-6;
+        color=info.base;shade=((h>>>8)%9)-4;
         if(info.type!=='spoil'){const depth=oy+(y+.5)/TERRAIN_PIXELS-world.baseSurface(info.wx),mix=Math.max(0,Math.min(1,(depth-3+Math.sin((ox+x/TERRAIN_PIXELS)*.18+world.seed)*.65)/5));color=palette.topsoil.colors[0].map((v,i)=>v*(1-mix)+palette.earth.colors[0][i]*mix);}
         // Fine grains replace the old repeating eight-pixel blocks; crumb clusters remain distinct from rooted earth.
         const cluster=hashCell([Math.floor(gx/3),Math.floor(gy/2)],world.seed);
         if(info.type==='spoil'){if(cluster%7===0)color=palette.spoil.light;else if(cluster%9===0)color=palette.spoil.dark;}
-        else if(h%11===0)color=palette[info.type].light;else if(h%17===0)color=palette[info.type].dark;
-        if(info.type==='topsoil'&&(gx+Math.floor(gy/7)+world.seed)%23===0&&h%4!==0)shade-=22;
+        else if(h%29===0)color=palette[info.type].light;else if(h%37===0)color=palette[info.type].dark;
+        if(info.type==='topsoil'&&cluster%127===0)shade-=18;
         if(!filled(mx,my-1))shade+=15;if(!filled(mx-1,my))shade+=6;if(!filled(mx,my+1))shade-=23;
         if(info.grass&&!filled(mx,my-1))color=rgb('#879d58');
       }else if(oy+(y+.5)/TERRAIN_PIXELS>=world.baseSurface(info.wx)-.5||info.wall){

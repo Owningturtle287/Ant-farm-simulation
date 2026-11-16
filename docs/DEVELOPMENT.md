@@ -97,3 +97,5 @@ Microclimate samples use a saved two-second moisture-source snapshot. Numeric ca
 `geometry.mjs` owns connected cubic passage rasterization, seeded rotated/lobed chamber footprints and shared bilinear occupancy sampling. Renderer chunks use 16 texture pixels and 8 contour samples per model cell. Cache invalidation includes adjacent chunks; sampling is world-aligned across seams. Never draw exposed former mound galleries as sheltered back walls.
 
 `World.geometryVersion` is independent of envelope/model version 4. On older malformed terrain, regrade the exact existing spoil inventory once, use some inventory to plug excess shallow breaches around protected mouth columns, and relocate affected occupants without loss. Stable old terrain is preserved. Keep the legacy-repair and modern deterministic-save tests.
+
+Contour masks include narrow capsules along valid diagonal graph edges, preserving solid centers and blocked corner pairs. Nest framing fits the modified terrain below the HUD when opening a mature save or pressing Nest.
