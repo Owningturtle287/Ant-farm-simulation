@@ -114,3 +114,5 @@ Browser checks attach camera timing reports, including a synthetic 10,000-adult/
 During camera input the canvas temporarily uses a one-pixel-per-CSS-pixel backing store; after 180 ms of stillness the normal capped device pixel ratio returns. DOM text/controls stay at native resolution. This bounds pixel bandwidth on mobile compositors, while bitmap caches and colony state survive the resolution change. Browser detail-ready checks include this restoration.
 
 An autosave request can start while a large tick is pending: the runner finishes that tick and holds further biology until the database generation commits. Do not require an already-idle runner to request an autosave, because continuous catch-up can otherwise starve saving indefinitely.
+
+Crowd suppression uses screen-space buckets rather than allowing several opaque sprites at the same world-cell position. Very dense wide views use simple pixel silhouettes beyond a viewport-scaled rich-sprite budget; selected ants and the queen bypass that budget. This changes drawing only, not the simulated population or individual inspection.

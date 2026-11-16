@@ -137,7 +137,7 @@ export class Renderer {
     this.resolution(performance.now()<(this.motionUntil??0)?Math.min(1,this.nativeDpr):this.nativeDpr);
     const c=this.ctx,u=this.unit,z=this.camera.zoom;c.setTransform(this.dpr,0,0,this.dpr,0,0);c.imageSmoothingEnabled=false;
     this.frameID++;this.landscape(colony.world);
-    this.requests.clear();this.previewDeadline=performance.now()+1.5;this.renderStats.drawnAnts=0;this.renderStats.crowdSkipped=0;const crowd=new Map(),broodCrowd=new Map();const lod=u*this.dpr>=13?16:8;
+    this.requests.clear();this.previewDeadline=performance.now()+1.5;this.renderStats.drawnAnts=0;this.renderStats.crowdSkipped=0;this.renderStats.simpleSprites=0;const crowd=new Map(),broodCrowd=new Map(),crowdWidth=Math.max(4,8*z),crowdHeight=Math.max(4,5*z),richBudget=Math.max(400,Math.min(1500,Math.ceil(this.width*this.height/800)));const lod=u*this.dpr>=13?16:8;
     const min=this.world([-u,-u]),max=this.world([this.width+u,this.height+u]);
     for(let cy=Math.floor(min[1]/16);cy<=Math.floor(max[1]/16);cy++) for(let cx=Math.floor(min[0]/16);cx<=Math.floor(max[0]/16);cx++) {
       const [x,y]=this.screen([cx*16-.5,cy*16-.5]),image=this.chunk(colony.world,cx,cy,lod);if(image)c.drawImage(image,Math.round(x),Math.round(y),Math.ceil(u*16)+.2,Math.ceil(u*16)+.2);else{const ground=this.screen([cx*16,colony.world.baseSurface(cx*16)-.5])[1],top=Math.max(y,ground);if(top<y+u*16){c.fillStyle='#806446';c.fillRect(x,top,u*16,y+u*16-top);}}
@@ -146,16 +146,17 @@ export class Renderer {
     if(options.trails)for(const [kind,map] of Object.entries(colony.world.signals))for(const [id,strength] of map)if(strength>.08){const [x,y]=this.screen(cell(id));c.globalAlpha=Math.min(.8,strength*.4);c.fillStyle=SIGNAL_COLORS[kind];c.fillRect(x-2*z,y-4*z,kind==='alarm'?6*z:4*z,kind==='alarm'?4*z:2*z);c.globalAlpha=1;}
     const visualClock=options.paused?colony.time:clock;
     this.surfaceLife(colony.world,visualClock);
-    for(const baby of colony.brood)if(baby.carriedBy==null&&baby.cell[0]>=min[0]-1&&baby.cell[0]<=max[0]+1&&baby.cell[1]>=min[1]-1&&baby.cell[1]<=max[1]+1){const bucket=key(baby.cell),count=broodCrowd.get(bucket)??0;if(count>=8)continue;broodCrowd.set(bucket,count+1);const [x,y]=this.screen(baby.cell);broodPixel(c,broodStage(baby),x+(baby.id%3-1)*2*z,y+2*z,z);}
+    for(const baby of colony.brood)if(baby.carriedBy==null&&baby.cell[0]>=min[0]-1&&baby.cell[0]<=max[0]+1&&baby.cell[1]>=min[1]-1&&baby.cell[1]<=max[1]+1){const bucket=key(baby.cell),count=broodCrowd.get(bucket)??0;if(count>=(z<1?2:6))continue;broodCrowd.set(bucket,count+1);const [x,y]=this.screen(baby.cell);broodPixel(c,broodStage(baby),x+(baby.id%3-1)*2*z,y+2*z,z);}
     const carriedBrood=new Map(colony.brood.filter(b=>b.carriedBy!=null).map(b=>[b.carriedBy,b]));
     const live=new Set();
     for(const ant of colony.ants) {
-      live.add(ant.id);if(ant.pos[0]<min[0]-3||ant.pos[0]>max[0]+3||ant.pos[1]<min[1]-3||ant.pos[1]>max[1]+3)continue;const bucket=key(ant.cell),count=crowd.get(bucket)??0;if(count>=(z<1?6:16)&&ant.id!==options.selected&&ant.caste!=='queen'){this.renderStats.crowdSkipped++;continue;}crowd.set(bucket,count+1);this.renderStats.drawnAnts++;let p=this.positions.get(ant.id);if(!p){p={x:ant.pos[0],y:ant.pos[1],angle:0};this.positions.set(ant.id,p);}
+      live.add(ant.id);if(ant.pos[0]<min[0]-3||ant.pos[0]>max[0]+3||ant.pos[1]<min[1]-3||ant.pos[1]>max[1]+3)continue;const bucket=Math.floor((this.width/2+(ant.pos[0]-this.camera.x)*u)/crowdWidth)+','+Math.floor((this.height*.3+(ant.pos[1]-this.camera.y)*u)/crowdHeight),count=crowd.get(bucket)??0;if(count>=(z<1.3?1:3)&&ant.id!==options.selected&&ant.caste!=='queen'){this.renderStats.crowdSkipped++;continue;}crowd.set(bucket,count+1);this.renderStats.drawnAnts++;let p=this.positions.get(ant.id);if(!p){p={x:ant.pos[0],y:ant.pos[1],angle:0};this.positions.set(ant.id,p);}
       if(p.frame!==this.frameID-1){p.x=ant.pos[0];p.y=ant.pos[1];}p.frame=this.frameID;
       const blend=options.speed>4?1:1-Math.exp(-dt*22);p.x+=(ant.pos[0]-p.x)*blend;p.y+=(ant.pos[1]-p.y)*blend;
       if(ant.route.length){const next=ant.route[0],dx=next[0]-ant.pos[0],dy=next[1]-ant.pos[1];if(Math.abs(dx)+Math.abs(dy)>.01)p.angle=Math.atan2(dy,dx);}
       const [x,y]=this.screen([p.x,p.y]);if(x<-50 || y<-50 || x>this.width+50 || y>this.height+50)continue;
       if(ant.id===options.selected){c.strokeStyle='#ebc381';c.lineWidth=1.3;c.beginPath();c.arc(x,y,(ant.caste==='queen'?20:14)*z,0,Math.PI*2);c.stroke();}
+      if(this.renderStats.drawnAnts>richBudget&&ant.id!==options.selected&&ant.caste!=='queen'){c.fillStyle='#b45a32';c.fillRect(Math.round(x),Math.round(y),Math.max(1,2*z),Math.max(1,z));this.renderStats.simpleSprites++;continue;}
       const moving=ant.route.length || ['digging','harvesting'].includes(ant.task),frame=Math.floor((options.paused?colony.time:clock)*(moving?9:2)+ant.id)%4;
       const width=(ant.caste==='queen'?31:13+ant.bodySize*9)*z,height=width*18/32;
       c.save();c.translate(Math.round(x),Math.round(y));c.rotate(p.angle);if(ant.task==='laying')c.scale(1+Math.sin(visualClock*7)*.045,1);c.drawImage(this.sprites[ant.caste][frame],-width/2,-height/2,width,height);
