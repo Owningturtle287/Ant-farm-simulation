@@ -1,7 +1,9 @@
 import {cell,key,broodStage} from './sim.mjs';
 import {MATERIALS,baseMaterial,hashCell} from './materials.mjs';
 import {resourceTiles} from './resources.mjs';
+import {terrainMask,densityAt,TERRAIN_PIXELS,CONTOUR_SAMPLES} from './geometry.mjs';
 import {SIGNAL_COLORS} from './signals.mjs';
+const rgbCache=new Map();function rgb(hex){if(!rgbCache.has(hex))rgbCache.set(hex,[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)));return rgbCache.get(hex);}
 function buffer(w,h) { const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
 function antSprite(caste,frame) {
   const image=buffer(32,18),c=image.getContext('2d');
@@ -46,37 +48,34 @@ export class Renderer {
   chunk(world,cx,cy) {
     const id=key([cx,cy]),version=world.chunkRevisions.get(id)??0,old=this.chunks.get(id);
     if(old?.version===version) return old.image;
-    const image=buffer(128,128),c=image.getContext('2d');
-    const box=(x,y,w,h,color)=>{c.fillStyle=color;c.fillRect(x,y,w,h);};
-    for(let ly=0;ly<16;ly++) for(let lx=0;lx<16;lx++) {
-      const pos=[cx*16+lx,cy*16+ly],[wx,wy]=pos,x=lx*8,y=ly*8;
-      const hash=hashCell(pos,world.seed);
-      if(world.solid(pos)) {
-        const type=world.material(pos),material=MATERIALS[type];box(x,y,8,8,material.colors[hash%material.colors.length]);
-        if(type==='spoil'){
-          // Fresh pellets and contrasting mineral fragments; never a grass cap.
-          const origin=MATERIALS[world.spoilOrigins.get(key(pos))];
-          box(x+1,y+1,3,2,material.light);box(x+4,y+4,3,2,material.dark);box(x+hash%6,y+5,2,2,origin?.colors[0]??'#99734d');
-          box(x+5,y+1,2,1,'#d4ae77');box(x+1,y+6,1,1,'#f0cd91');
-        }else if(type==='topsoil'){
-          box(x+hash%6,y+Math.floor(hash/7)%6,2,1,material.light);box(x+Math.floor(hash/17)%7,y+6,1,1,material.dark);
-          if(hash%3===0){box(x+3,y,1,6,'#342b21');box(x+4,y+4,2,1,'#342b21');}
-          if(hash%11===0)box(x+1,y+5,3,1,'#907a51');
-        }else{for(let i=0;i<6;i++){const grain=hashCell([wx*8+i,wy],world.seed);box(x+grain%8,y+(grain>>>8)%8,1+(grain%3===0?1:0),1,i%2?material.dark:material.light);}}
-        if(!world.solid([wx,wy-1])){
-          const depleted=world.patches.some(p=>p.origin==='grass'&&p.stage==='dead'&&Math.abs(p.cell[0]-wx)<=1);
-          const grass=type==='topsoil'&&wy===world.baseSurface(wx)&&!depleted;
-          box(x,y,8,1,grass?'#8ea760':material.light);if(grass)box(x,y+1,8,1,'#52643a');
-        }
-        if(!world.solid([wx-1,wy]))box(x,y,1,8,material.light);
-        if(!world.solid([wx,wy+1]))box(x,y+7,8,1,material.dark);
-      } else if(!world.onSurface(pos)) {
-        const type=world.moundTunnels.has(key(pos))?'spoil':baseMaterial(pos,world.seed,world.baseSurface(wx)),walls={topsoil:'#30281f',earth:'#4b3826',spoil:'#604529'};
-        box(x,y,8,8,walls[type]);box(x+hash%7,y+Math.floor(hash/11)%7,1,1,MATERIALS[type].dark);
-        if(world.solid([wx,wy-1]))box(x,y,8,2,'#25251e');
-        if(world.entrances.some(e=>e.state==='open'&&e.mouth[0]===wx&&wy===e.mouth[1]+1)){box(x,y,1,8,'#806548');box(x+7,y,1,8,'#806548');}
-      }
+    const size=16*TERRAIN_PIXELS,image=buffer(size,size),c=image.getContext('2d'),pixels=c.createImageData(size,size),data=pixels.data,mask=terrainMask(world,cx,cy),maskSize=16*CONTOUR_SAMPLES;
+    const palette={};for(const [name,m] of Object.entries(MATERIALS)){palette[name]={colors:m.colors.map(rgb),light:rgb(m.light),dark:rgb(m.dark)};}
+    const ox=cx*16-.5,oy=cy*16-.5,solid=(x,y)=>world.solid([x,y]);
+    const filled=(x,y)=>x>=0&&x<maskSize&&y>=0&&y<maskSize?mask[y*maskSize+x]:densityAt(ox+(x+.5)/CONTOUR_SAMPLES,oy+(y+.5)/CONTOUR_SAMPLES,solid)>=.5;
+    const cells=[];for(let ly=0;ly<16;ly++)for(let lx=0;lx<16;lx++){
+      const wx=cx*16+lx,wy=cy*16+ly,type=world.deposits.has(key([wx,wy]))||wy<world.baseSurface(wx)?'spoil':baseMaterial([wx,wy],world.seed,world.baseSurface(wx));
+      cells.push({wx,wy,type,base:palette[type].colors[0],wall:world.coveredMound([wx,wy]),grass:type==='topsoil'&&wy===world.baseSurface(wx)&&!world.patches.some(p=>p.origin==='grass'&&p.stage==='dead'&&Math.abs(p.cell[0]-wx)<=1)});
     }
+    for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+      const mx=x>>1,my=y>>1,inside=mask[my*maskSize+mx],info=cells[(y>>4)*16+(x>>4)],gx=cx*size+x,gy=cy*size+y,h=hashCell([gx,gy],world.seed),idx=(y*size+x)*4;
+      let color,shade=0;
+      if(inside){
+        color=info.base;shade=((h>>>8)%13)-6;
+        if(info.type!=='spoil'){const depth=oy+(y+.5)/TERRAIN_PIXELS-world.baseSurface(info.wx),mix=Math.max(0,Math.min(1,(depth-3+Math.sin((ox+x/TERRAIN_PIXELS)*.18+world.seed)*.65)/5));color=palette.topsoil.colors[0].map((v,i)=>v*(1-mix)+palette.earth.colors[0][i]*mix);}
+        // Fine grains replace the old repeating eight-pixel blocks; crumb clusters remain distinct from rooted earth.
+        const cluster=hashCell([Math.floor(gx/3),Math.floor(gy/2)],world.seed);
+        if(info.type==='spoil'){if(cluster%7===0)color=palette.spoil.light;else if(cluster%9===0)color=palette.spoil.dark;}
+        else if(h%11===0)color=palette[info.type].light;else if(h%17===0)color=palette[info.type].dark;
+        if(info.type==='topsoil'&&(gx+Math.floor(gy/7)+world.seed)%23===0&&h%4!==0)shade-=22;
+        if(!filled(mx,my-1))shade+=15;if(!filled(mx-1,my))shade+=6;if(!filled(mx,my+1))shade-=23;
+        if(info.grass&&!filled(mx,my-1))color=rgb('#879d58');
+      }else if(oy+(y+.5)/TERRAIN_PIXELS>=world.baseSurface(info.wx)-.5||info.wall){
+        color=rgb(info.wall?'#58432e':info.type==='topsoil'?'#302a22':'#423525');shade=(h%9)-4;
+        if(filled(mx,my-1)||filled(mx-1,my))shade-=10;
+      }else continue;
+      data[idx]=Math.max(0,Math.min(255,color[0]+shade));data[idx+1]=Math.max(0,Math.min(255,color[1]+shade));data[idx+2]=Math.max(0,Math.min(255,color[2]+shade));data[idx+3]=255;
+    }
+    c.putImageData(pixels,0,0);
     this.chunks.set(id,{image,version});return image;
   }
   landscape(world) {
@@ -85,7 +84,7 @@ export class Renderer {
     const gradient=c.createLinearGradient(0,ground-220*scale,0,ground);gradient.addColorStop(0,'#91b6a3');gradient.addColorStop(1,'#c0d2b6');c.fillStyle=gradient;c.fillRect(0,0,w,h);
     // One continuous stepped skyline avoids seams between distant hill sprites.
     for(let layer=0;layer<2;layer++){
-      const step=Math.max(6,12*scale),phase=(world.seed%1000)*.01+this.camera.x*.018;
+      const step=Math.max(2,4*scale),phase=(world.seed%1000)*.01+this.camera.x*.018;
       c.fillStyle=layer?'#86aa90':'#9bb9a0';c.beginPath();c.moveTo(0,h);
       for(let px=0;px<=w+step;px+=step){
         const elevation=(55-layer*14+Math.sin(px*.007+phase+layer*2)*18+Math.sin(px*.017+phase*.5)*8)*scale;

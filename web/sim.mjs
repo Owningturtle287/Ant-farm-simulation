@@ -4,6 +4,7 @@ import {terrainHeight,initHabitat,ensureHabitat,tickHabitat,harvest,restoreHabit
 import {NUTRITION,addStock,removeStock} from './resources.mjs';
 import {SPECIES,initializeBrain,lifespanFor,colonyOdor,contact,cropCapacity,developmentalRate,taskScores,rememberTask} from './fire-ant.mjs';
 import {founderNest,planPeripheralExit,planMoundPassage} from './architecture.mjs';
+import {chamberCells,curvedPassage} from './geometry.mjs';
 import {initSignals,emit,senseSignal,decaySignals,signalsJSON} from './signals.mjs';
 export {DAY,BROOD_DURATION,LIMIT,DEFAULT_SETTINGS,Random,createAnt,adultDays,broodStage};
 export const key=([x,y])=>x+','+y;
@@ -21,17 +22,18 @@ export function reason(a){return a.decision || 'Responding to local conditions a
 
 export class World{
   constructor(seed=287){
-    this.seed=seed;this.terrainVersion=1;this.terrainCache=new Map();this.climateCache=new Map();this.climateEpoch=null;this.excavated=new Set();this.deposits=new Set();this.heights=new Map();this.spoilOrigins=new Map();
+    this.seed=seed;this.geometryVersion=2;this.terrainVersion=1;this.terrainCache=new Map();this.climateCache=new Map();this.climateEpoch=null;this.excavated=new Set();this.deposits=new Set();this.heights=new Map();this.spoilOrigins=new Map();
     this.construction=[];this.plannedRooms=0;this.revision=0;this.chunkRevisions=new Map();this.soilExcavated=0;this.soilDeposited=0;this.soilAbandoned=0;
     this.pheromones=new Map();this.trails={food:new Map(),water:new Map()};this.nest=[0,11];this.pathCache=new Map();this.neighborCache=new Map();
     this.runtime={pathCalls:0,pathMs:0,recoveries:0};this.frontierVersion=-1;this.frontierCache=[];
     founderNest(this);initSignals(this);
     initHabitat(this);this.rebuildNavigation();
   }
-  carve([cx,cy],rx,ry){for(let y=-ry;y<=ry;y++)for(let x=-rx;x<=rx;x++)if(x*x/(rx*rx)+y*y/(ry*ry)<=1.12)this.excavated.add(key([cx+x,cy+y]));}
+  carve(center,rx,ry){for(const c of chamberCells(center,rx,ry,this.seed))this.excavated.add(key(c));this.excavated.add(key(center));}
   rebuildNavigation(){const bounds={minX:-12,maxX:12,maxY:15};for(const cells of [this.excavated,this.moundTunnels])for(const id of cells){const [x,y]=cell(id);bounds.minX=Math.min(bounds.minX,x);bounds.maxX=Math.max(bounds.maxX,x);bounds.maxY=Math.max(bounds.maxY,y);}this.navigation=bounds;}
   baseSurface(x){if(this.terrainVersion===0)return 1;let height=this.terrainCache.get(x);if(height==null){height=terrainHeight(x,this.seed);if(this.terrainCache.size>5000)this.terrainCache.clear();this.terrainCache.set(x,height);}return height;}
-  onSurface(c){return c[1]<this.baseSurface(c[0])&&!this.moundTunnels.has(key(c));}
+  coveredMound(c){return this.moundTunnels.has(key(c))&&c[1]<this.baseSurface(c[0])&&this.surface(c[0])<c[1];}
+  onSurface(c){return c[1]<this.baseSurface(c[0])&&!this.coveredMound(c);}
   inForagingZone(c){return c[1]<this.baseSurface(c[0]);}
   entrance(from=this.nest){const exits=this.entrances.filter(e=>e.state==='open');return [...(exits.sort((a,b)=>distance(from,a.mouth)-distance(from,b.mouth))[0]?.mouth??[0,0])];}
   foragingExit(from=this.nest){
@@ -83,16 +85,8 @@ export class World{
       for(const r of this.rooms)score+=Math.max(0,rx+r.rx+2-distance(center,r.center))*2;
       if(condition.humidity>.9)score+=100;
       if(center[1]-ry<this.baseSurface(center[0])+3)continue;
-      const plan=[],cursor=[...anchor.center];
-      while(!same(cursor,center)){
-        const chooseY=cursor[1]!==center[1] && (cursor[0]===center[0] || rng.int(0,2)===0);
-        cursor[chooseY?1:0]+=Math.sign(center[chooseY?1:0]-cursor[chooseY?1:0]);
-        plan.push([...cursor]);
-      }
-      for(let y=-ry;y<=ry;y++)for(let x=-rx;x<=rx;x++){
-        const c=[center[0]+x,center[1]+y],roughness=(hashCell(c,this.seed)%11)*.012;
-        if(x*x/(rx*rx)+y*y/(ry*ry)<=1+roughness)plan.push(c);
-      }
+      const chamber=chamberCells(center,rx,ry,this.seed+this.plannedRooms);if(chamber.some(c=>c[1]<this.baseSurface(c[0])+3))continue;
+      const plan=[...curvedPassage(anchor.center,center,rng),...chamber];
       if(!best || score<best.score)best={score,plan,center,rx,ry};
     }
     if(!best)return false;
@@ -113,16 +107,20 @@ export class World{
   }
   excavate(c){
     if(!this.solid(c)||!adjacent(c).some(n=>this.walkable(n)))return false;
-    if(this.deposits.has(key(c))){this.deposits.delete(key(c));this.spoilOrigins.delete(key(c));this.moundTunnels.add(key(c));this.soilDeposited--;this.soilRehandled++;this.heights.delete(c[0]);for(const id of this.deposits){const [x,y]=cell(id);if(x===c[0])this.heights.set(x,Math.min(this.heights.get(x)??Infinity,y));}this.construction=this.construction.filter(n=>!same(n,c));this.changed(c);return true;}
+    if(this.deposits.has(key(c))){this.deposits.delete(key(c));this.spoilOrigins.delete(key(c));this.moundTunnels.add(key(c));this.soilDeposited--;this.soilRehandled++;this.heights.delete(c[0]);for(const id of this.deposits){const [x,y]=cell(id);if(x===c[0]&&y<this.baseSurface(x))this.heights.set(x,Math.min(this.heights.get(x)??Infinity,y));}this.construction=this.construction.filter(n=>!same(n,c));this.changed(c);return true;}
     if(this.onSurface(c))return false;this.excavated.add(key(c));this.construction=this.construction.filter(n=>!same(n,c));this.soilExcavated++;this.changed(c);return true;
   }
+  stableDeposit([x,y]){
+    if(y<Math.max(this.surface(x-1),this.surface(x+1))-1)return false;
+    const rise=this.baseSurface(x)-y;for(let d=1;d<=3;d++)if(rise>Math.min(this.baseSurface(x-d)-this.surface(x-d),this.baseSurface(x+d)-this.surface(x+d))+1)return false;return true;
+  }
   depositSite(from=this.entrance()){
-    const radius=14+Math.floor(this.soilDeposited/65),bias=(hashCell([0,9],this.seed)%100)/100-.5;
+    const radius=18+Math.ceil(Math.sqrt(this.soilDeposited+1)*2),bias=(hashCell([0,9],this.seed)%100)/100-.5;
     for(const margin of [0,16]){
       const candidates=[];
       for(let x=-radius-margin;x<=radius+margin;x++)if(!this.entrances.some(e=>e.mouth[0]===x)){
         const y=this.surface(x)-1,c=[x,y];if(this.moundTunnels.has(key(c))||!this.onSurface(c)||!this.walkable(c))continue;
-        if(y<Math.min(this.surface(x-1),this.surface(x+1))-1)continue;
+        if(!this.stableDeposit(c))continue;
         const thickness=this.baseSurface(x)-y,score=thickness*.65+Math.abs(x)*.18+Math.sign(x)*bias*1.8+(hashCell([x,0],this.seed)%100)/180+distance(from,c)*.015;
         candidates.push({c,score});
       }
@@ -132,7 +130,7 @@ export class World{
   }
 
   deposit(c,origin='mixed'){
-    if(c[1]!==this.surface(c[0])-1||this.entrances.some(e=>e.mouth[0]===c[0])||this.moundTunnels.has(key(c)))return false;
+    if(c[1]!==this.surface(c[0])-1||!this.stableDeposit(c)||this.entrances.some(e=>e.mouth[0]===c[0])||this.moundTunnels.has(key(c)))return false;
     this.deposits.add(key(c));this.heights.set(c[0],c[1]);this.spoilOrigins.set(key(c),origin??'mixed');this.soilDeposited++;this.changed(c);
     for(const p of this.patches)if(p.cell[0]===c[0]){p.cell[1]=c[1]-1;if(p.kind==='food'){removeStock(this,p,p.amount,'buried');if(p.origin==='grass'){p.stage='dead';p.growth=0;}}if(p.origin==='puddle')removeStock(this,p,p.amount,'buried');}return true;
   }
@@ -145,7 +143,21 @@ export class World{
     if(kind==='food'){make('prey',24,x);make('nectar',16,x+2);}else make('placed',40,x);
   }
 
-  toJSON(){return {seed:this.seed,entrances:this.entrances,moundTunnels:[...this.moundTunnels],soilRehandled:this.soilRehandled,lastAccessPlan:this.lastAccessPlan,lastMoundPlan:this.lastMoundPlan,resourceLedger:this.resourceLedger,nextPrey:[...this.nextPrey],moistureSources:this.moistureSources,signals:signalsJSON(this),terrainVersion:this.terrainVersion,habitatRegions:[...this.habitatRegions],weather:this.weather,ecologyRng:{state:this.ecologyRng.state},environmentAt:this.environmentAt,nextPatchID:this.nextPatchID,excavated:[...this.excavated],deposits:[...this.deposits],spoilOrigins:[...this.spoilOrigins],construction:this.construction,rooms:this.rooms,plannedRooms:this.plannedRooms,
+  repairMound(){
+    if(this.geometryVersion>=2)return false;this.geometryVersion=2;
+    const plugs=[...this.excavated].map(cell).filter(c=>{const depth=c[1]-this.baseSurface(c[0]);return depth>=0&&depth<3&&this.entrances.some(e=>Math.abs(c[0]-e.mouth[0])<=10)&&!this.entrances.some(e=>c[0]===e.mouth[0]);}).sort((a,b)=>(a[1]-this.baseSurface(a[0]))-(b[1]-this.baseSurface(b[0])));
+    const wideMouth=plugs.some(c=>c[1]===this.baseSurface(c[0]));
+    const malformed=wideMouth||[...this.heights].some(([x,y])=>y<Math.max(this.surface(x-1),this.surface(x+1))-2)||this.moundTunnels.size>this.deposits.size*.3;
+    if(!malformed)return false;
+    for(const id of this.deposits)this.changed(cell(id));for(const id of this.moundTunnels)this.changed(cell(id));
+    const soil=[...this.deposits].map(id=>this.spoilOrigins.get(id)??'mixed');this.deposits.clear();this.heights.clear();this.spoilOrigins.clear();this.moundTunnels.clear();this.soilDeposited=0;this.construction=this.construction.filter(c=>c[1]>=this.baseSurface(c[0]));this.rooms=this.rooms.filter(r=>r.kind!=='mound');
+    this.pathCache.clear();this.neighborCache.clear();
+    // Same pellets, broader stable pile. No soil, ants, stores or underground excavation are removed.
+    for(const c of plugs){if(!soil.length)break;const origin=soil.pop();this.deposits.add(key(c));this.spoilOrigins.set(key(c),origin);this.soilDeposited++;this.changed(c);}
+    for(const origin of soil){const site=this.depositSite();if(!site)throw Error('Unable to settle saved mound');this.deposit(site,origin);}
+    this.repairedMound=true;return true;
+  }
+  toJSON(){return {seed:this.seed,geometryVersion:this.geometryVersion,entrances:this.entrances,moundTunnels:[...this.moundTunnels],soilRehandled:this.soilRehandled,lastAccessPlan:this.lastAccessPlan,lastMoundPlan:this.lastMoundPlan,resourceLedger:this.resourceLedger,nextPrey:[...this.nextPrey],moistureSources:this.moistureSources,signals:signalsJSON(this),terrainVersion:this.terrainVersion,habitatRegions:[...this.habitatRegions],weather:this.weather,ecologyRng:{state:this.ecologyRng.state},environmentAt:this.environmentAt,nextPatchID:this.nextPatchID,excavated:[...this.excavated],deposits:[...this.deposits],spoilOrigins:[...this.spoilOrigins],construction:this.construction,rooms:this.rooms,plannedRooms:this.plannedRooms,
     revision:this.revision,chunkRevisions:[...this.chunkRevisions],soilExcavated:this.soilExcavated,soilDeposited:this.soilDeposited,soilAbandoned:this.soilAbandoned,
     pheromones:[...this.pheromones],trails:{food:[...this.trails.food],water:[...this.trails.water]},patches:this.patches};}
   static fromJSON(d,legacy=false){
@@ -153,9 +165,9 @@ export class World{
     for(const f of ['excavated','deposits'])w[f]=new Set(d[f]);
     for(const f of ['chunkRevisions','pheromones','spoilOrigins'])w[f]=new Map(d[f]??[]);
     w.trails={food:new Map(d.trails?.food??d.pheromones??[]),water:new Map(d.trails?.water??[])};
-    w.heights=new Map();for(const id of w.deposits){const [x,y]=cell(id);w.heights.set(x,Math.min(w.heights.get(x)??Infinity,y));if(!w.spoilOrigins.has(id))w.spoilOrigins.set(id,'mixed');}
+    w.heights=new Map();for(const id of w.deposits){const [x,y]=cell(id);if(y<w.baseSurface(x))w.heights.set(x,Math.min(w.heights.get(x)??Infinity,y));if(!w.spoilOrigins.has(id))w.spoilOrigins.set(id,'mixed');}
     if(legacy){w.construction=[];w.rooms=[{kind:'queen',center:[0,11],rx:6,ry:3},{kind:'nursery',center:[-10,10],rx:4,ry:2},{kind:'storage',center:[10,10],rx:4,ry:2}];}
-    w.pathCache=new Map();w.neighborCache=new Map();w.runtime={pathCalls:0,pathMs:0,recoveries:0};w.frontierVersion=-1;w.frontierCache=[];restoreHabitat(w,d);initSignals(w,d);w.rebuildNavigation();return w;
+    w.geometryVersion=d.geometryVersion??1;w.pathCache=new Map();w.neighborCache=new Map();w.runtime={pathCalls:0,pathMs:0,recoveries:0};w.frontierVersion=-1;w.frontierCache=[];restoreHabitat(w,d);initSignals(w,d);w.rebuildNavigation();w.repairMound();return w;
   }
 }
 
@@ -603,6 +615,11 @@ export class Colony{
     if(preV4||!c.demand){c.lastDemand=-10;c.updateDemand();}
     if(legacy){
       for(const a of c.ants){if(!['queen','haulingSoil','returningFood','returningWater'].includes(a.task)){a.route=[];a.target=null;a.task=a.caste==='queen'?'queen':'resting';a.busyUntil=c.time;}a.knownNeeds=null;}
+    }
+    if(c.world.repairedMound){
+      for(const a of c.ants){if(c.world.inForagingZone(a.cell)){a.cell=[a.cell[0],c.world.surface(a.cell[0])-1];a.pos=[...a.cell];}if(!c.world.walkable(a.cell)){const safe=[...c.world.excavated].map(cell).filter(p=>c.world.walkable(p)).sort((p,q)=>distance(p,a.cell)-distance(q,a.cell))[0]??c.world.nest;a.cell=[...safe];a.pos=[...safe];}a.route=[];a.destination=null;a.lastProgressAt=c.time;}
+      for(const b of c.brood){const carrier=c.ants.find(a=>a.id===b.carriedBy);if(carrier){b.cell=[...carrier.cell];b.pos=[...carrier.pos];}else if(!c.world.walkable(b.cell)||c.world.inForagingZone(b.cell)){b.cell=[...c.nursery];b.home=[...b.cell];delete b.pos;b.needsTransport=false;}}
+      c.broodSites=null;c.record('The old unstable mound settled into a lower slope. Its soil and colony were retained.');
     }return c;
   }
 }

@@ -11,10 +11,12 @@ const inspect=()=>{
   assert.ok(c.ants.every(a=>c.world.walkable(a.cell)),'Adults must occupy traversable ground.');
   assert.ok(c.ants.length<=c.settings.populationCap);
   assert.equal(c.ants.some(a=>a.task==='patrolling'),false);
-  checkpoints.push({day:Math.round(c.time/DAY),adults:c.ants.length,brood:c.brood.length,births:c.births,deaths:c.deaths,moundCells:c.world.soilDeposited,moundTunnelCells:c.world.moundTunnels.size,food:c.food,protein:c.protein,water:c.water,alive:c.alive});
+  for(const [x,y] of c.world.heights)assert.ok(Math.abs(y-c.world.surface(x-1))<=1&&Math.abs(y-c.world.surface(x+1))<=1,'Mature mounds must not form vertical exterior walls.');
+  const covered=[...c.world.moundTunnels].filter(id=>c.world.coveredMound(id.split(',').map(Number))).length;assert.ok(covered<=c.world.deposits.size*.25+3,'Mound galleries must retain substantial solid soil.');
+  checkpoints.push({day:Math.round(c.time/DAY),adults:c.ants.length,brood:c.brood.length,births:c.births,deaths:c.deaths,moundPeak:Math.max(0,...[...c.world.heights].map(([x,y])=>c.world.baseSurface(x)-y)),coveredMoundCells:covered,moundCells:c.world.soilDeposited,moundTunnelCells:c.world.moundTunnels.size,food:c.food,protein:c.protein,water:c.water,alive:c.alive});
   console.log(JSON.stringify(checkpoints.at(-1)));
 };
 inspect();for(let i=0;i<120*DAY/.1;i++){c.step(.1);if((i+1)%(20*DAY/.1)===0)inspect();}
 assert.ok(c.alive,'The default colony must survive a long run.');assert.ok(c.births>=30,'Normal reproduction must replace the founder generation.');assert.ok(c.ants.length>=25,'The colony must grow beyond its founders.');
-const report={version:'0.5',seed,simulatedDays:120,tickSeconds:.1,settings:c.settings,wallSeconds:(performance.now()-began)/1000,checkpoints,balances:['food','water'].map(kind=>({kind,...resourceBalance(c.world,kind)})),scope:'One seeded CPU simulation; not a biological validation or a real-iPhone performance limit.'};
+const report={version:'0.6',seed,simulatedDays:120,tickSeconds:.1,settings:c.settings,wallSeconds:(performance.now()-began)/1000,checkpoints,balances:['food','water'].map(kind=>({kind,...resourceBalance(c.world,kind)})),scope:'One seeded CPU simulation; not a biological validation or a real-iPhone performance limit.'};
 if(process.argv[2])writeFileSync(process.argv[2],JSON.stringify(report,null,2));

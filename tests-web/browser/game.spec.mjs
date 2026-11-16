@@ -104,12 +104,26 @@ test('a collected water portion removes visible finite squares and survives a sa
   await page.screenshot({path:info.outputPath('finite-water-after.png')});await page.reload();await expect(page.locator('#game')).toHaveAttribute('data-ready','true');
 });
 
-test('fire-ant mound tunnels and chemical signals render together',async({page},info)=>{
-  const raw=readFileSync(new URL('../fixtures/v5-fire.json',import.meta.url),'utf8');
-  await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await page.getByRole('button',{name:'Show pheromone trails'}).click();await page.screenshot({path:info.outputPath('fire-ant-mound-and-signals.png')});
+test('mature low mounds, organic galleries and chemical signals render together',async({page},info)=>{
+  const raw=readFileSync(new URL('../fixtures/v6-mature.json',import.meta.url),'utf8');
+  await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await page.getByRole('button',{name:'Show pheromone trails'}).click();await page.screenshot({path:info.outputPath('mature-mound-and-organic-galleries.png')});
 });
 test('a v0.4 colony upgrades without retaining its old patrol loop',async({page})=>{
   const data=JSON.parse(readFileSync(new URL('../fixtures/v4-colony.json',import.meta.url),'utf8'));data.colony.ants[1].task='patrolling';data.colony.ants[1].caste='major';
   await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),JSON.stringify(data));await page.reload();await expect(page.locator('#ants-count')).toHaveText(String(data.colony.ants.length));await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
   const patrols=await page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.ants.filter(a=>a.task==='patrolling').length);expect(patrols).toBe(0);await page.getByRole('button',{name:'Open colony roster'}).click();await expect(page.locator('#colony-summary > div').filter({hasText:'Workers'}).locator('strong')).toHaveText(String(data.colony.ants.filter(a=>a.caste!=='queen').length));
+});
+
+test('an unstable older mound settles without losing the colony or its soil',async({page},info)=>{
+  const raw=readFileSync(new URL('../fixtures/v5-unstable.json',import.meta.url),'utf8'),original=JSON.parse(raw).colony;
+  await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();
+  await expect(page.locator('#ants-count')).toHaveText(String(original.ants.length));await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
+  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony);expect(saved.world.geometryVersion).toBe(2);expect(saved.world.soilDeposited).toBe(original.world.soilDeposited);expect(saved.food).toBeGreaterThan(original.food-.5);
+  const peak=Math.min(...saved.world.deposits.map(id=>Number(id.split(',')[1])));expect(peak).toBeGreaterThan(-10);await page.screenshot({path:info.outputPath('older-mound-settled.png')});
+});
+
+test('fine contours remain readable when zoomed and in portrait orientation',async({page},info)=>{
+  const raw=readFileSync(new URL('../fixtures/v6-mature.json',import.meta.url),'utf8');await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();
+  if(page.viewportSize().width>1000){await page.getByRole('button',{name:'Zoom in',exact:true}).click();await page.getByRole('button',{name:'Zoom in',exact:true}).click();await page.screenshot({path:info.outputPath('fine-terrain-closeup.png')});}
+  await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'Return to nest'}).click();await expect(page.getByRole('button',{name:'Open menu'})).toBeInViewport();expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);await page.screenshot({path:info.outputPath('mature-contours-portrait.png')});
 });

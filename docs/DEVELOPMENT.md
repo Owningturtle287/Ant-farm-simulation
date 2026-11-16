@@ -2,7 +2,7 @@
 
 The primary delivery is the GitHub Pages app in `web/`, deployed by `.github/workflows/pages.yml` to the same bookmark address. Preserve existing progress and the deployment pipeline when updating it.
 
-## v0.5 web architecture and contracts
+## v0.6 web architecture and contracts
 
 - `fire-ant.mjs` owns the single-queen species profile, continuous worker size, contact-odor recognition, crop capacities and task response scores. `signals.mjs` handles local cue emission, sampling and decay. `resources.mjs` owns finite stock accounting and discrete visible resource portions. `architecture.mjs` generates founder connections and worker-proposed exits/mound passages.
 - `biology.mjs` owns seeded randomness, individual traits, age/stage helpers, defaults, and bounded growth controls. New colonies have 12 workers, one queen, and three brood; the default ceiling is 120, with experimental options up to 500.
@@ -13,7 +13,7 @@ The primary delivery is the GitHub Pages app in `web/`, deployed by `.github/wor
 - `clock.mjs` advances the same fixed 0.1-second ticks at every speed through 128×. A six-millisecond per-frame simulation budget and bounded backlog preserve interaction under load; actual speed may fall below requested speed. Do not replace this with larger biology steps.
 - `render.mjs` caches visible 16-cell chunks with neighboring invalidation. Spoil must never receive grass. At high time lapse, draw current positions directly so smoothing does not cut across solid terrain between distant snapshots.
 - `app.mjs` owns controls, local performance sampling/export, pause state, and browser lifecycle. The optional performance panel runs with the simulation. Dialogs and background suspension pause it; there is no offline catch-up.
-- `persistence.mjs` writes envelope version 4 and reads versions 1–4 under the unchanged `little-colony.web.v1` key. Actual pre-update fixtures in `tests-web/fixtures/v1-colony.json` and `v2-colony.json` and `v4-colony.json` verify preservation of ants, terrain, mound, and elapsed time. Modern saves must continue seeded behavior exactly, including weather and in-flight brood. Old saves retain a flat `terrainVersion: 0`; newly created colonies use contoured `terrainVersion: 1`. Never reshape established terrain during migration. A valid backup recovers a corrupt primary; unreadable progress blocks automatic overwrite.
+- `persistence.mjs` writes envelope version 4 and reads versions 1–4 under the unchanged `little-colony.web.v1` key. Actual pre-update fixtures in `tests-web/fixtures/v1-colony.json` and `v2-colony.json` and `v4-colony.json` verify preservation of ants, terrain, mound, and elapsed time. Modern saves must continue seeded behavior exactly, including weather and in-flight brood. Old saves retain a flat `terrainVersion: 0`; newly created colonies use contoured `terrainVersion: 1`. Preserve established terrain except the explicit soil-preserving v0.6 correction of unstable mounds and wide shallow breaches. A valid backup recovers a corrupt primary; unreadable progress blocks automatic overwrite.
 - `sw.js` precaches every runtime module, icon, and document under the repository scope. `build-web.mjs` fingerprints source files into the cache version and builds `dist/`. New runtime files must be added to the explicit cache list. All production asset URLs remain relative.
 
 ## Verification and performance
@@ -92,3 +92,8 @@ Mound re-excavation decreases `soilDeposited`, increases `soilRehandled`, and pu
 Microclimate samples use a saved two-second moisture-source snapshot. Numeric cache epochs, brood-ID reuse, and avoiding unchanged population-array copies reduce hot-path work. These caches must never make saved continuation diverge. The six-millisecond frame budget remains in effect through 128×; requested speed is not a promise that every phone/population achieves it.
 
 `node scripts/endurance-sim.mjs report.json [seed]` checks 120 modeled days at the default reproduction settings, using the production 0.1-second tick and no player inputs. It asserts population renewal, walkable occupancy and soil/resource conservation. Actions runs seed 287 and uploads its checkpoints with the CPU benchmark. This is a regression scenario, not proof that every seed or parameter combination is viable.
+
+
+`geometry.mjs` owns connected cubic passage rasterization, seeded rotated/lobed chamber footprints and shared bilinear occupancy sampling. Renderer chunks use 16 texture pixels and 8 contour samples per model cell. Cache invalidation includes adjacent chunks; sampling is world-aligned across seams. Never draw exposed former mound galleries as sheltered back walls.
+
+`World.geometryVersion` is independent of envelope/model version 4. On older malformed terrain, regrade the exact existing spoil inventory once, use some inventory to plug excess shallow breaches around protected mouth columns, and relocate affected occupants without loss. Stable old terrain is preserved. Keep the legacy-repair and modern deterministic-save tests.

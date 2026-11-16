@@ -64,3 +64,6 @@ For browser checks: `npm install`, `npx playwright install chromium webkit`, the
 The earlier Swift/SpriteKit prototype remains in `AntFarm/` and `Sources/AntFarmCore/`. Its optional native workflow runs when native files change or when requested manually; see [native build instructions](docs/NATIVE_INSTALL.md). The web app is the primary phone delivery format.
 
 See [continuation notes](docs/DEVELOPMENT.md) and the [original roadmap](docs/ROADMAP.md).
+
+
+The v0.6 terrain update adds supported low mound slopes, narrow shallow entrances, roofed/spaced mound galleries, curved passage plans and varied organic chamber outlines. Fine pixel textures and subcell cutaway contours replace full-cell square boundaries. Older unstable mounds settle once using their existing soil; the colony and its stores remain.

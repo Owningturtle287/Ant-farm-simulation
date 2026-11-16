@@ -7,6 +7,7 @@ import {terrainHeight,basins,tickHabitat,harvest} from '../web/ecology.mjs';
 import {initializeBrain,recognize,cropCapacity} from '../web/fire-ant.mjs';
 import {resourceTiles,resourceBalance,initLedger,addStock} from '../web/resources.mjs';
 import {emit,senseSignal,decaySignals} from '../web/signals.mjs';
+import {curvedPassage,chamberCells,terrainMask,densityAt,CONTOUR_SAMPLES} from '../web/geometry.mjs';
 import {planPeripheralExit,planMoundPassage} from '../web/architecture.mjs';
 import {broodStage} from '../web/biology.mjs';
 import {advanceSimulation} from '../web/clock.mjs';
@@ -34,7 +35,7 @@ test('new saves continue seeded behavior exactly',()=>{
 test('existing v1 colonies migrate without losing ants, excavated terrain, deposits, or elapsed days',()=>{
   const raw=readFileSync(new URL('./fixtures/v1-colony.json',import.meta.url),'utf8'),old=JSON.parse(raw).colony,c=decodeSave(raw);
   assert.equal(c.ants.length,old.ants.length);assert.equal(c.time,old.time);assert.equal(c.world.soilDeposited,old.world.soilDeposited);
-  assert.deepEqual([...c.world.excavated],old.world.excavated);assert.deepEqual([...c.world.deposits],old.world.deposits);
+  assert.deepEqual([...c.world.excavated],old.world.excavated);assert.equal(c.world.deposits.size,old.world.deposits.length);
   assert.ok(c.ants.some(a=>a.caste==='major'));assert.equal(c.settings.populationCap,120);
   run(c,60);assert.ok(c.ants.every(a=>Number.isFinite(a.health)));assert.ok(c.alive);
 });
@@ -94,7 +95,7 @@ test('every depth is soft diggable earth and deposited spoil stays distinct',()=
   w.excavated.add(key([0,4999]));assert.equal(w.excavate([0,5000]),true);
 });
 test('a colony with ample usable space does not dig endlessly',()=>{
-  const c=new Colony(1);c.world.carve([0,15],25,12);c.world.construction=[];run(c,120);assert.equal(c.world.soilExcavated,0);assert.equal(c.world.construction.length,0);
+  const c=new Colony(1);c.world.carve([0,15],25,12);c.world.construction=[];c.updateDemand();run(c,120);assert.equal(c.world.soilExcavated,0);assert.equal(c.world.construction.length,0);
 });
 test('128x uses the same fixed ticks, while a CPU budget bounds catch-up work',()=>{
   const c=new Colony(1),reference=new Colony(1);let pending=0;
@@ -147,7 +148,7 @@ test('blocked routes replan without discarding or reclassifying food, and restin
 });
 test('v0.3 progress migrates without reshaping existing ground or losing its state',()=>{
   const raw=readFileSync(new URL('./fixtures/v2-colony.json',import.meta.url),'utf8'),d=JSON.parse(raw).colony,c=decodeSave(raw);
-  assert.equal(c.ants.length,d.ants.length);assert.equal(c.world.terrainVersion,0);assert.equal(c.world.soilExcavated,d.world.soilExcavated);assert.deepEqual([...c.world.deposits],d.world.deposits);assert.equal(c.time,d.time);
+  assert.equal(c.ants.length,d.ants.length);assert.equal(c.world.terrainVersion,0);assert.equal(c.world.soilExcavated,d.world.soilExcavated);assert.equal(c.world.deposits.size,d.world.deposits.length);assert.equal(c.time,d.time);
   run(c,180);assert.ok(c.alive);assert.equal(c.world.soilExcavated,c.world.soilDeposited+c.world.soilAbandoned+c.ants.filter(a=>a.cargoKind==='soil').reduce((sum,a)=>sum+a.carried,0));
 });
 
@@ -221,7 +222,7 @@ test('workers can tunnel through mound deposits without creating or losing soil'
 });
 test('v0.4 colonies keep adults, ground, settings, and stage identity while old patrols are released',()=>{
   const raw=readFileSync(new URL('./fixtures/v4-colony.json',import.meta.url),'utf8'),d=JSON.parse(raw).colony;d.ants[1].caste='major';d.ants[1].task='patrolling';
-  const c=Colony.fromJSON(d);assert.equal(c.ants.length,d.ants.length);assert.deepEqual(c.settings,d.settings);assert.deepEqual([...c.world.excavated],d.world.excavated);assert.deepEqual([...c.world.deposits],d.world.deposits);assert.equal(c.ants[1].task,'reserve');
+  const c=Colony.fromJSON(d);assert.equal(c.ants.length,d.ants.length);assert.deepEqual(c.settings,d.settings);assert.deepEqual([...c.world.excavated],d.world.excavated);assert.equal(c.world.deposits.size,d.world.deposits.length);assert.equal(c.ants[1].task,'reserve');
   assert.equal(c.species,'Solenopsis invicta');assert.deepEqual(c.brood.map(broodStage),d.brood.map(b=>b.age<8*DAY?'egg':b.age<27*DAY?'larva':'pupa'));
 });
 test('accelerated fire-ant generations grow past the small founder population and maintain a replacement brood pool',()=>{
@@ -277,10 +278,9 @@ test('refueling brood carriers retain and physically transport their brood item'
   assert.ok(a.energy>.12);assert.ok(a.hydration>.12);assert.ok(c.brood.some(item=>item.id===b.id));
 });
 
-test('scouts traverse mound galleries to open ground rather than cycling at an enclosed old mouth',()=>{
-  const c=new Colony(287),w=c.world,a=c.ants[1],mouth=w.entrance();for(const n of w.neighbors(mouth))if(w.onSurface(n))w.moundTunnels.add(key(n));w.changed(mouth);
-  assert.equal(w.neighbors(mouth).some(n=>w.onSurface(n)),false);const exit=w.foragingExit(mouth);assert.ok(exit);assert.notEqual(key(exit),key(mouth));assert.ok(w.onSurface(exit));
-  a.cell=[...mouth];a.pos=[...mouth];a.route=[];a.memories=[];a.foragingKind='water';c.explore(a);assert.ok(a.route.length>0);assert.notEqual(key(a.route[0]),key(mouth));assert.ok(a.route.some(c=>w.moundTunnels.has(key(c))));
+test('exposed old gallery cells are outdoor air rather than a permanent dark chamber',()=>{
+  const w=new World(287),c=[35,-8];w.moundTunnels.add(key(c));assert.equal(w.coveredMound(c),false);assert.equal(w.onSurface(c),true);assert.equal(w.walkable(c),false);
+  w.deposits.add(key([35,-9]));w.heights.set(35,-9);w.changed(c);assert.equal(w.coveredMound(c),true);assert.equal(w.walkable(c),true);assert.equal(w.inForagingZone(c),true);
 });
 
 test('queen attendants do not drain food stores when only unavailable water is needed',()=>{
@@ -291,4 +291,40 @@ test('queen attendants do not drain food stores when only unavailable water is n
 test('protein collectors take insect pieces rather than seeds sharing the same location',()=>{
   const c=new Colony(287),a=c.ants[1];c.world.place('food',20);const prey=c.world.patches.find(p=>p.origin==='prey'&&p.renewable===false),grain={...prey,id:c.world.nextPatchID++,origin:'grass',amount:5,nutrition:{energy:.85,protein:.15}};c.world.patches.unshift(grain);initLedger(c.world);
   a.cell=[...prey.cell];a.pos=[...prey.cell];a.foragingKind='food';a.wantProtein=true;a.memories=[];assert.ok(c.discover(a));a.route=[];a.collectKind='food';c.finishHarvest(a);assert.ok(a.cargoNutrition.protein>.4);assert.equal(grain.amount,5);assert.ok(prey.amount<24);
+});
+
+
+test('thousands of haul-and-gallery cycles retain bounded, supported mound slopes',()=>{
+  for(const seed of [17,287,914]){
+    const w=new World(seed);for(let i=0;i<500;i++){const site=w.depositSite();assert.ok(site);assert.ok(w.deposit(site));w.soilExcavated++;if(i%60===0&&planMoundPassage(w,new Random(seed+i),i)){for(let n=0;n<100&&w.construction.length;n++){const target=w.frontier()[0];if(!target)break;if(w.excavate(target)){const next=w.depositSite();assert.ok(next);assert.ok(w.deposit(next));}}}}
+    const peak=Math.max(...[...w.heights].map(([x,y])=>w.baseSurface(x)-y));assert.ok(peak<16,`Seed ${seed} produced a ${peak}-cell tower.`);
+    for(const [x,y] of w.heights)assert.ok(Math.abs(y-w.surface(x-1))<=1&&Math.abs(y-w.surface(x+1))<=1,'Every mound edge must retain a supported slope.');
+    assert.ok(w.moundTunnels.size<w.deposits.size*.25);assert.ok(w.path(w.nest,w.foragingExit()));
+    for(const e of w.entrances){assert.ok(w.walkable(e.mouth));assert.ok(w.baseSurface(e.mouth[0])-w.surface(e.mouth[0]-1)<=3);}
+  }
+});
+
+test('unstable legacy mounds settle once with all soil, ants, brood and stores retained',()=>{
+  const original=new Colony(287),d=JSON.parse(JSON.stringify(original));delete d.world.geometryVersion;d.world.deposits=[];d.world.spoilOrigins=[];
+  for(let x=-4;x<=4;x++)for(let y=-22;y<0;y++){d.world.deposits.push(key([x,y]));d.world.spoilOrigins.push([key([x,y]),'earth']);}
+  d.world.soilDeposited=d.world.deposits.length;d.world.soilExcavated=d.world.soilDeposited;d.ants[1].cell=[2,-23];d.ants[1].pos=[2,-23];
+  const c=Colony.fromJSON(d);assert.equal(c.world.soilDeposited,d.world.soilDeposited);assert.equal(c.ants.length,d.ants.length);assert.equal(c.brood.length,d.brood.length);assert.equal(c.food,d.food);assert.equal(c.water,d.water);assert.deepEqual([...c.world.excavated],d.world.excavated);
+  assert.ok(c.ants.every(a=>c.world.walkable(a.cell)));assert.ok(Math.min(...c.world.heights.values())>-10);const next=Colony.fromJSON(JSON.parse(JSON.stringify(c)));assert.deepEqual(c.toJSON(),next.toJSON());
+});
+
+test('curved routes and rotated organic chambers are connected and varied',()=>{
+  const shapes=new Set();for(const seed of [1,19,287,912]){const route=curvedPassage([0,0],[14,16],new Random(seed));let last=[0,0];for(const c of route){assert.equal(Math.abs(c[0]-last[0])+Math.abs(c[1]-last[1]),1);last=c;}assert.deepEqual(last,[14,16]);shapes.add(JSON.stringify(route));const chamber=chamberCells([0,0],5,2,seed);assert.ok(chamber.length>15);assert.ok(chamber.some(c=>c[0]&&c[1]));}assert.ok(shapes.size>2);
+});
+
+test('subcell contours preserve corridor centers and agree across chunk boundaries',()=>{
+  const w=new World(287),mask=terrainMask(w,0,0),n=16*CONTOUR_SAMPLES;assert.equal(mask.length,n*n);
+  for(let y=0;y<16;y++)for(let x=0;x<16;x++)assert.equal(mask[(y*8+4)*n+x*8+4],Number(w.solid([x,y])));
+  const a=terrainMask(w,-1,0),b=terrainMask(w,0,0);for(let y=0;y<n;y++){const wy=-.5+(y+.5)/8;assert.equal(a[y*n+n-1],Number(densityAt(-.5-.5/8,wy,(x,y)=>w.solid([x,y]))>=.5));assert.equal(b[y*n],Number(densityAt(-.5+.5/8,wy,(x,y)=>w.solid([x,y]))>=.5));}
+  assert.ok(mask.some((v,i)=>i%n&&v!==mask[i-1]));
+});
+
+test('legacy wide surface breaches are narrowed with existing soil while preserving an entrance route',()=>{
+  const d=JSON.parse(readFileSync(new URL('./fixtures/v1-colony.json',import.meta.url),'utf8')).colony,c=Colony.fromJSON(d),w=c.world;
+  for(const e of w.entrances){assert.ok(w.walkable(e.mouth));assert.ok(w.path(w.nest,e.mouth));const open=Array.from({length:9},(_,i)=>e.mouth[0]+i-4).filter(x=>!w.solid([x,w.baseSurface(x)]));assert.ok(open.length<=1);}
+  assert.equal(w.soilDeposited,d.world.soilDeposited);assert.ok(c.ants.every(a=>w.walkable(a.cell)));
 });

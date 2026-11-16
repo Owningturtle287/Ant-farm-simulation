@@ -1,12 +1,7 @@
 import {Random} from './biology.mjs';
 const key=c=>c.join(','),same=(a,b)=>key(a)===key(b);
-export function passage(start,end,rng){
-  const c=[...start],route=[];let guard=0;
-  while(!same(c,end)&&guard++<1000){
-    const axis=c[0]===end[0]?1:c[1]===end[1]?0:rng.float()<.67?1:0;
-    c[axis]+=Math.sign(end[axis]-c[axis]);route.push([...c]);
-  }return route;
-}
+export {curvedPassage as passage} from './geometry.mjs';
+import {curvedPassage as passage} from './geometry.mjs';
 export function founderNest(w){
   const rng=new Random(w.seed^0x192fa),side=rng.float()<.5?-1:1,mouthX=side*rng.int(8,13),depth=rng.int(2,4);
   w.rooms=[{kind:'queen',center:[0,11],rx:2,ry:1},{kind:'nursery',center:[-4,12],rx:2,ry:1},{kind:'storage',center:[4,10],rx:2,ry:1}];
@@ -36,9 +31,15 @@ export function planPeripheralExit(w,rng,time){
   w.entrances.push({mouth:best.mouth,state:'planned',createdAt:time});w.lastAccessPlan=time;return true;
 }
 export function planMoundPassage(w,rng,time){
-  const candidates=[...w.deposits].map(s=>s.split(',').map(Number)).filter(c=>w.solid([c[0],c[1]-1])&&w.solid([c[0],c[1]+1])&&c[1]<w.baseSurface(c[0]));
-  if(!candidates.length)return false;const goal=candidates[rng.int(0,candidates.length-1)],foot=[goal[0],w.baseSurface(goal[0])+1];
-  queuePassage(w,[...passage(w.nest,foot,rng),...passage(foot,goal,rng)]);
-  if(!w.rooms.some(r=>r.kind==='mound'&&Math.abs(r.center[0]-goal[0])<3))w.rooms.push({kind:'mound',center:goal,rx:1,ry:1});
-  w.lastMoundPlan=time;return true;
+  // A gallery needs a real roof and lateral soil, and may use only a small share of the mound volume.
+  const covered=[...w.moundTunnels].filter(id=>w.coveredMound(id.split(',').map(Number))),budget=Math.floor(w.deposits.size*.16);
+  if(budget-covered.length<3)return false;
+  const candidates=[...w.deposits].map(s=>s.split(',').map(Number)).filter(c=>c[1]<w.baseSurface(c[0])&&w.solid([c[0],c[1]-1])&&w.solid([c[0],c[1]-2])&&[-2,-1,1,2].every(dx=>w.solid([c[0]+dx,c[1]])));
+  for(let attempt=0;attempt<Math.min(candidates.length,16);attempt++){
+    const goal=candidates[rng.int(0,candidates.length-1)];if(covered.some(id=>{const [x,y]=id.split(',').map(Number);return Math.hypot(x-goal[0],y-goal[1])<4;}))continue;
+    const foot=[goal[0],w.baseSurface(goal[0])+1],route=[...passage(w.nest,foot,rng),...passage(foot,goal,rng)],above=route.filter(c=>c[1]<w.baseSurface(c[0]));
+    const removed=above.filter(c=>w.deposits.has(key(c)));
+    if(!removed.length||covered.length+removed.length>budget||above.some(c=>!w.solid([c[0],c[1]-1])&&!w.moundTunnels.has(key(c))))continue;
+    queuePassage(w,route);w.rooms.push({kind:'mound',center:goal,rx:1,ry:1});w.lastMoundPlan=time;return true;
+  }return false;
 }
