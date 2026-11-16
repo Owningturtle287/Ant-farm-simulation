@@ -478,3 +478,13 @@ test('a nurse with a full energy crop can fetch solid protein and physically fee
   for(let i=0;i<1000&&baby.nutrition<.5;i++){c.step();if(a.cargoKind==='broodMeal'&&a.carried>0)carried=true;}
   assert.ok(carried,'A full crop must not prevent solid-food transport.');assert.ok(baby.nutrition>=.5,'The pellet must be delivered to the larva, not consumed remotely.');
 });
+test('nurses claim different beds and prioritize hungry larvae over recently tended eggs',()=>{
+  const c=new Colony(287,{eggRate:0}),q=c.ants[0],[a,b]=c.ants.slice(1,3);primeCrop(c,q,3,1,2);
+  c.world.carve([0,12],5,3);c.time=1000;c.brood.forEach((baby,i)=>{baby.cell=[i*2-2,12];baby.age=i===0?0:DAY*9;baby.nutrition=i===0?1:.1;baby.lastCare=990;baby.needsTransport=false;baby.lastMoved=1000;baby.carriedBy=null;});
+  for(const ant of [a,b]){ant.cell=[0,12];ant.pos=[0,12];ant.knownBrood=c.brood.map(b=>b.id);primeCrop(c,ant,.5,.4,1);}
+  assert.ok(c.assignCare(a));assert.ok(c.assignCare(b));assert.notEqual(a.broodID,b.broodID);assert.ok([a,b].every(ant=>broodStage(c.brood.find(x=>x.id===ant.broodID))==='larva'));
+});
+test('a protein-rich crop fuels work without a repeated empty energy-cache visit',()=>{
+  const c=new Colony(287,{eggRate:0}),q=c.ants[0],a=c.ants[1];primeCrop(c,q,3,1,2);primeCrop(c,a,0,socialCapacity(a),1);a.energy=.5;clearBrood(c);c.updateDemand();c.chooseJob(a);assert.notEqual(a.cachePurpose==='self'&&a.task==='toCache',true);
+  for(let i=0;i<20;i++)consumeSelf(c,a,1);assert.ok(a.energy>.95);assert.ok(a.socialProtein<socialCapacity(a));assert.ok(Math.abs(supplyBalance(c,'protein').error)<1e-7);
+});

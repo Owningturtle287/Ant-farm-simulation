@@ -50,7 +50,7 @@ export function setReserve(c,kind,value){
 export function cleanCache(c){c.foodItems=c.foodItems.filter(p=>{if(p.energy+p.protein>1e-9)return true;releaseSlot(c.world,p.pos,'f:'+p.id);return false;});}
 export function consumeSelf(c,a,dt){
   initCrop(a);const food=Math.min(a.socialFood,(1-a.energy)*.4,dt*.05),water=Math.min(a.socialWater,(1-a.hydration)*.15,dt*.018);
-  const protein=a.energy<.3&&a.socialFood<.001?Math.min(a.socialProtein,(.8-a.energy)*.6,dt*.02):0;a.socialProtein-=protein;a.energy=clamp(a.energy+protein/.6);if(protein){c.nutrition.protein-=protein;if(c.supplyLedger)c.supplyLedger.protein.consumed+=protein;}
+  const protein=a.socialFood<.001?Math.min(a.socialProtein,(1-a.energy)*.6,dt*.02):0;a.socialProtein-=protein;a.energy=clamp(a.energy+protein/.6);if(protein){c.nutrition.protein-=protein;if(c.supplyLedger)c.supplyLedger.protein.consumed+=protein;}
   a.socialFood-=food;a.socialWater-=water;a.energy=clamp(a.energy+food/.4);a.hydration=clamp(a.hydration+water/.15);c.nutrition.energy=Math.max(0,c.nutrition.energy-food);c.nutrition.water=Math.max(0,c.nutrition.water-water);if(c.supplyLedger){c.supplyLedger.energy.consumed+=food;c.supplyLedger.water.consumed+=water;}
 }
 export function fillFromCargo(a){

@@ -234,7 +234,7 @@ export class Colony{
       for(const e of this.world.entrances)if(e.state==='planned'&&this.world.path(this.world.nest,e.mouth))e.state='open';
       this.lastPlan=this.time;
     }
-    this.occupancy=new Map();this.reserved=new Set();this.broodClaims=new Set(this.ants.filter(a=>['toBrood','carryingBrood'].includes(a.task)).map(a=>a.broodID));
+    this.occupancy=new Map();this.reserved=new Set();this.broodClaims=new Set(this.ants.filter(a=>['toBrood','carryingBrood'].includes(a.task)).map(a=>a.broodID));this.careClaims=new Map();for(const a of this.ants)if(a.task==='nursing'&&a.broodID!=null&&!this.careClaims.has(a.broodID))this.careClaims.set(a.broodID,a.id);
     let indexed=0;for(const a of this.ants){const id=key(a.cell);if(!this.occupancy.has(id))this.occupancy.set(id,[]);this.occupancy.get(id).push(a);if(a.target&&['toDig','digging'].includes(a.task))this.reserved.add(key(a.target));if(++indexed%128===0)yield;}
     this.broodByID=new Map();this.localBrood=new Map();this.indexedBrood=this.brood;let babies=0;for(const b of this.brood){this.broodByID.set(b.id,b);const id=key(b.cell);if(!this.localBrood.has(id))this.localBrood.set(id,[]);this.localBrood.get(id).push(b);if(++babies%128===0)yield;}
     if(this.broodSource!==this.brood||this.broodIDs?.size!==this.brood.length){this.broodIDs=new Set(this.brood.map(b=>b.id));this.broodSource=this.brood;}
@@ -332,7 +332,7 @@ export class Colony{
       this.encounter(a);
       if(this.time>=(a.selfCheckAt??0)){
         a.selfCheckAt=this.time+6;
-        if(((a.energy<.28&&this.food>0)||(a.hydration<.25&&this.water>0))&&a.task!=='refueling'){
+        if(((a.energy<.28&&foodFill(a)<.01&&this.food+this.protein>0)||(a.hydration<.25&&a.socialWater<.01&&this.water>0))&&a.task!=='refueling'){
           a.task='refueling';a.route=[];a.busyUntil=this.time;this.send(a,this.world.nest);a.decision='Temporarily returning for nutrition while retaining the current load.';
         }
       }
@@ -404,7 +404,7 @@ export class Colony{
       case 'carryingBrood':this.carryBrood(a);break;
       case 'nursing':{
         const baby=this.broodItem(a.broodID);
-        if(!baby||baby.carriedBy!=null){if(!this.assignCare(a))this.chooseJob(a);break;}
+        if(!baby||baby.carriedBy!=null||(this.careClaims?.has(baby.id)&&this.careClaims.get(baby.id)!==a.id)){if(!this.assignCare(a))this.chooseJob(a);break;}
         if(distance(a.cell,baby.cell)>1.5){this.send(a,baby.cell);break;}
         baby.lastCare=this.time;
         if(broodStage(baby)==='larva'){const wanted=Math.min(.054,(1-baby.nutrition)*.12),held=consumeNutrient(this,a,'protein',wanted),protein=held+feedBroodCargo(this,a,wanted-held);baby.nutrition+=protein/.12;baby.fed=(baby.fed??0)+protein/.12;if(a.socialProtein<.015&&!(a.cargoKind==='broodMeal'&&a.carried)&&this.assignCache(a,'care',true))break;}
@@ -413,7 +413,7 @@ export class Colony{
         if(this.time-(a.jobSince??0)>12&&this.rng.float()<.25)this.chooseJob(a);else this.assignCare(a);break;
       }
       case 'refueling':{
-        consumeSelf(this,a,1);if(a.energy<.75&&this.assignCache(a,'self'))break;
+        consumeSelf(this,a,1);if(a.energy<.75&&foodFill(a)<.01&&this.assignCache(a,'self'))break;
         if(a.hydration<.5&&a.socialWater<.01){a.foragingKind='water';if(this.discover(a))break;this.explore(a);break;}
         this.chooseJob(a);break;
       }
@@ -448,14 +448,15 @@ export class Colony{
     else{a.busyUntil=this.time+2;this.storageBlocked=true;this.proposeConstruction(a,{...this.needsFor(a),dig:1});a.decision='Holding excess food while workers make more storage space.';}return true;
   }
   chooseJob(a){
+    if(this.careClaims?.get(a.broodID)===a.id)this.careClaims.delete(a.broodID);
     a.lastProgressAt=this.time;a.lastProgressPos=[...a.pos];a.target=null;a.route=[];
-    if((a.energy<.28&&a.socialFood<.01)||(a.hydration<.25&&a.socialWater<.01)){
-      if(a.energy<.28&&this.assignCache(a,'self'))return;a.foragingKind=a.hydration<.25&&a.socialWater<.01?'water':'food';a.task='exploring';if(!this.discover(a))this.explore(a);return;
+    if((a.energy<.28&&foodFill(a)<.01)||(a.hydration<.25&&a.socialWater<.01)){
+      if(a.energy<.28&&foodFill(a)<.01&&this.assignCache(a,'self'))return;a.foragingKind=a.hydration<.25&&a.socialWater<.01?'water':'food';a.task='exploring';if(!this.discover(a))this.explore(a);return;
     }
     if(a.cargoKind==='broodMeal'&&a.carried){if(this.assignCare(a))return;a.cargoKind='food';this.assignFoodStorage(a);return;}
     if(a.cargoKind==='food'&&a.carried){this.assignFoodStorage(a);return;}
     if(a.deliveryKind){a.task=a.deliveryKind==='water'?'returningWater':'returningFood';this.send(a,this.world.nest);return;}
-    if(a.energy<.8&&a.socialFood<.01&&this.assignCache(a,'self'))return;
+    if(a.energy<.8&&foodFill(a)<.01&&this.assignCache(a,'self'))return;
     if(a.cargoKind==='queenMeal'){a.task='feedingQueen';this.feedQueen(a);return;}
     if(a.carryingBrood){a.task='carryingBrood';this.carryBrood(a);return;}
     if(a.carried){a.task=a.cargoKind==='soil'?'haulingSoil':a.cargoKind==='water'?'returningWater':'returningFood';this.send(a,a.cargoKind==='soil'?this.world.depositSite(a.cell):this.world.nest);return;}
@@ -504,11 +505,12 @@ export class Colony{
     if(proposed){this.storageBlocked=false;this.proposalAt=this.time+12;a.brain.lastProposal=cause;this.record(antName(a)+' initiated '+cause+'.');}
   }
   assignCare(a){
+    this.careClaims??=new Map();if(this.careClaims.get(a.broodID)===a.id)this.careClaims.delete(a.broodID);
     this.sense(a);const meal=a.cargoKind==='broodMeal'&&a.carried;if(!meal&&a.socialProtein<.025&&this.brood.some(b=>broodStage(b)==='larva'&&b.nutrition<.7)&&this.assignCache(a,'care',true))return true;
     if(!meal&&this.assignQueenCare(a))return true;
     if(!meal&&this.assignBroodTransport(a))return true;
-    const targets=this.careCandidates(a).filter(b=>b.carriedBy==null&&!this.broodClaims.has(b.id)&&(!meal||broodStage(b)==='larva'&&b.nutrition<.95)&&(a.knownBrood.includes(b.id)||distance(a.cell,b.cell)<3.1)).map(b=>({b,priority:b.lastCare+distance(a.cell,b.cell)*.5})).sort((x,y)=>x.priority-y.priority).map(item=>item.b);
-    for(const b of targets){const route=this.world.path(a.cell,b.cell);if(route){if(a.lastJob!=='care')a.jobSince=this.time;a.task='nursing';a.route=route;a.target=[...b.cell];a.destination=[...b.cell];a.broodID=b.id;a.lastJob='care';return true;}}
+    const targets=this.careCandidates(a).filter(b=>b.carriedBy==null&&!this.broodClaims.has(b.id)&&!this.careClaims.has(b.id)&&(!meal||broodStage(b)==='larva'&&b.nutrition<.95)&&(a.knownBrood.includes(b.id)||distance(a.cell,b.cell)<3.1)).map(b=>({b,priority:distance(a.cell,b.cell)*2-Math.min(20,Math.max(0,this.time-b.lastCare)*.05)-(broodStage(b)==='larva'?(1-b.nutrition)*40:0)})).sort((x,y)=>x.priority-y.priority).map(item=>item.b);
+    for(const b of targets){const route=this.world.path(a.cell,b.cell);if(route){if(a.lastJob!=='care')a.jobSince=this.time;a.task='nursing';a.route=route;a.target=[...b.cell];a.destination=[...b.cell];a.broodID=b.id;this.careClaims.set(b.id,a.id);a.lastJob='care';return true;}}
     if(meal)return false;
     const gradient=this.world.neighbors(a.cell).filter(c=>!this.world.onSurface(c)).sort((x,y)=>senseSignal(this.world,'brood',y)-senseSignal(this.world,'brood',x));
     if(gradient[0]&&senseSignal(this.world,'brood',gradient[0])>.04){a.task='nursing';a.broodID=null;this.send(a,gradient[0]);return true;}return false;
@@ -602,7 +604,7 @@ export class Colony{
   }
   assignQueenCare(a){
     const queen=this.ants.find(b=>b.caste==='queen');if(!queen||a.id===queen.id)return false;
-    const needFood=queen.socialFood<.45||queen.socialProtein<.15||(queen.energy<.65&&queen.socialFood<.1),needWater=queen.socialWater<.2||(queen.hydration<.65&&queen.socialWater<.1);
+    const needFood=foodFill(queen)<socialCapacity(queen)*.8&&(queen.socialFood<.45||queen.socialProtein<.15||queen.energy<.65),needWater=queen.socialWater<.2||(queen.hydration<.65&&queen.socialWater<.1);
     if(!needFood&&!needWater||this.ants.some(b=>b.id!==a.id&&((b.task==='toCache'&&b.cachePurpose==='queen')||b.task==='feedingQueen')))return false;
     if((foodFill(a)>.35&&needFood)||(a.socialWater>.12&&needWater)){if(this.send(a,queen.cell)){a.task='feedingQueen';a.lastJob='care';return true;}}
     if(needFood)return this.assignCache(a,'queen',queen.socialProtein<.15);return false;
@@ -644,7 +646,7 @@ export class Colony{
 
   place(kind,x){if(!['food','water'].includes(kind))return;this.world.place(kind,x);this.record(kind==='food'?'Finite insect pieces and nectar placed. Ants must discover and carry them.':'A water source appeared on the surface.');}
   toJSON(){
-    const {occupancy,reserved,broodClaims,broodIDs,broodSource,broodByID,localBrood,indexedBrood,...data}=this;return {...data,food:this.food,protein:this.protein,water:this.water,world:this.world.toJSON(),rng:{state:this.rng.state}};
+    const {occupancy,reserved,broodClaims,careClaims,broodIDs,broodSource,broodByID,localBrood,indexedBrood,...data}=this;return {...data,food:this.food,protein:this.protein,water:this.water,world:this.world.toJSON(),rng:{state:this.rng.state}};
   }
   static fromJSON(d){
     if(!d||!Number.isFinite(d.time)||d.time<0||!Number.isFinite(d.food)||!Number.isFinite(d.water)||!Array.isArray(d.ants)||d.ants.length>LIMIT)throw Error('Invalid colony save');
@@ -653,7 +655,7 @@ export class Colony{
     c.settings=settingsFrom(d.settings);c.world=World.fromJSON(d.world,legacy);c.rng=new Random(d.rng.state);c.modelVersion=4;c.species=SPECIES.scientific;
     c.ants=d.ants.map(a=>{const ant=normalizeAnt(a,c.world.seed),life=ant.traits.lifeDays*(ant.caste==='queen'?35:ant.caste==='major'?1.4:1);initializeBrain(ant,c.world.seed);if(preV4)ant.traits.lifeDays=Math.max(life,adultDays(ant)+10);return ant;});
     c.brood=d.brood.map(b=>({...b,age:migrateBroodAge(b.age,d.modelVersion),carriedBy:b.carriedBy??null,needsTransport:b.needsTransport??false,nutrition:b.nutrition??1,vitality:b.vitality??1,lastCare:b.lastCare??c.time}));
-    c.eggsLaid=d.eggsLaid??0;c.broodLost=d.broodLost??0;c.recruitments=d.recruitments??0;c.occupancy=new Map();c.reserved=new Set();c.broodClaims=new Set();c.broodMoved=d.broodMoved??0;
+    c.eggsLaid=d.eggsLaid??0;c.broodLost=d.broodLost??0;c.recruitments=d.recruitments??0;c.occupancy=new Map();c.reserved=new Set();c.broodClaims=new Set();c.careClaims=new Map();c.broodMoved=d.broodMoved??0;
     if(preV3)for(const a of c.ants){a.cargoKind=a.carried?(a.task==='haulingSoil'?'soil':a.task==='returningWater'?'water':'food'):null;a.destination=a.route.at(-1)??null;a.lastProgressAt=c.time;a.lastProgressPos=[...a.pos];}
     if(preV4)for(const a of c.ants){a.knownNeeds=null;a.needsAt=-100;if(a.task==='patrolling'){a.task='reserve';a.route=[];a.busyUntil=c.time;}a.cargoNutrition??=NUTRITION.mixed;}
     if(preV4||!c.demand)c.lastDemand=-10;
