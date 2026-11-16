@@ -43,7 +43,7 @@ export function findBed(w,near,id=null){
   const cells=openNestCells(w);if(w.bedPoolCells!==cells){w.bedPoolCells=cells;w.bedPools=new Map();}
   const key=cellKey(near);let ordered=w.bedPools.get(key);if(!ordered){ordered=cells.map(c=>({c,d:Math.hypot(c[0]-near[0],c[1]-near[1])})).sort((a,b)=>a.d-b.d).map(v=>v.c);if(w.bedPools.size>=16)w.bedPools.delete(w.bedPools.keys().next().value);w.bedPools.set(key,ordered);}
   // Geometry order is cached; actual reservations are always checked at pickup time.
-  const best=ordered.find(c=>freeCell(w,c,id));return best&&[...best];
+  const best=ordered.find(c=>freeCell(w,c,id));return best?[...best]:null;
 }
 export function cachePositions(w,near){const cells=openNestCells(w);return [...cells].sort((a,b)=>Math.hypot(a[0]-near[0],a[1]-near[1])-Math.hypot(b[0]-near[0],b[1]-near[1])).flatMap(c=>{const out=[];for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++)out.push([c[0]+x/SUB,c[1]+y/SUB]);return out;});}
 export function findCacheSlot(w,near){
