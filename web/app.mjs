@@ -56,7 +56,7 @@ function updateUI(){
   $('performance-button').textContent=$('performance-panel').hidden?'Show performance':'Hide performance';
   if(!$('performance-panel').hidden)updatePerformance();
 }
-function performanceSnapshot(){const taskCounts={};for(const a of colony.ants)taskCounts[a.task]=(taskCounts[a.task]??0)+1;return {...monitor.values,routeRecoveries:colony.world.runtime.recoveries,recognitions:colony.recognitions,socialTransfers:colony.socialTransfers,alarmEvents:colony.alarmEvents,taskCounts,resourceBalance:{food:resourceBalance(colony.world,'food'),water:resourceBalance(colony.world,'water')},moundTunnels:colony.world.moundTunnels.size,entrances:colony.world.entrances.filter(e=>e.state==='open').length,requestedSpeed:state.speed,ants:colony.ants.length,brood:colony.brood.length,populationCap:colony.settings.populationCap,soilDeposited:colony.world.soilDeposited,openCells:colony.world.excavated.size,cachedChunks:renderer.chunks.size,terrainCacheBytes:renderer.chunks.bytes,terrain:{...renderer.renderStats,queued:renderer.requests.size,active:!!renderer.active},pathCalls:colony.world.runtime.pathCalls,routingMs:colony.world.runtime.pathCalls?colony.world.runtime.pathMs/colony.world.runtime.pathCalls:0};}
+function performanceSnapshot(){const taskCounts={};for(const a of colony.ants)taskCounts[a.task]=(taskCounts[a.task]??0)+1;return {...monitor.values,routeRecoveries:colony.world.runtime.recoveries,recognitions:colony.recognitions,socialTransfers:colony.socialTransfers,alarmEvents:colony.alarmEvents,taskCounts,resourceBalance:{food:resourceBalance(colony.world,'food'),water:resourceBalance(colony.world,'water')},moundTunnels:colony.world.moundTunnels.size,entrances:colony.world.entrances.filter(e=>e.state==='open').length,requestedSpeed:state.speed,ants:colony.ants.length,brood:colony.brood.length,populationCap:colony.settings.populationCap,soilDeposited:colony.world.soilDeposited,openCells:colony.world.excavated.size,cachedChunks:renderer.chunks.size,terrainCacheBytes:renderer.chunks.bytes,renderDpr:renderer.dpr,nativeRenderDpr:renderer.nativeDpr,terrain:{...renderer.renderStats,queued:renderer.requests.size,active:!!renderer.active},pathCalls:colony.world.runtime.pathCalls,routingMs:colony.world.runtime.pathCalls?colony.world.runtime.pathMs/colony.world.runtime.pathCalls:0};}
 function updatePerformance(){
   const m=performanceSnapshot();$('performance-panel').dataset.readings=JSON.stringify(m);$('perf-fps').textContent=m.fps.toFixed(0);$('perf-frame').textContent=m.frameMs.toFixed(1)+' ms';$('perf-tick').textContent=m.tickMs.toFixed(2)+' ms';$('perf-draw').textContent=m.drawMs.toFixed(2)+' ms';$('perf-speed').textContent=m.effective.toFixed(1)+'× / '+m.requestedSpeed+'×';$('perf-population').textContent=m.ants+' / '+m.populationCap;$('perf-mound').textContent=m.soilDeposited;$('perf-routing').textContent=m.routingMs.toFixed(2)+' ms';$('perf-recoveries').textContent=colony.world.runtime.recoveries;
 }
@@ -124,7 +124,7 @@ canvas.addEventListener('pointermove',event=>{
   if(!pointers.has(event.pointerId))return;lastCameraInput=performance.now();const p=localPoint(event);pointers.set(event.pointerId,p);
   if(pointers.size>=2){const [a,b]=[...pointers.values()],d=distance(a,b);if(pinchDistance>0)renderer.zoom(d/pinchDistance,[(a[0]+b[0])/2,(a[1]+b[1])/2]);pinchDistance=d;state.following=false;moved=true;return;}
   if(start && distance(start,p)>6)moved=true;
-  if(moved && lastPoint){renderer.camera.x-=(p[0]-lastPoint[0])/renderer.unit;renderer.camera.y-=(p[1]-lastPoint[1])/renderer.unit;state.following=false;}lastPoint=p;
+  if(moved && lastPoint){renderer.cameraInput();renderer.camera.x-=(p[0]-lastPoint[0])/renderer.unit;renderer.camera.y-=(p[1]-lastPoint[1])/renderer.unit;state.following=false;}lastPoint=p;
 });
 canvas.addEventListener('pointerup',async event=>{
   const p=localPoint(event);pointers.delete(event.pointerId);
@@ -150,7 +150,7 @@ function frame(now){
   const drawBegan=performance.now();renderer.draw(colony,{...state,paused},dt,now/1000);monitor.frame(now,stats,performance.now()-drawBegan);
   if(now-lastUI>250){updateUI();lastUI=now;}
   if(now-lastSave>(colony.ants.length>=600?60000:20000)&&pointers.size===0&&now-lastCameraInput>800&&!runner.busy&&!saveTask)save();
-  if($('game').dataset.ready!=='true')$('game').dataset.ready='true';const terrainReady=renderer.requests.size===0&&!renderer.active&&!renderer.fallback;if(canvas.dataset.terrainReady!==String(terrainReady))canvas.dataset.terrainReady=String(terrainReady);requestAnimationFrame(frame);
+  if($('game').dataset.ready!=='true')$('game').dataset.ready='true';const terrainReady=renderer.requests.size===0&&!renderer.active&&!renderer.fallback&&now>=(renderer.motionUntil??0);if(canvas.dataset.terrainReady!==String(terrainReady))canvas.dataset.terrainReady=String(terrainReady);requestAnimationFrame(frame);
 }
 function networkState(){const cached=$('offline-state').dataset.cached==='true' || !!navigator.serviceWorker?.controller;$('offline-state').textContent=!navigator.onLine?(cached?'Offline · your colony is ready to play.':'Offline · open once online to cache the game.'):(cached?'Ready for offline play · saves stay on this device.':'Preparing offline play…');}
 for(const event of ['online','offline'])window.addEventListener(event,networkState);

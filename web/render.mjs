@@ -29,9 +29,10 @@ export class Renderer {
     this.resize();this.home();
   }
   resize() {
-    const rect=this.canvas.getBoundingClientRect();this.width=rect.width;this.height=rect.height;
-    this.dpr=Math.min(2,window.devicePixelRatio||1);this.canvas.width=Math.round(rect.width*this.dpr);this.canvas.height=Math.round(rect.height*this.dpr);
+    const rect=this.canvas.getBoundingClientRect();this.width=rect.width;this.height=rect.height;this.nativeDpr=Math.min(2,window.devicePixelRatio||1);this.resolution(this.nativeDpr);
   }
+  resolution(dpr){const width=Math.round(this.width*dpr),height=Math.round(this.height*dpr);if(this.canvas.width!==width)this.canvas.width=width;if(this.canvas.height!==height)this.canvas.height=height;this.dpr=dpr;this.canvas.dataset.renderDpr=String(dpr);}
+  cameraInput(){this.motionUntil=performance.now()+180;}
   get unit() { return 14*this.camera.zoom; }
   home(world=null) {
     this.camera={x:0,y:0,zoom:Math.max(.68,Math.min(1.3,this.width/960))};if(!world?.deposits.size)return;
@@ -44,7 +45,7 @@ export class Renderer {
   screen([x,y]) {return [this.width/2+(x-this.camera.x)*this.unit,this.height*.30+(y-this.camera.y)*this.unit];}
   world([x,y]) {return [(x-this.width/2)/this.unit+this.camera.x,(y-this.height*.30)/this.unit+this.camera.y];}
   zoom(factor,anchor=[this.width/2,this.height/2]) {
-    const before=this.world(anchor);this.camera.zoom=Math.max(.35,Math.min(3,this.camera.zoom*factor));
+    this.cameraInput();const before=this.world(anchor);this.camera.zoom=Math.max(.35,Math.min(3,this.camera.zoom*factor));
     const after=this.world(anchor);this.camera.x+=before[0]-after[0];this.camera.y+=before[1]-after[1];
   }
   focus(a) {
@@ -133,6 +134,7 @@ export class Renderer {
   }
 
   draw(colony,options,dt,clock) {
+    this.resolution(performance.now()<(this.motionUntil??0)?Math.min(1,this.nativeDpr):this.nativeDpr);
     const c=this.ctx,u=this.unit,z=this.camera.zoom;c.setTransform(this.dpr,0,0,this.dpr,0,0);c.imageSmoothingEnabled=false;
     this.frameID++;this.landscape(colony.world);
     this.requests.clear();this.previewDeadline=performance.now()+1.5;this.renderStats.drawnAnts=0;this.renderStats.crowdSkipped=0;const crowd=new Map(),broodCrowd=new Map();const lod=u*this.dpr>=13?16:8;
