@@ -116,3 +116,5 @@ During camera input the canvas temporarily uses a one-pixel-per-CSS-pixel backin
 An autosave request can start while a large tick is pending: the runner finishes that tick and holds further biology until the database generation commits. Do not require an already-idle runner to request an autosave, because continuous catch-up can otherwise starve saving indefinitely.
 
 Crowd suppression uses screen-space buckets rather than allowing several opaque sprites at the same world-cell position. Very dense wide views use simple pixel silhouettes beyond a viewport-scaled rich-sprite budget; selected ants and the queen bypass that budget. This changes drawing only, not the simulated population or individual inspection.
+
+The worker-off fallback caps terrain texture detail at eight pixels per cell to reduce per-chunk work. Its convergence check pauses biology so the target revision remains fixed; live fallback rendering may show an older bitmap while a changed chunk is repainted.

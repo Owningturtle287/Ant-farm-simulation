@@ -137,7 +137,7 @@ export class Renderer {
     this.resolution(performance.now()<(this.motionUntil??0)?Math.min(1,this.nativeDpr):this.nativeDpr);
     const c=this.ctx,u=this.unit,z=this.camera.zoom;c.setTransform(this.dpr,0,0,this.dpr,0,0);c.imageSmoothingEnabled=false;
     this.frameID++;this.landscape(colony.world);
-    this.requests.clear();this.previewDeadline=performance.now()+1.5;this.renderStats.drawnAnts=0;this.renderStats.crowdSkipped=0;this.renderStats.simpleSprites=0;const crowd=new Map(),broodCrowd=new Map(),crowdWidth=Math.max(4,8*z),crowdHeight=Math.max(4,5*z),richBudget=Math.max(400,Math.min(1500,Math.ceil(this.width*this.height/800)));const lod=u*this.dpr>=13?16:8;
+    this.requests.clear();this.previewDeadline=performance.now()+1.5;this.renderStats.drawnAnts=0;this.renderStats.crowdSkipped=0;this.renderStats.simpleSprites=0;const crowd=new Map(),broodCrowd=new Map(),crowdWidth=Math.max(4,8*z),crowdHeight=Math.max(4,5*z),richBudget=Math.max(400,Math.min(1500,Math.ceil(this.width*this.height/800)));const lod=this.worker&&u*this.dpr>=13?16:8;
     const min=this.world([-u,-u]),max=this.world([this.width+u,this.height+u]);
     for(let cy=Math.floor(min[1]/16);cy<=Math.floor(max[1]/16);cy++) for(let cx=Math.floor(min[0]/16);cx<=Math.floor(max[0]/16);cx++) {
       const [x,y]=this.screen([cx*16-.5,cy*16-.5]),image=this.chunk(colony.world,cx,cy,lod);if(image)c.drawImage(image,Math.round(x),Math.round(y),Math.ceil(u*16)+.2,Math.ceil(u*16)+.2);else{const ground=this.screen([cx*16,colony.world.baseSurface(cx*16)-.5])[1],top=Math.max(y,ground);if(top<y+u*16){c.fillStyle='#806446';c.fillRect(x,top,u*16,y+u*16-top);}}

@@ -163,5 +163,5 @@ test('10000-ant saves use atomic database generations and the roster stays paged
 });
 
 test('terrain rendering falls back to bounded row batches when workers are unavailable',async({page},info)=>{
-  await page.addInitScript(()=>{window.Worker=undefined;});await page.reload();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:30000});await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Show performance',exact:true}).click();await expect.poll(async()=>JSON.parse(await page.locator('#performance-panel').getAttribute('data-readings')).terrain.worker).toBe(false);await page.screenshot({path:info.outputPath('budgeted-fallback.png')});
+  await page.addInitScript(()=>{window.Worker=undefined;});await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:30000});await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Show performance',exact:true}).click();await expect.poll(async()=>JSON.parse(await page.locator('#performance-panel').getAttribute('data-readings')).terrain.worker).toBe(false);await page.screenshot({path:info.outputPath('budgeted-fallback.png')});
 });
