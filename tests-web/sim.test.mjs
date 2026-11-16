@@ -333,3 +333,10 @@ test('diagonal contour capsules smooth valid turns while retaining solid cell ce
   const solid=(x,y)=>!(x===y&&x>=0&&x<=1)&&!(x===0&&y===1);assert.equal(densityAt(.8,.2,solid),0);assert.equal(densityAt(1,0,solid),1);assert.equal(densityAt(0,0,solid),0);
   const blocked=(x,y)=>!(x===y&&x>=0&&x<=1);assert.ok(densityAt(.8,.2,blocked)>=.5,'Two solid corner flanks must not become a visual shortcut.');
 });
+
+test('mound branches reuse nearby passages instead of repeatedly opening the queen-to-surface fan',()=>{
+  const w=new World(287);for(let i=0;i<250;i++)w.deposit(w.depositSite());
+  for(let x=-35;x<=35;x++)w.excavated.add(key([x,5]));w.rebuildNavigation();w.changed([0,5]);
+  let planned=false;for(let i=0;i<10&&!planned;i++)planned=planMoundPassage(w,new Random(i+1600),1000);assert.ok(planned);
+  const original=w.construction.filter(c=>c[1]>=w.baseSurface(c[0]));assert.ok(original.length<18);assert.ok(original.every(c=>Math.hypot(c[0]-w.nest[0],c[1]-w.nest[1])>1));
+});

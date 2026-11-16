@@ -66,7 +66,7 @@ Next steps are quantitative calibration against one defined climate/diet regime,
 
 ## v0.6 terrain correction
 
-Mound deposition now checks both neighboring ground levels and a broader three-cell support span. Its search radius expands with soil volume, so accumulated pellets spread into a lower, asymmetric slope. An entrance protects a narrow mouth; it no longer permits an arbitrarily high adjacent wall. Internal mound galleries require an intact roof, lateral soil and spacing from other galleries, with a limited excavated share of the mound. An exposed old gallery is outdoor air, not a permanent sheltered chamber.
+Mound deposition now checks both neighboring ground levels and a broader three-cell support span. Its search radius expands with soil volume, so accumulated pellets spread into a lower, asymmetric slope. An entrance protects a narrow mouth; it no longer permits an arbitrarily high adjacent wall. New mound branches connect from the nearest existing passage instead of repeatedly cutting new routes from the queen chamber. Internal mound galleries require an intact roof, lateral soil and spacing from other galleries, with a limited excavated share of the mound. An exposed old gallery is outdoor air, not a permanent sheltered chamber.
 
 Passage candidates use curved centerlines with connected raster bridges; chambers use seeded rotated, lobed outlines. Navigation still uses a cell graph. The cutaway renderer resolves that graph at eight contour samples and sixteen texture pixels per cell, with continuous material shading, fine grains and pixel-stepped rounded boundaries. This increases visual contour detail; it is not a claim of granular soil mechanics or continuous collision physics.
 

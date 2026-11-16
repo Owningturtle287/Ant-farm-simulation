@@ -37,7 +37,8 @@ export function planMoundPassage(w,rng,time){
   const candidates=[...w.deposits].map(s=>s.split(',').map(Number)).filter(c=>c[1]<w.baseSurface(c[0])&&w.solid([c[0],c[1]-1])&&w.solid([c[0],c[1]-2])&&[-2,-1,1,2].every(dx=>w.solid([c[0]+dx,c[1]])));
   for(let attempt=0;attempt<Math.min(candidates.length,16);attempt++){
     const goal=candidates[rng.int(0,candidates.length-1)];if(covered.some(id=>{const [x,y]=id.split(',').map(Number);return Math.hypot(x-goal[0],y-goal[1])<4;}))continue;
-    const foot=[goal[0],w.baseSurface(goal[0])+1],route=[...passage(w.nest,foot,rng),...passage(foot,goal,rng)],above=route.filter(c=>c[1]<w.baseSurface(c[0]));
+    const foot=[goal[0],w.baseSurface(goal[0])+1],anchors=[...w.excavated].map(id=>id.split(',').map(Number)).filter(c=>w.walkable(c));anchors.sort((a,b)=>Math.hypot(a[0]-foot[0],a[1]-foot[1])-Math.hypot(b[0]-foot[0],b[1]-foot[1]));
+    const anchor=anchors[0]??w.nest,route=[...passage(anchor,foot,rng),...passage(foot,goal,rng)],above=route.filter(c=>c[1]<w.baseSurface(c[0]));
     const removed=above.filter(c=>w.deposits.has(key(c)));
     if(!removed.length||covered.length+removed.length>budget||above.some(c=>!w.solid([c[0],c[1]-1])&&!w.moundTunnels.has(key(c))))continue;
     queuePassage(w,route);w.rooms.push({kind:'mound',center:goal,rx:1,ry:1});w.lastMoundPlan=time;return true;
