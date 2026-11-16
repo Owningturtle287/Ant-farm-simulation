@@ -363,3 +363,8 @@ test('sub-threshold grain and insect residues are accounted for before their sou
   const w=new World(287),grass=w.patches.find(p=>p.origin==='grass');harvest(w,grass,grass.amount-.0004,0);assert.equal(grass.amount,0);assert.ok(Math.abs(resourceBalance(w,'food').error)<1e-7);
   const prey=w.patches.find(p=>p.origin==='prey');harvest(w,prey,prey.amount-.0003,0);prey.decayAt=1e10;w.weather.nextRain=1e10;tickHabitat(w,DAY+2);assert.equal(w.patches.includes(prey),false);assert.ok(Math.abs(resourceBalance(w,'food').error)<1e-7);
 });
+
+test('database read failures protect the large-colony marker from automatic replacement',async()=>{
+  const {ColonyStore}=await import('../web/large-saves.mjs'),data=new Map([['little-colony.web.v1.database','1']]),storage={getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)},database={open(){throw Error('Database unavailable');}},store=new ColonyStore(storage,database);
+  await assert.rejects(()=>store.load(),/Database unavailable/);assert.equal(store.blocked,true);assert.equal(await store.save(new Colony()),false);assert.equal(storage.getItem('little-colony.web.v1.database'),'1');assert.equal(storage.getItem('little-colony.web.v1'),null);
+});

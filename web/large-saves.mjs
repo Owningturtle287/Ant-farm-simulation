@@ -11,8 +11,8 @@ export class ColonyStore{
     for(const [kind,out,count] of [['ants',ants,head.ants],['brood',brood,head.brood]]){const keys=Array.from({length:Math.ceil(count/BATCH)},(_,i)=>head.id+':'+kind+':'+i);for(const group of await this.read(keys)){if(!Array.isArray(group))throw Error('Missing colony group');out.push(...group);}}
     if(ants.length!==head.ants||brood.length!==head.brood)throw Error('Incomplete colony');return Colony.fromJSON({...meta,ants,brood});
   }
-  async load(){if(this.storage.getItem(MARKER)!=='1')return this.small.load();const heads=await this.read(['primary','backup']);for(const [i,h] of heads.entries())try{const colony=await this.restore(h);if(colony){this.validHead=h;return {colony,recovered:i===1};}}catch{}
-    this.blocked=true;throw Error('Your large-colony save could not be read. Automatic saving is paused.');
+  async load(){if(this.storage.getItem(MARKER)!=='1')return this.small.load();try{const heads=await this.read(['primary','backup']);for(const [i,h] of heads.entries())try{const colony=await this.restore(h);if(colony){this.validHead=h;return {colony,recovered:i===1};}}catch{}
+    throw Error('Your large-colony save could not be read. Automatic saving is paused.');}catch(error){this.blocked=true;throw error;}
   }
   save(colony,explicit=false){const result=this.queue.then(()=>this.write(colony,explicit));this.queue=result.catch(()=>{});return result;}
   async write(colony,explicit){
