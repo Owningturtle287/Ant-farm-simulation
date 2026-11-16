@@ -3,7 +3,7 @@ export const SAVE_KEY='little-colony.web.v1';
 const BACKUP_KEY=SAVE_KEY+'.backup';
 export function decodeSave(raw) {
   const envelope=JSON.parse(raw);
-  if(![1,2,3].includes(envelope.version)) throw Error('Unsupported save version');
+  if(![1,2,3,4].includes(envelope.version)) throw Error('Unsupported save version');
   return Colony.fromJSON(envelope.colony);
 }
 export class SaveStore {
@@ -17,7 +17,7 @@ export class SaveStore {
   }
   save(colony,explicit=false) {
     if(this.blocked && !explicit) return false;
-    const raw=JSON.stringify({version:3,savedAt:Date.now(),colony});
+    const raw=JSON.stringify({version:4,savedAt:Date.now(),colony});
     const prior=this.storage.getItem(SAVE_KEY);
     if(prior) { try { decodeSave(prior); this.storage.setItem(BACKUP_KEY,prior); } catch(error) { if(error.name==='QuotaExceededError') throw error; } }
     this.storage.setItem(SAVE_KEY,raw); this.blocked=false; return true;

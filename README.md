@@ -16,9 +16,11 @@ The first online visit caches the game for offline reopening. Progress saves loc
 ## Playable features
 
 - Animated pixel ants on seeded, contoured grassland. Bare, asymmetrical mound pellets contrast with rooted dirt and soft earth. Trees and hard/stone layers are removed.
-- A queen, minor workers, and later major workers. White eggs, segmented larvae, and ant-shaped pupae develop through local care, seed nutrition, and nest conditions. The queen moves within sheltered rooms, visibly lays eggs, and receives food from attendants; nurses physically carry eggs and relocate brood.
-- Flexible tasks shaped by demand, age, individual thresholds, and successful experience. Local recruitment, fallible source memories, distinct food/water trails, rest, grooming, and crowding.
-- All ground is diggable. Transported soil retains its origin, and colony-specific deposition preferences and slopes shape uneven mounds. New space is requested as the colony grows.
+- A single reproductive queen and continuously sized small, medium, and large red imported fire-ant workers. White eggs, segmented larvae, and ant-shaped pupae develop through local care, prey protein, and nest conditions. The queen moves within sheltered rooms, visibly lays eggs, and receives food from attendants; nurses physically carry eggs and relocate brood.
+- Stimulus-driven task selection using nutritional need, local signals, age, size and experience. Large workers are not locked into guarding. Antennal recognition, bounded food/water sharing, recruitment, fallible source memories, and short alarm responses.
+- **More → Fire ant behavior** explains the model; **More → Disturb the ground** demonstrates a local alarm. Trails shows food, water, brood, queen, home and alarm cues.
+- All ground is diggable. Transported soil retains its origin, and colony-specific deposition preferences and slopes shape uneven mounds. Workers propose and dig narrow peripheral mouths and passages through mound soil. Rehandled soil is conserved.
+- Discrete water, nectar and insect portions shrink as picked up. Empty carcasses never refill; later wildlife creates a new finite entity. Nutrition separates carbohydrate energy from protein.
 - Seed-bearing grass clumps wither when fully harvested, then sprout and mature again. Intermittent rain collects in terrain depressions; puddles refill, evaporate, and are harvested.
 - Tap ants for personal stats, job, experience, and behavior explanations.
 - Drag / pinch navigation, ant following, pause, and 1× / 2× / 4× / 8× / 16× / 32× / 64× / 128× time lapse.
@@ -27,9 +29,9 @@ The first online visit caches the game for offline reopening. Progress saves loc
 - Food/water placement, colony roster, local autosaves, recovery copy, and JSON export.
 - Portrait and landscape phone layouts, Home Screen icon, and offline reopening.
 
-New colonies start with **12 workers and one queen**, plus three brood. The default population ceiling is **120**, adjustable to 60, 250, or 500. Higher ceilings are experimental; they do not establish a tested iPhone capacity. Existing saves keep their ants and terrain. **Start a new colony to generate contoured ground**; older colonies retain their original flat ground to protect established tunnels and mounds.
+New colonies start with **12 workers and one queen**, plus three brood. The default population ceiling is **120**, adjustable to 60, 250, or 500. Higher ceilings are experimental; they do not establish a tested iPhone capacity. Existing saves keep their ants, terrain and settings while behaviors upgrade and old patrol loops are released. **Start a new colony for the revised fire-ant founder nest and peripheral mouth.**
 
-This is a generalized, accelerated soil-nesting ant model. Its biological time and physical scale are gameplay approximations. Exact species calibration, richer colony communication, predators, reproductive flights, flooding physics, and persistent world streaming remain future milestones. The colony rests while the page is closed, hidden, or a menu is open. See [model and research notes](docs/REALISM.md).
+This is a research-informed, accelerated model of **Solenopsis invicta**, using its single-queen social form. It does not reproduce an exact neural brain. Its biological time and physical scale are gameplay approximations. Quantitative biological calibration, a complete trophallaxis/larval-processing network, rival colonies, reproductive flights, flooding physics, and persistent world streaming remain future milestones. The colony rests while the page is closed, hidden, or a menu is open. See [model and research notes](docs/REALISM.md).
 
 ## GitHub Actions
 
@@ -54,7 +56,7 @@ Open `http://localhost:4173/Ant-farm-simulation/`.
 
 For browser checks: `npm install`, `npx playwright install chromium webkit`, then `npm run test:browser`.
 
-- `web/`: simulation, canvas renderer, UI, manifest, icons, and service worker.
+- `web/`: simulation, fire-ant responses, signals, finite resource accounting, nest architecture, ecology, renderer, UI and offline assets.
 - `tests-web/`: simulation/save checks and browser playthrough/offline checks.
 - `scripts/build-web.mjs`: static output and cache versioning.
 - `.github/workflows/pages.yml`: tested GitHub Pages publishing.

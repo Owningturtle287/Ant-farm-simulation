@@ -37,6 +37,14 @@ Portrait and landscape both work. Turning your phone sideways gives a wider cuta
 
 ## Rain & renewal update
 
-Refresh or reopen online to load v0.4. New colonies generate rolling ground and unique uneven mounds; existing colonies keep their established terrain. Use **More → Start a new colony** only when you want to replace your current colony. Export a backup first if you want to retain a copy.
+Refresh or reopen online to load v0.5. New colonies generate rolling ground and unique uneven mounds; existing colonies keep their established terrain. Use **More → Start a new colony** only when you want to replace your current colony. Export a backup first if you want to retain a copy.
 
 Grain appears on grass heads. Harvested clumps wither, then regrow after a delay. Rain falls intermittently and fills low spots; puddles shrink as ants drink and water evaporates. All earth is diggable, with no rock barriers. White eggs, pale segmented larvae, and tan pupae have distinct sprites. Nurses carry new eggs from the queen to the nursery. Open **Colony** for stage counts, brood deliveries, and the queen’s current laying target.
+
+## Fire ant society update
+
+**More → Fire ant behavior** explains the single-queen species model. Large workers are general workers with size/age tendencies, not permanent guards. Open **Colony** to see what is supporting or limiting growth. Brood develops over modeled weeks; a low founder population before the first generation emerges is not itself a deadlock.
+
+Food placement now supplies finite insect pieces and nectar. Water squares vanish as ants collect portions. Natural rain and plants add new stock; later insect arrivals are distinct resources. **Trails** shows the chemical cue legend. At **1×**, use **More → Disturb the ground**, then tap close to workers to watch a temporary alarm. Tapping empty ground produces no worker alarm.
+
+Updates preserve existing progress. Start a new colony only when you want the revised narrow peripheral founder entrance. Existing workers adopt the new behavior in place, including release from old patrol loops.

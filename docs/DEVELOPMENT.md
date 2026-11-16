@@ -2,8 +2,9 @@
 
 The primary delivery is the GitHub Pages app in `web/`, deployed by `.github/workflows/pages.yml` to the same bookmark address. Preserve existing progress and the deployment pipeline when updating it.
 
-## v0.4 web architecture and contracts
+## v0.5 web architecture and contracts
 
+- `fire-ant.mjs` owns the single-queen species profile, continuous worker size, contact-odor recognition, crop capacities and task response scores. `signals.mjs` handles local cue emission, sampling and decay. `resources.mjs` owns finite stock accounting and discrete visible resource portions. `architecture.mjs` generates founder connections and worker-proposed exits/mound passages.
 - `biology.mjs` owns seeded randomness, individual traits, age/stage helpers, defaults, and bounded growth controls. New colonies have 12 workers, one queen, and three brood; the default ceiling is 120, with experimental options up to 500.
 - `materials.mjs` generates layered substrate and local moisture/temperature estimates. All depths are equally diggable. Deposited spoil is a separate visual material and retains its origin. `ecology.mjs` owns seeded contours, grass harvest/regrowth, basin detection, rain scheduling, accumulation, and evaporation. Separate saved randomness keeps weather deterministic.
 - `sim.mjs` owns persistent colony/world state, local discovery and recruitment, bounded learning, demand-sensitive task decisions, nursing, construction, and mass accounting. No DOM or renderer state belongs in the model. All random simulation choices must use the saved seeded generator.
@@ -12,10 +13,12 @@ The primary delivery is the GitHub Pages app in `web/`, deployed by `.github/wor
 - `clock.mjs` advances the same fixed 0.1-second ticks at every speed through 128×. A six-millisecond per-frame simulation budget and bounded backlog preserve interaction under load; actual speed may fall below requested speed. Do not replace this with larger biology steps.
 - `render.mjs` caches visible 16-cell chunks with neighboring invalidation. Spoil must never receive grass. At high time lapse, draw current positions directly so smoothing does not cut across solid terrain between distant snapshots.
 - `app.mjs` owns controls, local performance sampling/export, pause state, and browser lifecycle. The optional performance panel runs with the simulation. Dialogs and background suspension pause it; there is no offline catch-up.
-- `persistence.mjs` writes envelope version 3 and reads versions 1, 2, and 3 under the unchanged `little-colony.web.v1` key. Actual pre-update fixtures in `tests-web/fixtures/v1-colony.json` and `v2-colony.json` verify preservation of ants, terrain, mound, and elapsed time. Modern saves must continue seeded behavior exactly, including weather and in-flight brood. Old saves retain a flat `terrainVersion: 0`; newly created colonies use contoured `terrainVersion: 1`. Never reshape established terrain during migration. A valid backup recovers a corrupt primary; unreadable progress blocks automatic overwrite.
+- `persistence.mjs` writes envelope version 4 and reads versions 1–4 under the unchanged `little-colony.web.v1` key. Actual pre-update fixtures in `tests-web/fixtures/v1-colony.json` and `v2-colony.json` and `v4-colony.json` verify preservation of ants, terrain, mound, and elapsed time. Modern saves must continue seeded behavior exactly, including weather and in-flight brood. Old saves retain a flat `terrainVersion: 0`; newly created colonies use contoured `terrainVersion: 1`. Never reshape established terrain during migration. A valid backup recovers a corrupt primary; unreadable progress blocks automatic overwrite.
 - `sw.js` precaches every runtime module, icon, and document under the repository scope. `build-web.mjs` fingerprints source files into the cache version and builds `dist/`. New runtime files must be added to the explicit cache list. All production asset URLs remain relative.
 
 ## Verification and performance
+
+The regression suite also exercises finite-source transfers, resource ledger balance, water/protein search persistence, size-independent task changes, odor-based recognition, actual trail-biased movement, temporary alarms, mound re-excavation, migration of patrol jobs, and multiple accelerated generations.
 
 Run `npm test`, `npm run benchmark`, and `npm run build`. The simulation suite checks multi-seed resource/excavation/emergence loops, migration, deterministic save continuation, recovery, shortages, local recruitment/care, fallible memories, soft earth at every depth, sensible construction demand, soil conservation, fixed-step time lapse, seed depletion/regrowth, rain basins, queen movement/laying, physical egg transport, and queen provisioning outside the central store.
 
@@ -31,11 +34,13 @@ For device tests: use More → Show performance and Export readings. Record the 
 
 Movement uses `destination` for the walkable route endpoint, separately from a solid dig target. Do not route diggers to the solid tile they plan to remove. Cargo has an explicit `cargoKind`; food/water must never become excavated soil during replanning. Purposeful resting/grooming and busy intervals are not stalled routes. The movement auditor only resets active work after actual lack of positional progress.
 
+Resource stock must balance environmental inputs against remaining amounts, harvest, evaporation, decay and burial. Never refill a harvested insect entity: ecological arrivals create a new ID. Food cargo carries its nutrient composition so nectar cannot become protein during transfer.
+
 The queen's position is independent of the central store. Attendants must visit the store and then reach her before feeding. Newly laid brood exists at her current position. `carriedBy` and each carrier's `carryingBrood` must agree; release brood on carrier death and avoid adult emergence during transit. Nursery candidate scores are cached for five seconds with terrain-revision invalidation and included in save state to preserve deterministic continuation.
 
 ## Next increments
 
-1. Calibrate one reference species and replace remaining colony-level assumptions with measured local mechanisms.
+1. Quantitatively calibrate the selected S. invicta model and replace remaining colony-level shortcuts with measured local mechanisms.
 2. Add brood relocation, food sharing networks, waste handling, and richer encounter-based task feedback.
 3. Profile real iPhones at increasing populations; add spatial/update optimizations only where measurements justify them.
 4. Add persistent region streaming before promising practically unbounded altered terrain.
@@ -75,3 +80,15 @@ Physical iPhone installation, frame-rate stability, thermal behavior, and batter
 5. Add predators and defense, drone/reproductive lifecycle, weather, hazards, audio, and further animation as independently tested increments.
 
 Do not revive the superseded foundation branch by merging it. Continue from the current main tree and retain the passing Actions pipeline.
+
+## v0.5 invariants and regression scope
+
+Large workers have no permanent patrol override. Defense requires a sensed alarm and has a bounded investigation interval. Familiar contact activates search without copying a remote source coordinate. A source memory can record nutritional type only after local discovery. Brood cue salience is multiplied by current care demand so a large, well-tended brood pile does not permanently trap all workers in nursing. Satiation attenuates recruitment and allows reserves to rest even while nearby foragers return.
+
+The adult population limit and the supportable replacement brood pool are separate. Ready pupae can wait at the player ceiling. Changes in brood schedules migrate stage and within-stage progress, rather than rescaling the total age indiscriminately. Existing adults retain prior lifespan expectations during migration.
+
+Mound re-excavation decreases `soilDeposited`, increases `soilRehandled`, and puts the same soil into cargo. It does not increment original `soilExcavated`. Old surface geometry remains unchanged. New mouths are registered as planned until a real path connects them to the nest.
+
+Microclimate samples use a saved two-second moisture-source snapshot. Numeric cache epochs, brood-ID reuse, and avoiding unchanged population-array copies reduce hot-path work. These caches must never make saved continuation diverge. The six-millisecond frame budget remains in effect through 128×; requested speed is not a promise that every phone/population achieves it.
+
+`node scripts/endurance-sim.mjs report.json [seed]` checks 120 modeled days at the default reproduction settings, using the production 0.1-second tick and no player inputs. It asserts population renewal, walkable occupancy and soil/resource conservation. Actions runs seed 287 and uploads its checkpoints with the CPU benchmark. This is a regression scenario, not proof that every seed or parameter combination is viable.

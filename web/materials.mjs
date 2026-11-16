@@ -10,8 +10,9 @@ export function materialAt(world,c){return world.deposits.has(c.join(','))?'spoi
 export function conditionsAt(world,c){
   const [x,y]=c,depth=Math.max(0,y-world.baseSurface(x)),h=hashCell([Math.floor(x/5),Math.floor(y/4)],world.seed);
   let humidity=.32+.38*(1-Math.exp(-depth/18))+((h%11)-5)*.006+(world.weather?.wetness??.35)*.10*Math.exp(-depth/12);
-  for(const p of world.patches)if(p.kind==='water'&&p.amount>0)humidity+=Math.exp(-Math.abs(x-p.cell[0])/5)*Math.exp(-depth/11)*.10*clamp(p.amount/40);
+  for(const p of world.moistureSources??world.patches.filter(p=>p.kind==='water'))if(p.amount>0)humidity+=Math.exp(-Math.abs(x-p.cell[0])/5)*Math.exp(-depth/11)*.10*clamp(p.amount/40);
   const phase=(world.environmentAt??0)/600*Math.PI*2;
-  return {humidity:clamp(humidity,.08,.95),temperature:24.5+Math.sin(phase)*2*Math.exp(-depth/10)-1.5*(1-Math.exp(-depth/14))};
+  if(world.moundTunnels?.has(c.join(',')))humidity+=.15;
+  return {humidity:clamp(humidity,.08,.95),temperature:28+Math.sin(phase)*3*Math.exp(-depth/10)-1*(1-Math.exp(-depth/14))};
 }
 export function digDuration(world,c,skill=0){return 3.2/(1+clamp(skill)*.3);}

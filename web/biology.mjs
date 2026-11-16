@@ -1,6 +1,6 @@
 // Tunable, accelerated biological model. One colony day is ten simulation minutes.
 export const DAY=600;
-export const BROOD_DURATION=38*DAY;
+export const BROOD_DURATION=30*DAY;
 export const LIMIT=500;
 export const DEFAULT_SETTINGS=Object.freeze({startingWorkers:12,populationCap:120,eggRate:1,broodRate:1});
 export const SPEEDS=Object.freeze([1,2,4,8,16,32,64,128]);
@@ -25,7 +25,7 @@ export function createAnt(id,caste,c,seed=287,initialAgeDays=0){
     knownNeeds:null,needsAt:-100,perceptionAt:0,encounterAt:0,heading:id%2?1:-1,destination:null,cargoKind:null,routeFailures:0,lastProgressAt:0,lastProgressPos:[...c],carryingBrood:null,recent:[],lastJob:null,decision:'Settling into the colony.',sourceAt:0};
 }
 export const adultDays=ant=>(ant.initialAgeDays??0)+ant.age/DAY;
-export function broodStage(b){return b.age<BROOD_DURATION*(8/38)?'egg':b.age<BROOD_DURATION*(27/38)?'larva':'pupa';}
+export function broodStage(b){return b.age<8*DAY?'egg':b.age<18*DAY?'larva':'pupa';}
 export function normalizeAnt(a,seed){
   const caste=a.caste==='soldier'?'major':a.caste;
   const base=createAnt(a.id,caste,a.cell,seed,a.initialAgeDays??(caste==='queen'?60:1+(a.id*11)%18));

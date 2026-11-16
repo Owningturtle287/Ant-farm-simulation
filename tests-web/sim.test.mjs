@@ -4,13 +4,17 @@ import {readFileSync} from 'node:fs';
 import {Colony,World,key,LIMIT,DAY,BROOD_DURATION,createAnt,Random} from '../web/sim.mjs';
 import {MATERIALS,baseMaterial} from '../web/materials.mjs';
 import {terrainHeight,basins,tickHabitat,harvest} from '../web/ecology.mjs';
+import {initializeBrain,recognize,cropCapacity} from '../web/fire-ant.mjs';
+import {resourceTiles,resourceBalance,initLedger,addStock} from '../web/resources.mjs';
+import {emit,senseSignal,decaySignals} from '../web/signals.mjs';
+import {planPeripheralExit,planMoundPassage} from '../web/architecture.mjs';
 import {broodStage} from '../web/biology.mjs';
 import {advanceSimulation} from '../web/clock.mjs';
 import {SaveStore,SAVE_KEY,decodeSave} from '../web/persistence.mjs';
 const run=(c,seconds)=>{for(let i=0;i<seconds*10;i++)c.step();return c;};
 test('small seeded colonies forage, excavate, grow a mound, and develop brood',()=>{
   for(const seed of [17,287,914]){
-    const c=run(new Colony(seed),360);
+    const c=new Colony(seed);c.water=1;run(c,600);
     assert.ok(c.foodDelivered>0);assert.ok(c.waterDelivered>0);assert.ok(c.births>0);assert.ok(c.world.soilDeposited>0);assert.ok(c.alive);
     const cargo=c.ants.filter(a=>a.task==='haulingSoil').reduce((sum,a)=>sum+a.carried,0);
     assert.equal(c.world.soilExcavated,c.world.soilDeposited+c.world.soilAbandoned+cargo);
@@ -36,7 +40,7 @@ test('existing v1 colonies migrate without losing ants, excavated terrain, depos
 });
 test('autosave recovers a valid backup and protects unreadable progress',()=>{
   const data=new Map(),storage={getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)},store=new SaveStore(storage),c=run(new Colony(),30);
-  store.save(c);run(c,20);store.save(c);assert.equal(JSON.parse(storage.getItem(SAVE_KEY)).version,3);storage.setItem(SAVE_KEY,'broken');
+  store.save(c);run(c,20);store.save(c);assert.equal(JSON.parse(storage.getItem(SAVE_KEY)).version,4);storage.setItem(SAVE_KEY,'broken');
   const recovered=store.load();assert.equal(recovered.recovered,true);assert.ok(Math.abs(recovered.colony.time-30)<.001);
   storage.setItem(SAVE_KEY+'.backup','broken');assert.throws(()=>store.load());assert.equal(store.save(c),false);assert.equal(storage.getItem(SAVE_KEY),'broken');assert.equal(store.save(c,true),true);
 });
@@ -73,7 +77,7 @@ test('source memories are not omniscient and lose reliability after an actual fa
 test('recruitment requires a nearby returning nestmate',()=>{
   const c=new Colony(2),scout=c.ants[1],donor=c.ants[2];Object.assign(donor,{cell:[3,0],pos:[3,0],task:'returningFood',memory:[-19,0],carried:2.5});
   scout.cell=[50,0];scout.pos=[50,0];scout.encounterAt=0;c.time=5;c.occupancy=new Map([[key(donor.cell),[donor]]]);c.encounter(scout);assert.equal(scout.memories.length,0);
-  scout.cell=[2,0];scout.pos=[2,0];scout.encounterAt=0;c.encounter(scout);assert.equal(scout.memories.length,1);assert.equal(c.recruitments,1);
+  scout.cell=[2,0];scout.pos=[2,0];scout.encounterAt=0;c.encounter(scout);assert.equal(scout.memories.length,0,'Contact activation must not convey remote coordinates.');assert.equal(scout.brain.recruitedKind,'food');assert.ok(scout.brain.recruitUntil>c.time);assert.equal(c.recruitments,1);
 });
 test('larvae need actual local care and protein rather than a global nurse bonus',()=>{
   const c=new Colony(12),nurse=c.ants[1],b=c.brood[0];c.brood=[b];b.age=BROOD_DURATION*.4;b.nutrition=0;b.lastCare=0;
@@ -125,7 +129,7 @@ test('rain gathers in depressions, fills puddles, then stops and water evaporate
 test('queen walks under shelter, lays at her own position, and workers carry single reserved eggs to nursery',()=>{
   const c=new Colony(287),queen=c.ants[0];c.brood=[];c.food=80;c.water=60;c.protein=30;c.lastEgg=-1000;c.updateDemand();
   c.updateQueen(queen);assert.equal(queen.task,'laying');const at=[...queen.cell];c.time=queen.layUntil;c.updateQueen(queen);assert.equal(c.brood.length,1);const b=c.brood[0];assert.deepEqual(b.cell,at);assert.equal(broodStage(b),'egg');assert.equal(b.needsTransport,true);
-  const nurse=c.ants[1],other=c.ants[2];assert.equal(c.assignBroodTransport(nurse),true);assert.equal(c.assignBroodTransport(other),false,'A second nurse must not reserve the same egg.');
+  const nurse=c.ants[1],other=c.ants[2];Object.assign(nurse,{cell:[...at],pos:[...at]});c.sense(nurse);assert.equal(c.assignBroodTransport(nurse),true);assert.equal(c.assignBroodTransport(other),false,'A second nurse must not reserve the same egg.');
   let carried=false;for(let i=0;i<2000&&c.broodMoved===0;i++){c.step();if(b.carriedBy!=null){carried=true;const carrier=c.ants.find(a=>a.id===b.carriedBy);assert.deepEqual(b.pos,carrier.pos);}}
   assert.equal(carried,true);assert.equal(c.broodMoved,1);assert.equal(b.carriedBy,null);assert.equal(b.needsTransport,false);assert.notDeepEqual(b.cell,at);
   const positions=new Set();for(let i=0;i<6000;i++){c.step();positions.add(key(queen.cell));assert.equal(c.world.onSurface(queen.cell),false);}assert.ok(positions.size>1);
@@ -159,4 +163,132 @@ test('attendants physically provision a queen beyond the central food-sharing ar
 test('rain, growth, and brood in flight continue exactly across a save',()=>{
   const raw=readFileSync(new URL('./fixtures/v3-living.json',import.meta.url),'utf8'),a=decodeSave(raw),b=Colony.fromJSON(JSON.parse(JSON.stringify(a)));
   assert.equal(a.world.weather.raining,true);assert.ok(a.ants.some(a=>a.carryingBrood));run(a,30);run(b,30);assert.deepEqual(a.toJSON(),b.toJSON());
+});
+
+test('finite resource squares disappear, cargo equals removed stock, and consumption transfers only that stock',()=>{
+  const c=new Colony(287),a=c.ants[1];c.world.place('water',-20);const p=c.world.patches.at(-1);p.amount=6;
+  initLedger(c.world);for(const patch of c.world.patches)c.world.resourceLedger[patch.kind].created+=patch.amount;
+  const before=resourceTiles(c.world,p).length;assert.equal(before,3);
+  const carried=harvest(c.world,p,2,0);assert.equal(carried,2);assert.equal(resourceTiles(c.world,p).length,2);
+  Object.assign(a,{carried,cargoKind:'water',task:'returningWater',cell:[...c.world.nest],pos:[...c.world.nest],route:[],busyUntil:0});
+  const water=c.water;c.updateAnt(a,.1);c.time=a.busyUntil;c.updateAnt(a,.1);assert.ok(c.water>=water+2-.001);
+  harvest(c.world,p,100,c.time);assert.deepEqual(resourceTiles(c.world,p),[]);assert.equal(harvest(c.world,p,100,c.time),0);
+  for(const kind of ['food','water'])assert.ok(Math.abs(resourceBalance(c.world,kind).error)<1e-8);
+});
+test('placed food is finite and never respawns as another dead insect or nectar drop',()=>{
+  const w=new World(287);w.place('food',40);const patches=w.patches.slice(-2);assert.deepEqual(patches.map(p=>p.origin),['prey','nectar']);
+  for(const p of patches){harvest(w,p,p.amount,0);assert.equal(resourceTiles(w,p).length,0);}
+  for(let time=2;time<DAY*8;time+=2)tickHabitat(w,time);
+  assert.ok(patches.every(p=>p.amount===0));assert.ok(Math.abs(resourceBalance(w,'food').error)<1e-7);
+});
+test('water and protein searches do not loop on plentiful carbohydrate food',()=>{
+  const c=new Colony(287),a=c.ants[1];c.world.patches=[];c.world.place('food',20);const nectar=c.world.patches.find(p=>p.origin==='nectar');c.world.patches=[nectar];
+  Object.assign(a,{cell:[...nectar.cell],pos:[...nectar.cell],foragingKind:'water',wantProtein:false,memories:[]});assert.equal(c.discover(a),false);
+  a.foragingKind='food';a.wantProtein=true;assert.equal(c.discover(a),false);a.wantProtein=false;assert.equal(c.discover(a),true);
+});
+test('large fire-ant workers change tasks with stimuli instead of becoming permanent guards',()=>{
+  const c=new Colony(287),a=c.ants[1];Object.assign(a,{caste:'major',bodySize:.95,cell:[...c.world.nest],pos:[...c.world.nest],initialAgeDays:15});
+  c.food=0;c.protein=0;c.water=30;c.updateDemand();a.knownNeeds=null;c.chooseJob(a);assert.equal(a.lastJob,'forage');assert.notEqual(a.task,'patrolling');
+  c.food=100;c.protein=100;c.brood[0].nutrition=0;c.brood[0].age=DAY*10;a.initialAgeDays=1;a.traits.care=.45;c.brood.forEach(b=>b.lastCare=-100);c.updateDemand();a.knownNeeds=null;a.cell=[...c.brood[0].cell];a.pos=[...a.cell];a.senseAt=0;c.chooseJob(a);assert.ok(['nursing','toBrood','carryingBrood'].includes(a.task));
+  const count=a.brain.taskHistory.length;for(let i=0;i<600;i++)c.step();assert.ok(a.brain.taskHistory.length>count);assert.equal(c.ants.some(a=>a.task==='patrolling'),false);
+});
+test('contact recognizes colony odor rather than an ID and unfamiliar cues release alarm',()=>{
+  const c=new Colony(287),a=c.ants[1],b=c.ants[2];assert.equal(recognize(a,b),true);const originalID=b.id;b.id=8888;assert.equal(recognize(a,b),true);b.id=originalID;
+  a.cell=[...c.world.nest];a.pos=[...a.cell];b.cell=[...a.cell];b.pos=[...a.cell];b.odor=[1.8,1.8,1.8];c.occupancy=new Map([[key(a.cell),[a,b]]]);a.encounterAt=0;c.encounter(a);
+  assert.ok(c.alarmEvents>0);assert.ok(senseSignal(c.world,'alarm',a.cell)>.1);assert.equal(a.brain.lastContact,'Unfamiliar colony odor · alarm response');
+});
+test('chemical trails affect local route choice, evaporate, and alarm defense ends',()=>{
+  const w=new World(287),c=new Colony(287),a=c.ants[1];const place=c.world.entrance();a.cell=[...place];a.pos=[...place];a.route=[];
+  emit(c.world,'food',a.cell,2);const strength=senseSignal(c.world,'food',a.cell);decaySignals(c.world,180);assert.ok(senseSignal(c.world,'food',a.cell)<strength);
+  c.world.patches=[];const choices=c.world.neighbors(a.cell).filter(p=>c.world.onSurface(p)),preferred=choices[0];emit(c.world,'food',preferred,4);let followed=0;
+  for(let i=0;i<100;i++){a.recent=[];a.route=[];a.memories=[];a.foragingKind='food';c.explore(a);if(key(a.route[0])===key(preferred))followed++;}assert.ok(followed>65,'Local trail concentration must influence actual movement choices.');
+  const responders=c.disturb(a.cell);assert.ok(responders>0);assert.ok(c.ants.some(a=>a.task==='investigating'));
+  run(c,90);assert.equal(c.ants.some(a=>['patrolling','investigating'].includes(a.task)),false);
+});
+test('new nests have procedural narrow side mouths with connected subsurface routes',()=>{
+  const signatures=new Set();for(const seed of [17,287,914,19000]){const w=new World(seed),e=w.entrances[0];assert.ok(Math.abs(e.mouth[0])>=8);assert.ok(w.path(w.nest,e.mouth));assert.ok(w.solid([0,w.baseSurface(0)]),'The mound center is not an open canyon.');signatures.add(key(e.mouth));
+    assert.ok(planPeripheralExit(w,new Random(seed),600));const planned=w.entrances.at(-1);assert.ok(Math.abs(planned.mouth[0]-e.mouth[0])>=7);assert.ok(w.construction.length>0);
+  }assert.ok(signatures.size>1);
+});
+test('workers can tunnel through mound deposits without creating or losing soil',()=>{
+  const w=new World(287);for(let i=0;i<110;i++)w.deposit(w.depositSite(),'earth');assert.ok(planMoundPassage(w,new Random(5),1000));
+  const depBefore=w.soilDeposited,candidate=[...w.deposits].map(s=>s.split(',').map(Number)).find(c=>w.solid([c[0],c[1]-1])&&w.solid([c[0],c[1]+1]));assert.ok(candidate);
+  // Open a connected approach from the founder tunnel to the chosen mound cell.
+  const below=[candidate[0],candidate[1]+1];if(w.deposits.has(key(below))){assert.ok(w.excavate(below)||!w.solid(below));}
+  // A reachable frontier in the queued plan must ultimately include spoil.
+  let rehandled=false,guard=0;while(w.construction.length&&guard++<300){const site=w.frontier()[0];if(!site)break;const spoil=w.deposits.has(key(site));if(w.excavate(site)&&spoil){rehandled=true;break;}}
+  assert.equal(rehandled,true);assert.ok(w.moundTunnels.size>0);assert.ok(w.soilDeposited<depBefore);assert.ok(w.soilRehandled>0);
+});
+test('v0.4 colonies keep adults, ground, settings, and stage identity while old patrols are released',()=>{
+  const raw=readFileSync(new URL('./fixtures/v4-colony.json',import.meta.url),'utf8'),d=JSON.parse(raw).colony;d.ants[1].caste='major';d.ants[1].task='patrolling';
+  const c=Colony.fromJSON(d);assert.equal(c.ants.length,d.ants.length);assert.deepEqual(c.settings,d.settings);assert.deepEqual([...c.world.excavated],d.world.excavated);assert.deepEqual([...c.world.deposits],d.world.deposits);assert.equal(c.ants[1].task,'reserve');
+  assert.equal(c.species,'Solenopsis invicta');assert.deepEqual(c.brood.map(broodStage),d.brood.map(b=>b.age<8*DAY?'egg':b.age<27*DAY?'larva':'pupa'));
+});
+test('accelerated fire-ant generations grow past the small founder population and maintain a replacement brood pool',()=>{
+  const c=new Colony(287,{broodRate:8,eggRate:4,populationCap:60});run(c,DAY*9);
+  assert.ok(c.alive);assert.ok(c.ants.length>=45);assert.ok(c.births>32);assert.ok(c.brood.length>0);assert.equal(c.ants.some(a=>a.task==='patrolling'),false);
+  assert.ok(c.world.moundTunnels.size>0);assert.ok(c.ants.every(a=>c.world.walkable(a.cell)));
+  const carried=c.ants.filter(a=>a.cargoKind==='soil').reduce((n,a)=>n+a.carried,0);assert.equal(c.world.soilExcavated,c.world.soilDeposited+c.world.soilAbandoned+carried);
+  for(const kind of ['food','water'])assert.ok(Math.abs(resourceBalance(c.world,kind).error)<1e-5);
+});
+
+test('recognized nestmates share a bounded crop-derived meal through actual contact',()=>{
+  const c=new Colony(287),a=c.ants[1],b=c.ants[2];Object.assign(a,{cell:[...c.world.nest],pos:[...c.world.nest],energy:.2,hydration:.2});Object.assign(b,{cell:[...a.cell],pos:[...a.cell],energy:.95,hydration:.95});
+  c.occupancy=new Map([[key(a.cell),[a,b]]]);const energy=a.energy+b.energy,water=a.hydration+b.hydration;c.encounter(a);
+  assert.ok(a.energy>.2);assert.ok(a.hydration>.2);assert.ok(Math.abs(a.energy+b.energy-energy)<1e-10);assert.ok(Math.abs(a.hydration+b.hydration-water)<1e-10);assert.ok(c.socialTransfers>=2);
+});
+test('adequate stores damp recruitment so returning workers cannot sustain a food-collecting feedback loop',()=>{
+  const c=new Colony(287),a=c.ants[1];c.food=1000;c.protein=1000;c.water=1000;c.brood=[];c.world.carve([0,14],25,12);c.world.construction=[];c.updateDemand();a.cell=[...c.world.nest];a.pos=[...a.cell];
+  a.brain.recruitedKind='food';a.brain.recruitUntil=1000;let reserves=0;
+  for(let i=0;i<50;i++){a.knownNeeds=null;a.route=[];c.chooseJob(a);if(['reserve','resting','grooming'].includes(a.task))reserves++;}
+  assert.ok(reserves>30);assert.equal(a.brain.taskHistory.some(h=>h.job==='defend'),false);
+});
+
+test('a harvested insect is never refilled; later wildlife creates a distinct finite source',()=>{
+  const w=new World(287),old=w.patches.find(p=>p.origin==='prey'),oldID=old.id,region=Math.floor(old.cell[0]/32);harvest(w,old,old.amount,0);w.nextPrey.set(region,0);const before=w.nextPatchID;tickHabitat(w,2);
+  assert.equal(old.amount,0);assert.ok(w.patches.some(p=>p.origin==='prey'&&p.id>=before&&p.id!==oldID&&p.amount>0));assert.ok(Math.abs(resourceBalance(w,'food').error)<1e-8);
+});
+
+test('migration preserves the previous queen lifespan multiplier rather than aging her into premature death',()=>{
+  const d=JSON.parse(readFileSync(new URL('./fixtures/v4-colony.json',import.meta.url),'utf8')).colony,queen=d.ants.find(a=>a.caste==='queen');queen.traits.lifeDays=100;queen.age=200*DAY;
+  const c=Colony.fromJSON(d),converted=c.ants.find(a=>a.caste==='queen');assert.equal(converted.traits.lifeDays,3500);assert.ok(converted.traits.lifeDays>converted.initialAgeDays+converted.age/DAY);
+});
+
+test('haulers can cross mound roofs above the old routing ceiling and never deposit into galleries',()=>{
+  const w=new World(287);w.terrainVersion=0;w.terrainCache.clear();
+  for(let y=0;y>=-24;y--)w.deposits.add(key([3,y]));w.heights.set(3,-24);w.changed([3,-24]);
+  const route=w.path([2,0],[4,0]);assert.ok(route);assert.ok(route.some(c=>c[1]<-24));
+  const natural=new World(287),site=natural.depositSite();assert.ok(site);natural.moundTunnels.add(key(site));natural.changed(site);
+  const next=natural.depositSite();assert.ok(next);assert.notEqual(key(next),key(site));assert.ok(natural.path(natural.entrance(),next));assert.equal(natural.deposit(site),false);
+});
+
+test('loaded workers interrupt work to refuel and resume delivery without losing earth',()=>{
+  const c=new Colony(287,{eggRate:0}),a=c.ants[1];c.ants=[c.ants[0],a];c.brood=[];c.world.construction=[];
+  a.cell=[...c.world.entrance()];a.pos=[...a.cell];Object.assign(a,{energy:.12,hydration:.12,carried:1,cargoKind:'soil',cargoMaterial:'earth',task:'haulingSoil',selfCheckAt:0,route:[]});c.world.soilExcavated++;
+  c.step();assert.equal(a.task,'refueling');assert.equal(a.carried,1);assert.equal(a.cargoKind,'soil');
+  run(c,180);assert.ok(a.energy>.5);assert.ok(a.hydration>.5);assert.ok(c.world.soilDeposited>=1);assert.equal(c.ants.length,2);
+  assert.equal(c.world.soilExcavated,c.world.soilDeposited+c.world.soilAbandoned+c.ants.filter(a=>a.cargoKind==='soil').reduce((n,a)=>n+a.carried,0));
+});
+
+test('refueling brood carriers retain and physically transport their brood item',()=>{
+  const c=new Colony(287),a=c.ants[1],b=c.brood[0];a.cell=[...c.world.entrance()];a.pos=[...a.cell];Object.assign(a,{energy:.12,hydration:.12,task:'carryingBrood',carryingBrood:b.id,broodID:b.id,broodDestination:[...c.nursery],selfCheckAt:0,route:[]});b.carriedBy=a.id;b.cell=[...a.cell];b.pos=[...a.pos];
+  c.step();assert.equal(a.task,'refueling');assert.equal(a.carryingBrood,b.id);assert.equal(b.carriedBy,a.id);
+  for(let i=0;i<200;i++){c.step();if(b.carriedBy===a.id)assert.deepEqual(b.pos,a.pos);}
+  assert.ok(a.energy>.12);assert.ok(a.hydration>.12);assert.ok(c.brood.some(item=>item.id===b.id));
+});
+
+test('scouts traverse mound galleries to open ground rather than cycling at an enclosed old mouth',()=>{
+  const c=new Colony(287),w=c.world,a=c.ants[1],mouth=w.entrance();for(const n of w.neighbors(mouth))if(w.onSurface(n))w.moundTunnels.add(key(n));w.changed(mouth);
+  assert.equal(w.neighbors(mouth).some(n=>w.onSurface(n)),false);const exit=w.foragingExit(mouth);assert.ok(exit);assert.notEqual(key(exit),key(mouth));assert.ok(w.onSurface(exit));
+  a.cell=[...mouth];a.pos=[...mouth];a.route=[];a.memories=[];a.foragingKind='water';c.explore(a);assert.ok(a.route.length>0);assert.notEqual(key(a.route[0]),key(mouth));assert.ok(a.route.some(c=>w.moundTunnels.has(key(c))));
+});
+
+test('queen attendants do not drain food stores when only unavailable water is needed',()=>{
+  const c=new Colony(287),q=c.ants[0],a=c.ants[1];c.water=0;c.food=100;q.energy=.9;q.hydration=.1;assert.equal(c.assignQueenCare(a),false);assert.equal(c.food,100);
+  c.water=10;q.cell=[4,10];q.pos=[4,10];a.cell=[...c.world.nest];a.pos=[...a.cell];assert.equal(c.assignQueenCare(a),true);a.route=[];a.busyUntil=0;c.updateAnt(a,.1);assert.equal(a.queenMeal.food,0);assert.ok(a.queenMeal.water>0);assert.equal(c.food,100);
+});
+
+test('protein collectors take insect pieces rather than seeds sharing the same location',()=>{
+  const c=new Colony(287),a=c.ants[1];c.world.place('food',20);const prey=c.world.patches.find(p=>p.origin==='prey'&&p.renewable===false),grain={...prey,id:c.world.nextPatchID++,origin:'grass',amount:5,nutrition:{energy:.85,protein:.15}};c.world.patches.unshift(grain);initLedger(c.world);
+  a.cell=[...prey.cell];a.pos=[...prey.cell];a.foragingKind='food';a.wantProtein=true;a.memories=[];assert.ok(c.discover(a));a.route=[];a.collectKind='food';c.finishHarvest(a);assert.ok(a.cargoNutrition.protein>.4);assert.equal(grain.amount,5);assert.ok(prey.amount<24);
 });

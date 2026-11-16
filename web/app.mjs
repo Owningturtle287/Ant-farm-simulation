@@ -1,5 +1,7 @@
 import {Colony,antName,casteLabel,taskLabels,reason,distance,adultDays,DAY,broodStage} from './sim.mjs';
 import {SPEEDS} from './biology.mjs';
+import {SPECIES} from './fire-ant.mjs';
+import {resourceBalance} from './resources.mjs';
 import {advanceSimulation,PerformanceMonitor} from './clock.mjs';
 import {SaveStore} from './persistence.mjs';
 import {Renderer} from './render.mjs';
@@ -26,7 +28,8 @@ function select(id,focus=false){state.selected=id;state.following=false;state.to
 function updateTools(){
   document.querySelectorAll('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===state.tool)));
   $('trails').setAttribute('aria-pressed',String(state.trails));$('placement').hidden=!state.tool;
-  $('placement-text').textContent=state.tool?`Tap the world to leave ${state.tool} on the surface.`:'';
+  $('placement-text').textContent=state.tool==='disturb'?'Tap near ants to create a brief local alarm.':state.tool?`Tap the world to leave ${state.tool} on the surface.`:'';
+  $('trail-legend').hidden=!state.trails||state.selected!=null;
   canvas.style.cursor=state.tool?'crosshair':'grab';
 }
 function updateUI(){
@@ -40,13 +43,15 @@ function updateUI(){
   if(ant){$('ant-name').textContent=antName(ant);$('ant-caste').textContent=casteLabel(ant).toUpperCase();$('ant-task').textContent=taskLabels[ant.task];
     for(const metric of ['energy','health','hydration']){$(metric+'-value').textContent=Math.round(ant[metric]*100)+'%';$(metric+'-bar').style.width=ant[metric]*100+'%';}
     $('ant-age').textContent=adultDays(ant).toFixed(1)+' d';$('ant-experience').textContent=ant.experience;$('ant-trips').textContent=ant.trips;$('ant-reason').textContent=reason(ant);$('follow').textContent=state.following?'Following ant':'Follow this ant';
+    const senses=ant.brain.senses;$('ant-senses').textContent=`Antennae · food ${(senses.food??0).toFixed(2)} · water ${(senses.water??0).toFixed(2)} · alarm ${(senses.alarm??0).toFixed(2)} · brood ${(senses.brood??0).toFixed(2)}`;
+    $('ant-social').textContent=`${ant.brain.recognized} recognized contacts · ${ant.brain.lastContact}`;
     $('ant-memory').textContent=ant.memories.length+' remembered source'+(ant.memories.length===1?'':'s')+' · skills improve with successful work.';
   }else{state.selected=null;state.following=false;}
   if(lastAlive && !colony.alive)toast('The queen has died. You can start a new colony from More.');lastAlive=colony.alive;
   $('performance-button').textContent=$('performance-panel').hidden?'Show performance':'Hide performance';
   if(!$('performance-panel').hidden)updatePerformance();
 }
-function performanceSnapshot(){return {...monitor.values,requestedSpeed:state.speed,ants:colony.ants.length,brood:colony.brood.length,populationCap:colony.settings.populationCap,soilDeposited:colony.world.soilDeposited,openCells:colony.world.excavated.size,cachedChunks:renderer.chunks.size,pathCalls:colony.world.runtime.pathCalls,routingMs:colony.world.runtime.pathCalls?colony.world.runtime.pathMs/colony.world.runtime.pathCalls:0};}
+function performanceSnapshot(){return {...monitor.values,routeRecoveries:colony.world.runtime.recoveries,recognitions:colony.recognitions,socialTransfers:colony.socialTransfers,alarmEvents:colony.alarmEvents,taskCounts:Object.fromEntries([...new Set(colony.ants.map(a=>a.task))].map(task=>[task,colony.ants.filter(a=>a.task===task).length])),resourceBalance:{food:resourceBalance(colony.world,'food'),water:resourceBalance(colony.world,'water')},moundTunnels:colony.world.moundTunnels.size,entrances:colony.world.entrances.filter(e=>e.state==='open').length,requestedSpeed:state.speed,ants:colony.ants.length,brood:colony.brood.length,populationCap:colony.settings.populationCap,soilDeposited:colony.world.soilDeposited,openCells:colony.world.excavated.size,cachedChunks:renderer.chunks.size,pathCalls:colony.world.runtime.pathCalls,routingMs:colony.world.runtime.pathCalls?colony.world.runtime.pathMs/colony.world.runtime.pathCalls:0};}
 function updatePerformance(){
   const m=performanceSnapshot();$('perf-fps').textContent=m.fps.toFixed(0);$('perf-frame').textContent=m.frameMs.toFixed(1)+' ms';$('perf-tick').textContent=m.tickMs.toFixed(2)+' ms';$('perf-draw').textContent=m.drawMs.toFixed(2)+' ms';$('perf-speed').textContent=m.effective.toFixed(1)+'× / '+m.requestedSpeed+'×';$('perf-population').textContent=m.ants+' / '+m.populationCap;$('perf-mound').textContent=m.soilDeposited;$('perf-routing').textContent=m.routingMs.toFixed(2)+' ms';$('perf-recoveries').textContent=colony.world.runtime.recoveries;
 }
@@ -55,6 +60,9 @@ function syncSettings(){
   $('cap-note').textContent=colony.ants.length>=colony.settings.populationCap?'The ceiling pauses further growth; your existing ants remain.':'The ceiling controls growth. Changing it never removes existing ants.';
 }
 function buildRoster(){
+  const stock=resourceBalance(colony.world,'food'),water=resourceBalance(colony.world,'water');$('habitat-stats').textContent=`${SPECIES.scientific} · single queen · finite food ${stock.available.toFixed(1)} · water ${water.available.toFixed(1)} outside · ${colony.world.entrances.filter(e=>e.state==='open').length} open mouths · ${colony.world.moundTunnels.size} mound tunnel cells`;
+  const hungry=colony.brood.filter(b=>broodStage(b)==='larva'&&b.nutrition<.25).length;
+  $('growth-status').textContent=colony.ants.length>=colony.settings.populationCap?'Population ceiling reached. Ready brood waits for an adult vacancy.':!colony.alive?'The queen has died.':colony.settings.eggRate===0?'New eggs are disabled in reproduction settings.':hungry?`${hungry} hungry larvae need protein-rich food. Workers can switch to prey collection.`:colony.canLay()?'Growth is proceeding through egg, larva, and pupa stages. Development takes modeled weeks.':'Laying is paused by nutrition or brood-care capacity. The colony must support existing brood first.';
   const counts={egg:0,larva:0,pupa:0};for(const b of colony.brood)counts[broodStage(b)]++;
   $('brood-breakdown').textContent=`${counts.egg} eggs · ${counts.larva} larvae · ${counts.pupa} pupae · ${colony.broodMoved} brood deliveries`;
   $('queen-laying').textContent=`Queen laying target: ${(DAY/colony.eggInterval).toFixed(1)} eggs / colony day · ${colony.eggsLaid} laid. Capacity and resources can pause laying.`;
@@ -85,6 +93,8 @@ $('save-now').addEventListener('click',()=>{closeDialog('menu');if(save(true))to
 $('help').addEventListener('click',()=>openDialog('guide'));
 $('settings-button').addEventListener('click',()=>{syncSettings();openDialog('settings');});
 $('materials-button').addEventListener('click',()=>openDialog('materials'));
+$('species-button').addEventListener('click',()=>openDialog('species'));
+$('disturb-button').addEventListener('click',()=>{closeDialog('menu');state.tool='disturb';state.selected=null;updateTools();updateUI();});
 $('performance-button').addEventListener('click',()=>{$('performance-panel').hidden=!$('performance-panel').hidden;closeDialog('menu');updateUI();});
 $('close-performance').addEventListener('click',()=>{$('performance-panel').hidden=true;updateUI();});
 for(const [id,field] of [['egg-rate','eggRate'],['brood-rate','broodRate'],['starting-workers','startingWorkers'],['population-cap','populationCap']])$(id).addEventListener('change',()=>{colony.setSettings({[field]:Number($(id).value)});syncSettings();toast(save()?'Colony settings saved.':'Colony settings updated for this session.');});
@@ -92,9 +102,9 @@ $('enter').addEventListener('click',()=>{try{storage?.setItem('little-colony.gui
 $('reset').addEventListener('click',()=>openDialog('reset-confirm'));
 $('confirm-reset').addEventListener('click',()=>{colony=new Colony(Date.now()>>>0,colony.settings);state.selected=null;state.following=false;state.paused=false;accumulator=0;lastAlive=true;renderer.reset();monitor.reset();closeDialog('reset-confirm');save(true);updateUI();toast('A small colony takes root.');});
 $('export').addEventListener('click',()=>{
-  const blob=new Blob([JSON.stringify({version:3,savedAt:Date.now(),colony})],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='little-colony-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Colony backup exported.');
+  const blob=new Blob([JSON.stringify({version:4,savedAt:Date.now(),colony})],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='little-colony-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Colony backup exported.');
 });
-$('export-performance').addEventListener('click',()=>{const blob=new Blob([JSON.stringify({version:'0.4',recordedAt:new Date().toISOString(),...performanceSnapshot(),settings:colony.settings,viewport:{width:renderer.width,height:renderer.height,dpr:renderer.dpr}},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='little-colony-performance.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Performance readings exported.');});
+$('export-performance').addEventListener('click',()=>{const blob=new Blob([JSON.stringify({version:'0.5',recordedAt:new Date().toISOString(),...performanceSnapshot(),settings:colony.settings,viewport:{width:renderer.width,height:renderer.height,dpr:renderer.dpr}},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='little-colony-performance.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Performance readings exported.');});
 $('install-button').addEventListener('click',()=>openDialog('install'));
 for(const [id,factor] of [['zoom-in',1.25],['zoom-out',.8]])$(id).addEventListener('click',()=>{state.following=false;renderer.zoom(factor);});
 const pointers=new Map();let start=null,lastPoint=null,moved=false,pinchDistance=0;
@@ -109,7 +119,7 @@ canvas.addEventListener('pointermove',event=>{
 canvas.addEventListener('pointerup',event=>{
   const p=localPoint(event);pointers.delete(event.pointerId);
   if(!moved && pointers.size===0){const world=renderer.world(p);
-    if(state.tool){const kind=state.tool;colony.place(kind,world[0]);state.tool=null;updateTools();toast(kind==='food'?'Food placed. Let the scouts harvest the grain.':'Water placed. Workers will bring it home.');}
+    if(state.tool){const kind=state.tool;let responders=0;if(kind==='disturb')responders=colony.disturb(world.map(Math.round));else colony.place(kind,world[0]);state.tool=null;updateTools();toast(kind==='disturb'?(responders?'Nearby workers raised an alarm. Watch at 1×.':'Ground disturbed. No workers were close enough to react.'):kind==='food'?'Food placed. Insect pieces supply protein; nectar supplies energy.':'Water placed. Its finite squares disappear as workers collect it.');}
     else{const ants=colony.ants.filter(a=>distance(renderer.screen(a.pos),p)<26).sort((a,b)=>a.id-b.id),current=ants.findIndex(a=>a.id===state.selected);select(ants.length?ants[(current+1)%ants.length].id:null);}
   }
   if(pointers.size===1){lastPoint=[...pointers.values()][0];moved=true;}else{start=null;lastPoint=null;}pinchDistance=0;

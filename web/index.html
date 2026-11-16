@@ -38,6 +38,7 @@
     </div>
     <div class="pace"><button id="speed" aria-label="Simulation speed: 1 times">1×</button><button id="pause" aria-label="Pause simulation"><span id="pause-icon">Ⅱ</span></button></div>
   </header>
+  <aside id="trail-legend" class="panel trail-legend" aria-label="Chemical signal colors" hidden><span class="food-signal">Food</span><span class="water-signal">Water</span><span class="alarm-signal">Alarm</span><span class="brood-signal">Brood</span><span class="queen-signal">Queen</span><span class="home-signal">Home</span></aside>
   <div id="pause-badge" class="pause-badge panel" hidden>PAUSED</div>
   <aside id="inspector" class="panel inspector" aria-label="Ant profile" hidden>
     <div class="inspector-heading"><span class="eyebrow">ANT PROFILE</span><button id="close-profile" class="icon-button" aria-label="Close ant profile"><svg><use href="#i-close"/></svg></button></div>
@@ -49,7 +50,7 @@
       <div class="meter"><div><span>Hydration</span><span id="hydration-value"></span></div><div class="track"><i id="hydration-bar" class="health"></i></div></div>
       <div class="personal-stats"><div><span>AGE</span><strong id="ant-age"></strong></div><div><span>EXPERIENCE</span><strong id="ant-experience"></strong></div><div><span>TRIPS</span><strong id="ant-trips"></strong></div></div>
       <p id="ant-reason" class="muted reason"></p>
-      <p id="ant-memory" class="muted small"></p>
+      <p id="ant-memory" class="muted small"></p><p id="ant-senses" class="muted small"></p><p id="ant-social" class="muted small"></p>
       <button id="follow" class="secondary full">Follow this ant</button>
     </div>
   </aside>
@@ -78,19 +79,19 @@
   <h2 id="guide-title">A whole world, one small colony.</h2><p class="intro muted">Give them a little care, then watch their world take shape.</p>
   <div class="guide-grid">
     <article><svg><use href="#i-nest"/></svg><h3>Look a little closer</h3><p>Drag to explore. Pinch to zoom. Tap an ant to meet it.</p></article>
-    <article><svg><use href="#i-food"/></svg><h3>Leave a little care</h3><p>Harvest grass seed. Empty plants wither, then regrow. Rain gathers in low spots. You can also place food or water.</p></article>
-    <article><svg><use href="#i-ant"/></svg><h3>Let the colony build</h3><p>Workers dig soft earth, carry new eggs to the nursery, and tend larvae and pupae.</p></article>
+    <article><svg><use href="#i-food"/></svg><h3>Leave a little care</h3><p>Fire ants collect energy-rich nectar and protein-rich insect pieces. Visible food and water squares disappear as they are carried away. Rain and plant growth add new supplies.</p></article>
+    <article><svg><use href="#i-ant"/></svg><h3>Let the colony build</h3><p>Workers dig narrow passages, carry brood, and change jobs in response to nutrition, contact, scent, age, and body size.</p></article>
   </div>
   <button id="enter" class="primary full">Enter the clearing</button><p class="guide-note muted">Saves on this device. The colony rests while the app is closed.</p>
 </dialog>
 <dialog id="roster" class="panel roster-dialog" aria-labelledby="roster-title">
   <div class="dialog-heading"><div><span class="eyebrow">LIFE IN THE CLEARING</span><h2 id="roster-title">Your colony</h2></div><button data-close="roster" class="icon-button" aria-label="Close colony roster"><svg><use href="#i-close"/></svg></button></div>
-  <div id="colony-summary" class="colony-summary"></div><p id="brood-breakdown" class="brood-breakdown"></p><p id="queen-laying" class="muted small"></p><p id="soil-stats" class="muted"></p><div id="ant-list" class="ant-list"></div>
+  <div id="colony-summary" class="colony-summary"></div><p id="habitat-stats" class="muted small"></p><p id="growth-status" class="growth-status"></p><p id="brood-breakdown" class="brood-breakdown"></p><p id="queen-laying" class="muted small"></p><p id="soil-stats" class="muted"></p><div id="ant-list" class="ant-list"></div>
 </dialog>
 <dialog id="menu" class="panel menu-dialog" aria-labelledby="menu-title">
   <div class="dialog-heading"><h2 id="menu-title">A little care</h2><button data-close="menu" class="icon-button" aria-label="Close menu"><svg><use href="#i-close"/></svg></button></div>
-  <div class="menu-actions"><button id="settings-button" class="secondary">Colony &amp; reproduction</button><button id="performance-button" class="secondary">Show performance</button><button id="materials-button" class="secondary">Terrain guide</button><button id="save-now" class="secondary">Save colony now</button><button id="install-button" class="secondary">Save to my Home Screen</button><button id="help" class="secondary">How to play</button><button id="export" class="secondary">Export colony backup</button><button id="reset" class="danger">Start a new colony</button></div>
-  <p id="offline-state" class="offline-state muted" role="status">Preparing offline play…</p><p class="muted small">Rain &amp; renewal · v0.4<br>A harvester-inspired soil-nesting colony. Growth follows resources, brood care, and nest conditions. Use Colony &amp; reproduction to control growth.</p>
+  <div class="menu-actions"><button id="species-button" class="secondary">Fire ant behavior</button><button id="disturb-button" class="secondary">Disturb the ground</button><button id="settings-button" class="secondary">Colony &amp; reproduction</button><button id="performance-button" class="secondary">Show performance</button><button id="materials-button" class="secondary">Terrain guide</button><button id="save-now" class="secondary">Save colony now</button><button id="install-button" class="secondary">Save to my Home Screen</button><button id="help" class="secondary">How to play</button><button id="export" class="secondary">Export colony backup</button><button id="reset" class="danger">Start a new colony</button></div>
+  <p id="offline-state" class="offline-state muted" role="status">Preparing offline play…</p><p class="muted small">Fire ant society · v0.5<br>Solenopsis invicta · single-queen fire ants. Large workers forage, build, share food, and respond to local alarms. Growth follows resources, brood care, and nest conditions. Use Colony &amp; reproduction to control growth.</p>
 </dialog>
 <dialog id="settings" class="panel settings-dialog" aria-labelledby="settings-title">
   <div class="dialog-heading"><div><span class="eyebrow">GROW AT YOUR OWN PACE</span><h2 id="settings-title">Colony &amp; reproduction</h2></div><button data-close="settings" class="icon-button" aria-label="Close colony settings"><svg><use href="#i-close"/></svg></button></div>
@@ -101,13 +102,22 @@
     <label>Population ceiling<select id="population-cap"><option value="60">60 ants</option><option value="120">120 ants · default</option><option value="250">250 ants · testing</option><option value="500">500 ants · testing</option></select></label>
   </div>
   <p class="muted small">Egg laying and development are separate. Existing brood can still emerge when laying is off. Seed nutrition, care, moisture, and temperature continue to affect development.</p>
-  <p class="muted small settings-note">At normal development, the model spans about 38 colony days under ideal conditions. Each colony day is compressed into ten minutes at 1×. Use higher time speeds to observe longer periods.</p>
+  <p class="muted small settings-note">At normal development, the model spans about 30 colony days under warm, well-fed conditions. Each colony day is compressed into ten minutes at 1×. Use higher time speeds to observe longer periods.</p>
   <p id="cap-note" class="muted small">Changing the ceiling never removes existing ants.</p><button data-close="settings" class="primary full">Back to the colony</button>
 </dialog>
 <dialog id="materials" class="panel materials-dialog" aria-labelledby="materials-title">
   <div class="dialog-heading"><div><span class="eyebrow">LAYERS OF THE CLEARING</span><h2 id="materials-title">Terrain guide</h2></div><button data-close="materials" class="icon-button" aria-label="Close terrain guide"><svg><use href="#i-close"/></svg></button></div>
-  <div class="material-list"><article><i class="swatch spoil"></i><div><h3>Loose mound soil</h3><p>Bare, coarse pellets outside the entrance. Carrying distance, slopes, and colony-specific preferences produce uneven mounds.</p></div></article><article><i class="swatch topsoil"></i><div><h3>Rooted dirt</h3><p>Dark soil under grass. Harvested clumps turn brown, then sprout and produce grain again.</p></div></article><article><i class="swatch earth"></i><div><h3>Diggable earth</h3><p>Soft soil continues at every depth. There are no stone barriers or harder layers.</p></div></article><article><i class="swatch water"></i><div><h3>Rain &amp; puddles</h3><p>Rainwater gathers in local depressions. Puddles shrink through collection and evaporation and refill during later rain.</p></div></article></div>
+  <div class="material-list"><article><i class="swatch spoil"></i><div><h3>Loose mound soil</h3><p>Bare, coarse pellets outside the entrance. Carrying distance, slopes, and colony-specific preferences produce uneven mounds. Workers can re-excavate narrow tunnels inside deposited soil.</p></div></article><article><i class="swatch topsoil"></i><div><h3>Rooted dirt</h3><p>Dark soil under grass. Seeds, nectar, and insect pieces are finite; carbohydrate and protein sources meet different needs.</p></div></article><article><i class="swatch earth"></i><div><h3>Diggable earth</h3><p>Soft soil continues at every depth. There are no stone barriers or harder layers.</p></div></article><article><i class="swatch water"></i><div><h3>Rain &amp; puddles</h3><p>Rainwater gathers in local depressions. Each square holds at most two model units. Squares disappear as water is picked up or evaporates; rain adds new stock.</p></div></article></div>
   <div class="brood-key"><span><i class="egg-dot"></i>Egg · white oval</span><span><i class="larva-dot"></i>Larva · pale, segmented</span><span><i class="pupa-dot"></i>Pupa · tan ant shape</span></div>
+</dialog>
+<dialog id="species" class="panel species-dialog" aria-labelledby="species-title">
+  <div class="dialog-heading"><div><span class="eyebrow">SOLENOPSIS INVICTA</span><h2 id="species-title">A fire ant society</h2></div><button data-close="species" class="icon-button" aria-label="Close fire ant behavior"><svg><use href="#i-close"/></svg></button></div>
+  <p>One reproductive queen and a range of sterile female worker sizes. Large workers are not a separate permanent soldier caste.</p>
+  <p>Workers weigh nutritional signals, brood contact, antennal encounters, local chemical trails, age, size, and experience. Young workers tend toward brood care; older workers are more likely to forage. These are tendencies that can change with need.</p>
+  <p>Nestmates recognize a familiar blend of contact odors. Returning foragers activate nearby recruits. Food and water trails fade; an unsuccessful trip lowers a remembered source’s reliability.</p>
+  <p>Use <strong>More → Disturb the ground</strong> at 1× to see a brief local alarm response. With no threat, large workers return to useful work or wait as recruitable reserves.</p>
+  <p>Narrow peripheral mouths connect to shallow foraging passages. The mound above them can contain its own tunnel network. New colonies generate the revised layout; established colonies keep their ground.</p>
+  <p class="muted small">A research-informed behavioral approximation, not an exact ant brain. Timings, distance, nutrition, the population ceiling, and resource squares use game-scale units. Full mating flights, multiple-queen societies, rival colonies, and detailed neural/chemical physiology are not modeled.</p>
 </dialog>
 <dialog id="install" class="panel install-dialog" aria-labelledby="install-title">
   <div class="dialog-heading"><span class="eyebrow">YOUR OWN LITTLE CLEARING</span><button data-close="install" class="icon-button" aria-label="Close installation guide"><svg><use href="#i-close"/></svg></button></div>

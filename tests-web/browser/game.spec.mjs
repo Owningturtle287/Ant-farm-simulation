@@ -23,7 +23,7 @@ test('local saves restore and the complete app reopens without its origin under 
   try{
     await page.goto(url);await page.getByRole('button',{name:'Enter the clearing'}).click();
     await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
-    const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')));expect(saved.colony.ants.length).toBe(13);expect(saved.version).toBe(3);
+    const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')));expect(saved.colony.ants.length).toBe(13);expect(saved.version).toBe(4);
     await page.reload();await expect(page.locator('#ants-count')).toHaveText('13');
     await page.evaluate(async()=>{await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true}));});
     // WebKit's offline flag rejects even literal service-worker responses:
@@ -82,4 +82,34 @@ test('rainy grassland, nursery stages, and queen production information survive 
   await page.getByRole('button',{name:'Open colony roster'}).click();await expect(page.locator('#brood-breakdown')).toContainText('eggs');await expect(page.locator('#brood-breakdown')).toContainText('larvae');await expect(page.locator('#brood-breakdown')).toContainText('pupae');await expect(page.locator('#queen-laying')).toContainText('eggs / colony day');
   await page.screenshot({path:info.outputPath('brood-and-laying-info.png')});
   await page.getByRole('button',{name:'Close colony roster'}).click();await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Terrain guide',exact:true}).click();await expect(page.getByRole('heading',{name:'Rain & puddles',exact:true})).toBeVisible();await expect(page.getByText('Pupa · tan ant shape',{exact:true})).toBeVisible();
+});
+
+test('fire-ant society, chemical senses, and local alarm tool work on a phone',async({page},info)=>{
+  await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Fire ant behavior',exact:true}).click();await expect(page.getByRole('heading',{name:'A fire ant society',exact:true})).toBeVisible();await expect(page.getByText('Large workers are not a separate permanent soldier caste.',{exact:false})).toBeVisible();
+  await page.screenshot({path:info.outputPath('fire-ant-behavior.png')});await page.getByRole('button',{name:'Close fire ant behavior'}).click();
+  await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await page.getByRole('button',{name:'Show pheromone trails'}).click();await expect(page.getByRole('complementary',{name:'Chemical signal colors'})).toBeVisible();
+  await page.getByRole('button',{name:'Open colony roster'}).click();await expect(page.locator('#habitat-stats')).toContainText('Solenopsis invicta');await expect(page.locator('#growth-status')).not.toBeEmpty();await page.locator('[data-ant="1"]').click();await expect(page.locator('#ant-senses')).toContainText('Antennae');await expect(page.locator('#ant-social')).toContainText('recognized contacts');await page.screenshot({path:info.outputPath('worker-senses-and-contact.png')});
+  await page.getByRole('button',{name:'Close ant profile'}).click();await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Disturb the ground',exact:true}).click();
+  await expect(page.locator('#placement-text')).toContainText('brief local alarm');const viewport=page.viewportSize();await page.locator('#world').click({position:{x:viewport.width*.5-(viewport.width>550?115:0),y:viewport.height*(viewport.width>550?.48:.30)}});await expect(page.getByRole('status').filter({hasText:'raised an alarm'})).toBeVisible();await page.screenshot({path:info.outputPath('local-alarm-response.png')});
+});
+test('a collected water portion removes visible finite squares and survives a save',async({page},info)=>{
+  const raw=readFileSync(new URL('../fixtures/v5-water.json',import.meta.url),'utf8'),original=JSON.parse(raw).colony,patchID=original.world.patches.find(p=>p.kind==='water').id;
+  await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.screenshot({path:info.outputPath('finite-water-before.png')});
+  await expect.poll(async()=>{
+    await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
+    return page.evaluate(id=>{const c=JSON.parse(localStorage.getItem('little-colony.web.v1')).colony;return c.ants.some(a=>a.cargoKind==='water'&&a.carried>0)||c.waterDelivered>0;},patchID);
+  },{timeout:20000,intervals:[500,1000]}).toBe(true);
+  await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
+  const remaining=await page.evaluate(id=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.world.patches.find(p=>p.id===id).amount,patchID);expect(remaining).toBeLessThan(3);expect(remaining).toBeGreaterThanOrEqual(0);
+  await page.screenshot({path:info.outputPath('finite-water-after.png')});await page.reload();await expect(page.locator('#game')).toHaveAttribute('data-ready','true');
+});
+
+test('fire-ant mound tunnels and chemical signals render together',async({page},info)=>{
+  const raw=readFileSync(new URL('../fixtures/v5-fire.json',import.meta.url),'utf8');
+  await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await page.getByRole('button',{name:'Show pheromone trails'}).click();await page.screenshot({path:info.outputPath('fire-ant-mound-and-signals.png')});
+});
+test('a v0.4 colony upgrades without retaining its old patrol loop',async({page})=>{
+  const data=JSON.parse(readFileSync(new URL('../fixtures/v4-colony.json',import.meta.url),'utf8'));data.colony.ants[1].task='patrolling';data.colony.ants[1].caste='major';
+  await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),JSON.stringify(data));await page.reload();await expect(page.locator('#ants-count')).toHaveText(String(data.colony.ants.length));await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
+  const patrols=await page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.ants.filter(a=>a.task==='patrolling').length);expect(patrols).toBe(0);
 });

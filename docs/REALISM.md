@@ -1,42 +1,64 @@
-# Rain & renewal model · v0.4
+# Fire ant society · v0.5
 
-The aim is observable, testable biological behavior. The current colony is a harvester-inspired soil-nesting ant model with minor and major workers. It does not represent every ant species, a validated species-specific colony, or an individually simulated neural brain.
+The reference species is the red imported fire ant, **Solenopsis invicta**, using the **single-queen (monogyne)** social form. This is a mechanistic, research-informed game model. It is not a reconstruction of neurons, a fitted whole-colony biological model, or an exact ant brain.
 
-## Implemented mechanisms
+## Reproduction and worker organization
 
-- **Flexible work:** adult age, individual response thresholds, resource demand remembered from nest contact, and bounded skill improvements influence task choice. Urgent shortages can draw young workers into foraging. Majors usually guard but can collect resources. Weak work signals leave a resting/grooming reserve.
-- **Local discovery and recruitment:** scouts sample nearby sources and follow food or water scent cues. Returning carriers reinforce the relevant trail. Antennal encounters with nearby returning workers can share a lower-confidence source memory. Memories expire and lose confidence after a failed visit; remote depletion is not automatically known.
-- **Queen and brood care:** the queen walks slowly within sheltered chambers, favors suitable conditions, and pauses for a four-second laying animation. Each egg appears at her actual location. Nurses reserve individual brood items, walk to them, carry them in their jaws, and place them in nursery space. Attendants fetch food/water at the central store and feed a queen living elsewhere. Nurses travel to actual brood. Larvae need protein and lose nutrition over time. Care, nutrition, humidity, and temperature affect development; severe deprivation reduces vitality. Egg laying and development have independent player controls.
-- **Excavation:** all underground earth is equally diggable; experience improves handling. There are no stone or harder layers, including at great depth. Demand for space triggers short, irregular branches and chambers. Candidate sites favor suitable moisture and separation from existing rooms. Soil is carried out as pellets and deposited around an open entrance.
-- **Distinct materials:** contoured rooted topsoil has dark organic fragments above softer-looking granular earth. These are visual distinctions, not mechanical barriers. Mounds use a bare tan pellet texture with fragments of their excavated origin, never a grass cap.
-- **Grass and rain:** seeded terrain generates grass clumps and low spots. Harvesting reduces visible grain; fully harvested clumps wither, wait, sprout, and produce grain again. Grass buried by a mound stays dead. Seeded intermittent storms add water to local depressions. Collection and evaporation reduce puddles.
-- **Route recovery:** working ants track real movement, reroute after terrain changes, and abandon blocked jobs without losing or confusing cargo. Crowding slows movement without a hard collision deadlock. Rest and grooming remain bounded, purposeful behaviors.
-- **Individual state:** age, energy, hydration, health, experience, source memory, traffic delays, and task reasoning persist. Soil removed must equal deposited soil, living ants' soil cargo, and explicitly abandoned soil.
+The queen reproduces; the modeled workers are sterile females. Worker body size is continuous, assigned at emergence, and influenced by larval feeding. Small, medium, and large are descriptive UI categories, not fixed job assignments. Adults do not grow into a different caste. New small/medium/large workers use approximate 30–60 / 60–90 / 90–180 modeled-day lifespans; queens use a much longer range. Migrated adults retain their prior lifespan to avoid an abrupt conversion-related die-off.
 
-## Deliberate abstractions
+Task decisions combine remembered nutritional demand, personal energy/hydration, age, size, experience, contact recruitment, nearby brood cues, construction stimuli, and local alarm. Large workers can collect prey and water, excavate, share food, or attend brood. There is no permanent soldier/patrol branch. Short alarm investigations end as the stimulus fades. Recruitable reserves and grooming/resting remain normal behavior.
 
-One colony day is ten simulation minutes at 1×. Baseline egg-to-adult development uses approximately 38 modeled days (8 egg, 19 larval, 11 pupal) before nutritional and environmental adjustments; initial brood starts at different stages so the first emergence can be observed sooner. The stage schedule follows a published comparative estimate used for Florida harvester ants, not a new measurement or validated species calibration. At the default laying setting, the target is 2–30 eggs per modeled day, rising with worker population and constrained by food, water, queen health, brood capacity, and the population ceiling. This laying curve is a conservative gameplay approximation, not an empirically fitted reproduction function. Player multipliers deliberately accelerate it. Lifespans, diet ratios, environmental responses, and movement remain tuning values. Time, distance, metabolic cost, and temperature are not yet physically calibrated to a shared scale.
+The nominal warm, well-fed development schedule is 8 days as an egg, 10 as a larva, and 12 as a pupa. Temperature, moisture, care and larval nutrition alter it. The thermal curve loosely spans published warm/cool developmental differences; it is not a fitted physiological model. Larval feeding uses protein intake. Poor nutrition slows development and severe deprivation reduces vitality.
 
-Nest layout currently uses a colony-level space request and candidate plan. Workers execute it locally, reserve dig sites, and transport soil. Fully emergent architecture from local excavation/deposition rules, real soil collapse, water diffusion/flooding, a full food-sharing network between individual crops, disease, waste management, and reproductive flights are future work. Aggregate food/protein/water stores and a short sharing pause stand in for most social food transport; distant queen provisioning is carried explicitly. Rain runoff uses topographic basin detection and a bounded accumulation/evaporation model, not fluid dynamics. Grass dieback after seed depletion is the requested game lifecycle; removing ripe seed does not universally kill real grasses. Grass seeds supply an abstract energy/protein mix, rather than a complete calibrated diet.
+The default egg target rises with workers (`0.75 × worker count`, bounded at 3–1500 per modeled day), then the player multiplier applies. This is a small-colony gameplay scaling curve, not a measured fecundity regression. Food, water, queen health and supportable brood limit actual laying. The adult ceiling does not stop the colony maintaining replacement brood. Ready pupae wait when adult capacity is full—an explicit game limit, not natural fire-ant development.
 
-The map generates material beyond the visible area and stores altered cells, but persistent region streaming and arbitrarily large colonies are not implemented. The optional 500-ant ceiling is a testing control, not a supported-device capacity promise.
+## Perception, recognition and learning
 
-Old saves preserve their original surface geometry and excavated cells. New colonies get seeded contours. Brood ages are rescaled during migration to preserve developmental progress. Weather, grass state, transport claims reconstructed from ant jobs, and carried brood survive saves.
+Workers sample local signal concentrations and nearby resources. Short-distance body contact compares a familiar composite colony-odor template with the encountered ant's cues. Recognized contact can update that template, activate recruits, share bounded food/water, and relay previously acquired demand information. Recognition is not an ID comparison. The three-component odor vector and acceptance threshold are computational abstractions; the chemistry of recognition is more complex and not uniquely established by hydrocarbons alone.
 
-## Research informing the direction
+Returning carriers lay fading trails. Antennae sample neighboring cells and gradients influence movement, with recent-cell avoidance and stochastic exploration. Contact activates resource search without transmitting a remote coordinate. A worker learns a source location and nutrient type through its own discovery; failed visits reduce reliability, impose a cooldown, and eventually remove the memory. Water searches do not repeatedly collect carbohydrates; protein searches can bypass seeds/nectar to look for prey. Satiation dampens recruitment to prevent a self-sustaining hoarding loop.
 
-These sources support mechanisms and future calibration, not the exact game coefficients:
+Food, water, home, alarm, queen and brood are **functional signal channels**, not claims about six separate chemical compounds in this species. Strengths, evaporation, diffusion and thresholds are game units. Food/water colors distinguish destinations for observation; the known trail chemistry is not recreated molecule by molecule. Queen and brood cues fade if their sources disappear. Disturbing ground near workers prompts a bounded alarm response; a click in empty ground creates no worker alarm.
 
-- [Robinson, Feinerman & Franks, 2009: Flexible task allocation and the organization of work in ants](https://pmc.ncbi.nlm.nih.gov/articles/PMC2817103/) — flexible task allocation, physiological thresholds, age, and interactions.
-- [Empirical response-threshold study](https://pmc.ncbi.nlm.nih.gov/articles/PMC6586672/) — variation between workers and colony task allocation.
-- [Worker age and caste dynamics](https://pmc.ncbi.nlm.nih.gov/articles/PMC7039887/) — age-related behavior and worker differences, rather than fixed universal jobs.
-- [Soil moisture and particle mechanics in excavation](https://pubmed.ncbi.nlm.nih.gov/25954041/) — substrate properties influence construction.
-- [Pellet formation and soil transport](https://pubmed.ncbi.nlm.nih.gov/23457648/) — excavation and carrying material are distinct activities.
-- [Moisture preferences in nest construction](https://pubmed.ncbi.nlm.nih.gov/24748382/) — environmental conditions influence where ants build.
-- [Nest architecture and plasticity](https://pmc.ncbi.nlm.nih.gov/articles/PMC8630048/) — architecture changes with colony and environmental context.
+Remembered passages and shared aggregate reserves still simplify navigation and nutrition. Brood memories and nursery geometry are abstracted. Learning means bounded successful-work gains, source reliability, contact templates and recent experience, not machine-learned neural weights.
 
-- [Tschinkel: Sociometry and sociogenesis of reproduction in Florida harvester ants](https://pmc.ncbi.nlm.nih.gov/articles/PMC2990325/) — comparative developmental schedule; the source itself describes this as an estimate.
-- [Targeted worker removal and brood transport specialization](https://pmc.ncbi.nlm.nih.gov/articles/PMC10901836/) — workers physically transport brood after identifying suitable locations. Species differ in how flexible this specialization is.
-- [Sequential sand and seed transport in Florida harvester ants](https://pmc.ncbi.nlm.nih.gov/articles/PMC4624972/) — distinct transport activities between nest regions.
+## Finite resources and nutrition
 
-Next biological milestone: choose one reference species and calibrate its caste development, diet, worker-age task tendencies, brood conditions, communication, and measured construction rules. Keep explanations and regression checks tied to each added mechanism.
+Water and non-grass food are drawn as discrete portions, each representing up to two model units. Pickup removes exactly the carried quantity; empty sources have no resource squares. Collection, cargo transfer and consumption are distinct events. Nectar supplies energy; insect pieces supply mostly protein; seeds remain opportunistic mixed food. Aggregate reserve units stand in for the full larval processing, storage and trophallaxis network.
+
+Rain creates new water in topographic depressions. Plants can produce new grain or nectar after a delay. A harvested insect is never refilled: later wildlife inputs create a new finite entity with a new ID. Player-placed insect pieces and nectar drops do not regenerate. Uneaten insect pieces decay. Resource ledgers account for environmental inputs, remaining stock, harvested amounts, evaporation, decay and burial. These ecological inputs are accelerated game rules, not a calibrated field food web.
+
+Grass dieback after complete seed harvest is retained from the requested game design; seed removal does not universally kill real grasses. Regrowth and rain make the ecosystem renewable while each available portion remains finite.
+
+## Nest construction
+
+New colonies start with a compact nest and a seeded, narrow **peripheral mouth**, linked by irregular subsurface passages. The center of the future mound is not a protected open canyon. Used passages, remembered space pressure, builder experience and accumulated soil prompt worker construction proposals. A shared queue and reservations coordinate their execution.
+
+Deposited soil can be excavated again to produce narrow interior mound galleries. Existing roofs remain visible as cutaway back walls. Peripheral exits and mound passages are procedurally selected and physically dug, not instant teleports. Nursery selection considers stage-specific moisture/temperature and crowding, with hysteresis to avoid endless brood shuttling. All ground remains soft and diggable as requested. Deposition rejects protected galleries and unreachable candidates; route searches include the existing mound roof and known nest extent. Foraging can continue through aboveground galleries when the mound surrounds an older mouth. Loaded workers can interrupt work to replenish energy and hydration without losing cargo or transported brood.
+
+This is still a candidate-plan architecture model, not fully emergent stigmergy or granular soil physics. Worker proposals use some colony-level state as a shortcut. Geometry, distance and metabolic time are not physically calibrated together. Flooding, collapse and ventilation physics are not modeled.
+
+For soil accounting, excavation of original earth increases `soilExcavated`. Re-excavating deposited soil moves it from `soilDeposited` into cargo without manufacturing new earth; `soilRehandled` records that work. Always preserve:
+
+`soilExcavated = soilDeposited + living soil cargo + soilAbandoned`
+
+Existing colonies retain their terrain and excavated cells. Their behavior and resource system upgrade in place, and old indefinite patrol jobs are released. Start a new colony for the fully revised founder nest. Developmental migration preserves both stage and within-stage progress.
+
+## Research used
+
+These sources support mechanisms and plausible ranges; none validates the exact coefficients above.
+
+- [Tschinkel, 2011: The Organization of Foraging in the Fire Ant, Solenopsis invicta](https://pmc.ncbi.nlm.nih.gov/articles/PMC3391925/) — scouts, recruitable reserves, local activation from foraging tunnels, worker age and the underground foraging network.
+- [Family before work: task reversion in S. invicta](https://www.nature.com/articles/s41598-023-29246-z) — brood-associated stimuli and task changes. This does not imply unlimited flexibility in every task or species.
+- [Cassill & Tschinkel: Task selection by workers of the fire ant](https://digitalcommons.usf.edu/fac_publications/1000/) — worker task selection and the participation of large workers in food recruitment/storage.
+- [Vander Meer, Alvarez & Lofgren, 1988: Isolation of trail recruitment pheromone](https://www.ars.usda.gov/ARSUserFiles/60360510/publications/Vander_Meer_et_al-1988%28M-1986%29.pdf) — orientation and recruitment components of trail signaling.
+- [Vander Meer et al., 1989: Temporal changes in colony chemical patterns](https://pubmed.ncbi.nlm.nih.gov/24272300/) and [Obin, 1986: Environment and nestmate recognition](https://pubmed.ncbi.nlm.nih.gov/24305971/) — chemical context, environmental effects and changing recognition templates.
+- [Anderson & Vander Meer, 2001: Experimental evidence concerning recognition cues](https://www.ars.usda.gov/arsuserfiles/60360510/publications/Anderson_and_Vander_Meer-2001%28M-3649%29.pdf) — a reason not to equate a hydrocarbon profile with a complete identity code.
+- [Cassill, Tschinkel & Vinson, 2002: Nest complexity, group size and brood rearing](https://pure.lib.usf.edu/en/publications/nest-complexity-group-size-and-brood-rearing-in-the-fire-ant-sole-2/) — narrow mound galleries and connections with subterranean chambers.
+- [Porter, 1988: Temperature, colony growth and developmental rates](https://www.sciencedirect.com/science/article/pii/0022191088902156) — strong temperature dependence of development.
+- [Markin et al., 1972: Colony founding by S. invicta queens](https://academic.oup.com/aesa/article-abstract/65/5/1053/13950) — early colony development and favorable temperature ranges.
+- [Fang et al.: Fire-ant embryogenesis](https://pmc.ncbi.nlm.nih.gov/articles/PMC12277563/) — observed egg development at controlled temperature.
+- [Fire ants dry and store insect pieces](https://pmc.ncbi.nlm.nih.gov/articles/PMC3127378/) — protein collection and storage rather than a seed-only diet.
+- [UF/IFAS species account](https://ask.ifas.ufl.edu/publication/IN352) — expert synthesis of life history, worker sizes and longevity ranges.
+
+Next steps are quantitative calibration against one defined climate/diet regime, a fuller larval processing and food-sharing network, measured local excavation rules, and real-iPhone population/thermal tests. Rival colonies, mating flights, multiple-queen genetics, disease and waste handling remain future systems.
