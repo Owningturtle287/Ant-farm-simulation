@@ -5,6 +5,7 @@ import {resourceTiles} from './resources.mjs';
 import {ChemicalOverlay} from './chemical-art.mjs';
 import {wrapAngle,antennaTips} from './locomotion.mjs';
 import {buildAntAtlas,GAIT_FRAMES,SCAN_FRAMES,SPRITE_W,SPRITE_H} from './ant-art.mjs';
+const visualClockForWater=(options,colony,clock)=>options.paused?colony.time:clock;
 function buffer(w,h) { const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
 function broodPixel(c,stage,x,y,z){
   const box=(dx,dy,w,h,color)=>{c.fillStyle=color;c.fillRect(Math.round(x+dx*z),Math.round(y+dy*z),w*z,h*z);};
@@ -30,14 +31,14 @@ export class Renderer {
     this.camera={x:0,y:0,zoom:Math.max(.68,Math.min(1.3,this.width/960))};if(!world?.deposits.size)return;
     let minX=0,maxX=0,minY=0,maxY=15;for(const ids of [world.excavated,world.deposits])for(const id of ids){const [x,y]=cell(id);minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);}
     const top=this.width>550?110:170,bottom=this.height-96;
-    this.camera.zoom=Math.max(.35,Math.min(this.camera.zoom,(this.width-48)/((maxX-minX+6)*14),Math.max(100,bottom-top)/((maxY-minY+6)*14)));
+    this.camera.zoom=Math.max(.10,Math.min(this.camera.zoom,(this.width-48)/((maxX-minX+6)*14),Math.max(100,bottom-top)/((maxY-minY+6)*14)));
     this.camera.x=(minX+maxX)/2;this.camera.y=minY-3-(top-this.height*.30)/this.unit;
   }
   reset() {this.epoch++;this.chunks.clear();this.positions.clear();this.requests.clear();this.active=null;this.fallback=null;this.home();}
   screen([x,y]) {return [this.width/2+(x-this.camera.x)*this.unit,this.height*.30+(y-this.camera.y)*this.unit];}
   world([x,y]) {return [(x-this.width/2)/this.unit+this.camera.x,(y-this.height*.30)/this.unit+this.camera.y];}
   zoom(factor,anchor=[this.width/2,this.height/2]) {
-    this.cameraInput();const before=this.world(anchor);this.camera.zoom=Math.max(.35,Math.min(3,this.camera.zoom*factor));
+    this.cameraInput();const before=this.world(anchor);this.camera.zoom=Math.max(.10,Math.min(3,this.camera.zoom*factor));
     const after=this.world(anchor);this.camera.x+=before[0]-after[0];this.camera.y+=before[1]-after[1];
   }
   focus(a) {
@@ -46,9 +47,8 @@ export class Renderer {
   }
   terrainImage(result){const image=buffer(result.size,result.size);image.getContext('2d').putImageData(new ImageData(result.data,result.size,result.size),0,0);return image;}
   acceptTerrain(job){
-    if(job.epoch!==this.epoch)return;const active=this.active;if(!active||active.id!==job.id)return;this.active=null;
-    if(job.error){this.workerFailed();return;}
-    this.chunks.put(job.id,{image:this.terrainImage({data:new Uint8ClampedArray(job.pixels),size:job.size}),bytes:job.size*job.size*4,version:job.version,detail:true,at:performance.now()});this.renderStats.built++;this.renderStats.workerRasterMs=job.cost;
+    if(job.epoch!==this.epoch)return;const active=this.active;if(!active)return;if(job.error){this.workerFailed();return;}
+    const jobs=job.batch??[job];for(const result of jobs){if(!(active.ids??[active.id]).includes(result.id))continue;this.chunks.put(result.id,{image:this.terrainImage({data:new Uint8ClampedArray(result.pixels),size:result.size}),bytes:result.size*result.size*4,version:result.version,detail:true,at:performance.now()});this.renderStats.built++;this.renderStats.workerRasterMs=result.cost;}this.active=null;
   }
   workerFailed(){this.worker?.terminate();this.worker=null;this.active=null;this.fallback=null;this.renderStats.worker=false;}
   chunk(world,cx,cy,lod){
@@ -57,18 +57,19 @@ export class Renderer {
     if(old?.detail&&performance.now()-old.at<100)return old.image;
     this.renderStats.misses++;this.requests.set(id,{id,cx,cy,lod,version,priority:(old?.detail?1000:0)+Math.hypot(cx*16+8-this.camera.x,cy*16+8-this.camera.y)});
     if(old)return old.image;
-    const alternate=this.chunks.get(`${cx},${cy},${lod===16?8:16}`);if(alternate)return alternate.image;
+    for(const other of [8,4,2,16])if(other!==lod){const alternate=this.chunks.get(`${cx},${cy},${other}`);if(alternate?.detail)return alternate.image;}
     if(performance.now()>this.previewDeadline)return null;
     const began=performance.now(),snapshot=snapshotTerrain(world,cx,cy,lod),result=coarseTerrain(snapshot),image=this.terrainImage(result);this.chunks.put(id,{image,bytes:16*16*4,version,detail:false});this.renderStats.mainRasterMs+=performance.now()-began;return image;
   }
   serviceTerrain(world){
     if(this.active)return;
     if(this.fallback){const until=performance.now()+1.5;let result;do{result=this.fallback.rows.next();}while(!result.done&&performance.now()<until);if(result.done){const f=this.fallback;this.fallback=null;this.chunks.put(f.job.id,{image:this.terrainImage(result.value),bytes:result.value.size**2*4,version:f.job.version,detail:true,at:performance.now()});this.renderStats.built++;}return;}
-    const job=[...this.requests.values()].sort((a,b)=>a.priority-b.priority)[0];if(!job)return;
-    const snapshot=snapshotTerrain(world,job.cx,job.cy,job.lod);
-    if(this.worker){this.active=job;this.worker.postMessage({...job,epoch:this.epoch,snapshot},[snapshot.solid.buffer,snapshot.ground.buffer,snapshot.surface.buffer,snapshot.deposits.buffer,snapshot.covered.buffer]);}
-    else this.fallback={job,rows:rasterRows(snapshot)};
+    const sorted=[...this.requests.values()].sort((a,b)=>a.priority-b.priority),job=sorted[0];if(!job)return;
+    if(this.worker){
+      const batch=sorted.slice(0,job.lod<=4?4:1).map(j=>({...j,epoch:this.epoch,snapshot:snapshotTerrain(world,j.cx,j.cy,j.lod)})),transfers=batch.flatMap(j=>[j.snapshot.solid.buffer,j.snapshot.ground.buffer,j.snapshot.surface.buffer,j.snapshot.deposits.buffer,j.snapshot.covered.buffer]);this.active={ids:batch.map(j=>j.id)};this.worker.postMessage({epoch:this.epoch,batch},transfers);
+    }else this.fallback={job,rows:rasterRows(snapshotTerrain(world,job.cx,job.cy,job.lod))};
   }
+
   landscape(world) {
     const c=this.ctx,w=this.width,h=this.height,ground=this.screen([0,.5])[1],scale=this.camera.zoom;
     c.fillStyle='#241e1a';c.fillRect(0,0,w,h);
@@ -98,15 +99,12 @@ export class Renderer {
           const dx=(i*3-6)*z,h=(10+(p.id+i)%7)*z*growth,sway=alive?Math.sin(clock*1.2+p.id+i*.5)*1.2*z:0;
           c.strokeStyle=alive?(i%2?'#6e934b':'#4c783d'):'#8b7c4f';c.lineWidth=Math.max(1,z);c.beginPath();c.moveTo(x+dx,y);c.lineTo(x+dx+sway+(alive?0:4*z),y-h*(alive?1:.35));c.stroke();
           if(alive){c.strokeStyle='#82a454';c.beginPath();c.moveTo(x+dx,y-h*.35);c.lineTo(x+dx+(i%2?4:-4)*z,y-h*.65);c.stroke();}
-          if(p.stage==='seed'&&i<Math.ceil(p.amount/p.capacity*5)){
-            c.fillStyle=i%2?'#e3bf70':'#cda151';for(let grain=0;grain<3;grain++)c.fillRect(Math.round(x+dx+sway+(grain%2?1:-2)*z),Math.round(y-h+grain*3*z),3*z,2*z);
-          }
         }
       }
-      if(p.kind==='water'||p.origin==='prey'||p.origin==='nectar'){
+      if(p.kind==='water'||p.origin==='prey'||p.origin==='nectar'||p.origin==='grass'&&p.stage==='seed'){
         const tiles=resourceTiles(world,p);
         for(const tile of tiles){const [tx,ty]=this.screen([tile.x,tile.y]);
-          c.globalAlpha=Math.min(1,tile.amount/2);c.fillStyle=p.kind==='water'?'#80c3cf':p.origin==='prey'?'#ba755b':'#ecc56b';
+          c.globalAlpha=Math.min(1,tile.amount/2);const shimmer=p.kind==='water'?.88+Math.sin(clock*2+tile.x*.7)*.12:1;c.globalAlpha*=shimmer;c.fillStyle=p.kind==='water'?'#74bdcd':p.origin==='prey'?'#ba755b':'#ecc56b';
           const size=p.kind==='water'?u/3-.3:u*.20;c.fillRect(Math.round(tx-size/2),Math.round(ty-size/2),size,size);
           c.fillStyle=p.kind==='water'?'#c2e6e9':p.origin==='prey'?'#e2a982':'#fff0b1';c.fillRect(Math.round(tx-size/2),Math.round(ty-size/2),Math.max(1,size*.6),Math.max(1,z));c.globalAlpha=1;
         }
@@ -114,31 +112,38 @@ export class Renderer {
       }
     }
   }
+  groundwater(world,clock){
+    if(!world.groundwater)return;const c=this.ctx,u=this.unit,min=this.world([0,0]),max=this.world([this.width,this.height]);if(max[1]<world.groundwater.depth-12)return;
+    c.beginPath();let first=true;for(let x=Math.floor(min[0])-1;x<=Math.ceil(max[0])+1;x++){const p=this.screen([x,world.waterTable(x)]);if(first){c.moveTo(...p);first=false;}else c.lineTo(...p);}c.lineTo(this.width,this.height);c.lineTo(0,this.height);c.closePath();c.fillStyle='#4e9baa25';c.fill();
+    c.strokeStyle='#9acbd282';c.lineWidth=Math.max(1,this.camera.zoom);c.beginPath();first=true;for(let x=Math.floor(min[0])-1;x<=Math.ceil(max[0])+1;x++){const p=this.screen([x,world.waterTable(x)+Math.sin(clock*.7+x*.15)*.025]);if(first){c.moveTo(...p);first=false;}else c.lineTo(...p);}c.stroke();
+    for(const id of world.excavated){const cell=id.split(',').map(Number);if(cell[0]<min[0]-1||cell[0]>max[0]+1||cell[1]<min[1]-1||cell[1]>max[1]+1||cell[1]<world.waterTable(cell[0])-.25)continue;const [x,y]=this.screen(cell);c.fillStyle='#438daba8';c.fillRect(x-u*.43,y-u*.43,u*.86,u*.86);}
+  }
   rainfall(world,clock){
-    if(!world.weather.raining)return;const c=this.ctx,z=this.camera.zoom;
-    c.fillStyle='#7898a015';c.fillRect(0,0,this.width,this.height);
-    c.strokeStyle='#b7d5d977';c.lineWidth=Math.max(1,z);
-    for(let i=0;i<Math.floor(this.width/9);i++){
-      const x=(i*97+clock*32)%this.width,y=(i*61+clock*250)%(this.height+80)-40;
-      const wx=this.world([x,y])[0],ground=this.screen([wx,world.surface(Math.round(wx))-.5])[1];if(y>ground)continue;
-      c.beginPath();c.moveTo(x,y);c.lineTo(x-3*z,y+8*z);c.stroke();
+    if(!world.weather.raining)return;const c=this.ctx,z=this.camera.zoom,intensity=world.weather.intensity??.7;
+    c.fillStyle='#6d889720';c.fillRect(0,0,this.width,this.height);c.lineWidth=Math.max(.7,z*.7);
+    const count=Math.min(240,Math.floor(this.width/(8+8*(1-intensity))));for(let i=0;i<count;i++){
+      const speed=210+(i%7)*18,wind=8+Math.sin(clock*.23)*8,x=((i*97-clock*wind)%(this.width+60)+this.width+60)%(this.width+60)-30,y=(i*61+clock*speed)%(this.height+100)-50,wx=this.world([x,y])[0],ground=this.screen([wx,world.surface(Math.round(wx))-.5])[1];
+      if(y>ground)continue;c.strokeStyle=i%3?'#b3d3df80':'#d2e3e899';c.beginPath();c.moveTo(x,y);c.lineTo(x-3*z,y+(7+i%4*2)*z);c.stroke();
+      const phase=(clock*2+i*.37)%1;if(ground>0&&ground<this.height&&phase<.3){const r=(1-phase/.3)*2.5*z;c.fillStyle='#bedad370';c.fillRect(x-r,ground-phase*7*z,Math.max(1,z),Math.max(1,z));c.fillRect(x+r,ground-phase*5*z,Math.max(1,z),Math.max(1,z));}
     }
+    for(const p of world.patches)if(p.kind==='water'&&p.origin==='puddle'&&p.amount>0){const [x,y]=this.screen([p.cell[0],world.surface(p.cell[0])-.65]),t=(clock*1.3+p.id*.21)%1;if(x<0||x>this.width||y<0||y>this.height)continue;c.strokeStyle='#d0e5e6';c.globalAlpha=(1-t)*.5;c.beginPath();c.ellipse(x,y,(2+t*7)*z,(1+t*2)*z,0,0,Math.PI*2);c.stroke();}c.globalAlpha=1;
   }
 
   draw(colony,options,dt,clock) {
     this.resolution(performance.now()<(this.motionUntil??0)?Math.min(1,this.nativeDpr):this.nativeDpr);
     const c=this.ctx,u=this.unit,z=this.camera.zoom;c.setTransform(this.dpr,0,0,this.dpr,0,0);c.imageSmoothingEnabled=false;
-    this.frameID++;this.landscape(colony.world);
-    this.requests.clear();this.previewDeadline=performance.now()+1.5;this.renderStats.drawnAnts=0;this.renderStats.crowdSkipped=0;this.renderStats.simpleSprites=0;const crowd=new Map(),broodCrowd=new Map(),crowdWidth=Math.max(4,8*z),crowdHeight=Math.max(4,5*z),richBudget=Math.max(400,Math.min(1500,Math.ceil(this.width*this.height/800)));const lod=this.worker&&u*this.dpr>=13?16:8;
+    this.canvas.dataset.cameraZoom=this.camera.zoom.toFixed(3);this.frameID++;this.landscape(colony.world);
+    this.requests.clear();this.previewDeadline=performance.now()+1.5;this.renderStats.drawnAnts=0;this.renderStats.crowdSkipped=0;this.renderStats.simpleSprites=0;const crowd=new Map(),crowdWidth=Math.max(4,8*z),crowdHeight=Math.max(4,5*z),richBudget=Math.max(400,Math.min(1500,Math.ceil(this.width*this.height/800)));const density=u*this.dpr,lod=this.worker&&density>=13?16:density>=6?8:density>=4?4:2;
     const min=this.world([-u,-u]),max=this.world([this.width+u,this.height+u]);
     for(let cy=Math.floor(min[1]/16);cy<=Math.floor(max[1]/16);cy++) for(let cx=Math.floor(min[0]/16);cx<=Math.floor(max[0]/16);cx++) {
       const [x,y]=this.screen([cx*16-.5,cy*16-.5]),image=this.chunk(colony.world,cx,cy,lod);if(image)c.drawImage(image,Math.round(x),Math.round(y),Math.ceil(u*16)+.2,Math.ceil(u*16)+.2);else{const ground=this.screen([cx*16,colony.world.baseSurface(cx*16)-.5])[1],top=Math.max(y,ground);if(top<y+u*16){c.fillStyle='#806446';c.fillRect(x,top,u*16,y+u*16-top);}}
     }
-    this.serviceTerrain(colony.world);
+    this.serviceTerrain(colony.world);this.groundwater(colony.world,visualClockForWater(options,colony,clock));
     if(options.trails)this.chemicals.draw(c,colony.world,this,performance.now());
     const visualClock=options.paused?colony.time:clock;
     this.surfaceLife(colony.world,visualClock);
-    for(const baby of colony.brood)if(baby.carriedBy==null&&baby.cell[0]>=min[0]-1&&baby.cell[0]<=max[0]+1&&baby.cell[1]>=min[1]-1&&baby.cell[1]<=max[1]+1){const bucket=key(baby.cell),count=broodCrowd.get(bucket)??0;if(count>=(z<1?2:6))continue;broodCrowd.set(bucket,count+1);const [x,y]=this.screen(baby.cell);broodPixel(c,broodStage(baby),x+(baby.id%3-1)*2*z,y+2*z,z);}
+    for(const baby of colony.brood)if(baby.carriedBy==null&&baby.cell[0]>=min[0]-1&&baby.cell[0]<=max[0]+1&&baby.cell[1]>=min[1]-1&&baby.cell[1]<=max[1]+1){const [x,y]=this.screen(baby.cell);broodPixel(c,broodStage(baby),x,y+2*z,z);}
+    for(const item of colony.foodItems){const [x,y]=this.screen(item.pos);if(x<-u||y<-u||x>this.width+u||y>this.height+u)continue;const d=Math.max(1,u*.23);c.fillStyle=item.protein>item.energy?'#b97950':'#d4b56d';c.fillRect(Math.round(x-d/2),Math.round(y-d/2),d,d*.7);c.fillStyle='#efd39a';c.fillRect(Math.round(x-d/2),Math.round(y-d/2),Math.max(1,d*.6),Math.max(1,z*.6));}
     const carriedBrood=new Map(colony.brood.filter(b=>b.carriedBy!=null).map(b=>[b.carriedBy,b]));
     const live=new Set();
     for(const ant of colony.ants) {

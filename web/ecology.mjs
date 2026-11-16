@@ -53,12 +53,13 @@ export function harvest(w,p,amount,time){
 }
 export function tickHabitat(w,time){
   const elapsed=time-w.environmentAt;if(elapsed<2)return;w.environmentAt=time;
-  const weather=w.weather;
+  const weather=w.weather;if(weather.raining)weather.lastRainAt=time;
+  if(w.spaceReady&&w.resourceGeometryRevision!==w.revision){w.resourceGeometryRevision=w.revision;for(const p of w.patches)for(const i of [...(p.pieces??[])])if(w.solid(i.pos.map(Math.round))){p.activePieceID=i.id;removeStock(w,p,i.amount,'buried');delete p.activePieceID;}}
   if(!weather.raining&&time>=weather.nextRain){weather.raining=true;weather.intensity=.5+w.ecologyRng.float()*.5;weather.until=time+70+w.ecologyRng.int(0,110);weather.storms++;}
-  if(weather.raining&&time>=weather.until){weather.raining=false;weather.intensity=0;weather.nextRain=time+DAY*(1.2+w.ecologyRng.float()*2.8);}
+  if(weather.raining&&time>=weather.until){weather.raining=false;weather.intensity=0;weather.nextRain=time+DAY*(2+w.ecologyRng.float()*4);}
   weather.wetness=clamp(weather.wetness+(weather.raining?.003:-.00022)*elapsed,.08,.9);
   for(const p of w.patches){
-    const y=w.surface(p.cell[0])-1;if(p.cell[1]!==y){p.cell[1]=y;}
+    if(p.origin==='seep')continue;const y=w.surface(p.cell[0])-1;if(p.cell[1]!==y){p.cell[1]=y;}
     const buried=w.surface(p.cell[0])<w.baseSurface(p.cell[0]);
     if(p.origin==='grass'){
       if(buried){removeStock(w,p,p.amount,'buried');p.stage='dead';p.growth=0;p.regrowAt=time+DAY;continue;}
@@ -71,7 +72,7 @@ export function tickHabitat(w,time){
       if(buried&&p.origin==='nectar'&&p.renewable!==false){removeStock(w,p,p.amount,'buried');p.regrowAt=time+DAY;continue;}
       if(p.origin==='prey'&&p.amount>0&&time>p.decayAt){removeStock(w,p,elapsed*.006,'decayed');if(p.amount<.001)p.depletedAt=time;}
       if(p.renewable!==false&&p.amount<.001&&time>=p.regrowAt){addStock(w,p,p.capacity);p.decayAt=time+DAY*4;p.regrowAt=time+DAY*1000;}
-    }else if(p.kind==='water'&&!weather.raining){removeStock(w,p,elapsed*(p.origin==='puddle'?.006:.003),'evaporated');}
+    }else if(p.kind==='water'&&!weather.raining){removeStock(w,p,elapsed*(p.origin==='puddle'?.012:.008),'evaporated');}
   }
   for(const region of w.habitatRegions)if(time>=(w.nextPrey.get(region)??time+1)){
     const x=region*32+w.ecologyRng.int(2,29),p={id:w.nextPatchID++,kind:'food',origin:'prey',renewable:false,nutrition:NUTRITION.prey,cell:[x,w.surface(x)-1],amount:0,capacity:w.ecologyRng.int(12,24),regrowAt:1e12,decayAt:time+DAY*4};

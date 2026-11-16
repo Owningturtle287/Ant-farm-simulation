@@ -31,10 +31,10 @@ export function densityAt(x,y,solid){
   if(!b&&!c&&(!a||!d)){const t=Math.max(0,Math.min(1,(1-fx+fy)*.5));if((fx-(1-t))**2+(fy-t)**2<.46**2)return 0;}
   return value;
 }
-export function terrainMask(world,cx,cy){
-  const size=16*CONTOUR_SAMPLES,result=new Uint8Array(size*size),grid=new Uint8Array(18*18),ox=cx*16-.5,oy=cy*16-.5;
+export function terrainMask(world,cx,cy,samples=CONTOUR_SAMPLES){
+  const size=16*samples,result=new Uint8Array(size*size),grid=new Uint8Array(18*18),ox=cx*16-.5,oy=cy*16-.5;
   for(let y=0;y<18;y++)for(let x=0;x<18;x++)grid[y*18+x]=world.solid([cx*16+x-1,cy*16+y-1])?1:0;
   const solid=(x,y)=>grid[(y-cy*16+1)*18+x-cx*16+1];
-  for(let y=0;y<size;y++)for(let x=0;x<size;x++)result[y*size+x]=densityAt(ox+(x+.5)/CONTOUR_SAMPLES,oy+(y+.5)/CONTOUR_SAMPLES,solid)>=.5?1:0;
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++)result[y*size+x]=densityAt(ox+(x+.5)/samples,oy+(y+.5)/samples,solid)>=.5?1:0;
   return result;
 }

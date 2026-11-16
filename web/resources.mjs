@@ -1,14 +1,16 @@
+import {ITEM_UNIT,allocatePieces,consumePieces} from './item-space.mjs';
 // Resource quantities are conserved when taken. Renewals are explicit ecological inputs.
-export const RESOURCE_UNIT=2;
+export const RESOURCE_UNIT=ITEM_UNIT;
 export const NUTRITION=Object.freeze({grass:{energy:.85,protein:.15},nectar:{energy:1,protein:0},prey:{energy:.15,protein:.85},mixed:{energy:.5,protein:.5}});
-const row=()=>({created:0,harvested:0,evaporated:0,buried:0,decayed:0});
+const row=()=>({created:0,harvested:0,evaporated:0,buried:0,decayed:0,drained:0,runoff:0});
 export function initLedger(w){w.resourceLedger={food:row(),water:row()};}
 export function restoreLedger(w,d){if(d.resourceLedger){w.resourceLedger=structuredClone(d.resourceLedger);return;}initLedger(w);for(const p of w.patches)w.resourceLedger[p.kind].created+=p.amount;}
-export function addStock(w,p,amount){const n=Math.max(0,Math.min(amount,Math.max(0,(p.capacity??Infinity)-p.amount)));p.amount+=n;if(w.resourceLedger)w.resourceLedger[p.kind].created+=n;return n;}
-export function removeStock(w,p,amount,why='harvested'){const n=Math.max(0,Math.min(amount,p.amount));p.amount=Math.max(0,p.amount-n);if(w.resourceLedger)w.resourceLedger[p.kind][why]=(w.resourceLedger[p.kind][why]??0)+n;return n;}
-export function resourceBalance(w,kind){const l=w.resourceLedger[kind],available=w.patches.filter(p=>p.kind===kind).reduce((s,p)=>s+p.amount,0);return {available,...l,error:l.created-available-l.harvested-l.evaporated-l.buried-(l.decayed??0)};}
+export function addStock(w,p,amount){const n=Math.max(0,Math.min(amount,Math.max(0,(p.capacity??Infinity)-p.amount)));const placed=w.spaceReady?allocatePieces(w,p,n):n;p.amount+=placed;if(w.resourceLedger)w.resourceLedger[p.kind].created+=placed;return placed;}
+export function removeStock(w,p,amount,why='harvested'){const n=Math.max(0,Math.min(amount,p.amount));consumePieces(w,p,n,p.activePieceID);p.amount=Math.max(0,p.amount-n);if(w.resourceLedger)w.resourceLedger[p.kind][why]=(w.resourceLedger[p.kind][why]??0)+n;return n;}
+export function resourceBalance(w,kind){const l=w.resourceLedger[kind],available=w.patches.filter(p=>p.kind===kind).reduce((s,p)=>s+p.amount,0);return {available,...l,error:l.created-available-l.harvested-l.evaporated-l.buried-(l.decayed??0)-(l.drained??0)-(l.runoff??0)};}
 export function resourceTiles(w,p){
   if(!(p.amount>1e-7))return [];
+  if(p.pieces)return p.pieces.filter(i=>i.amount>1e-7).map(i=>({x:i.pos[0],y:i.pos[1],amount:i.amount,id:i.id}));
   const n=Math.ceil((p.amount-1e-7)/RESOURCE_UNIT),tiles=[];
   if(p.kind==='water'){
     const left=p.left??p.cell[0]-1,right=p.right??p.cell[0]+1,columns=[];

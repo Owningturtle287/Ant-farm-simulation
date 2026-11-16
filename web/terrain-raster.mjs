@@ -14,16 +14,16 @@ function snapshotWorld(s){const index=([x,y])=>(y-s.cy*16)*16+x-s.cx*16;return {
   solid:([x,y])=>!!s.solid[(y-s.cy*16+1)*18+x-s.cx*16+1],baseSurface:x=>s.ground[x-s.cx*16+1],surface:x=>s.surface[x-s.cx*16+1],coveredMound:c=>!!s.covered[index(c)],
   deposits:{has:id=>!!s.deposits[index(id.split(',').map(Number))]},patches:s.dead.map(x=>({origin:'grass',stage:'dead',cell:[x,0]}))};}
 export function* rasterRows(snapshot){const {cx,cy,lod}=snapshot,world=snapshotWorld(snapshot);
-    const size=16*lod,data=new Uint8ClampedArray(size*size*4),mask=terrainMask(world,cx,cy),maskSize=16*CONTOUR_SAMPLES;
+    const size=16*lod,data=new Uint8ClampedArray(size*size*4),samples=Math.min(CONTOUR_SAMPLES,lod),mask=terrainMask(world,cx,cy,samples),maskSize=16*samples;
     const palette={};for(const [name,m] of Object.entries(MATERIALS)){palette[name]={colors:m.colors.map(rgb),light:rgb(m.light),dark:rgb(m.dark)};}
     const ox=cx*16-.5,oy=cy*16-.5,solid=(x,y)=>world.solid([x,y]);
-    const filled=(x,y)=>x>=0&&x<maskSize&&y>=0&&y<maskSize?mask[y*maskSize+x]:densityAt(ox+(x+.5)/CONTOUR_SAMPLES,oy+(y+.5)/CONTOUR_SAMPLES,solid)>=.5;
+    const filled=(x,y)=>x>=0&&x<maskSize&&y>=0&&y<maskSize?mask[y*maskSize+x]:densityAt(ox+(x+.5)/samples,oy+(y+.5)/samples,solid)>=.5;
     const cells=[];for(let ly=0;ly<16;ly++)for(let lx=0;lx<16;lx++){
       const wx=cx*16+lx,wy=cy*16+ly,type=world.deposits.has(key([wx,wy]))||wy<world.baseSurface(wx)?'spoil':baseMaterial([wx,wy],world.seed,world.baseSurface(wx));
       cells.push({wx,wy,type,base:palette[type].colors[0],wall:world.coveredMound([wx,wy])||(wy<world.baseSurface(wx)&&wy>world.surface(wx)),grass:type==='topsoil'&&wy===world.baseSurface(wx)&&!world.patches.some(p=>p.origin==='grass'&&p.stage==='dead'&&Math.abs(p.cell[0]-wx)<=1)});
     }
     for(let y=0;y<size;y++){if(y%4===0)yield;for(let x=0;x<size;x++){
-      const mx=Math.floor(x*CONTOUR_SAMPLES/lod),my=Math.floor(y*CONTOUR_SAMPLES/lod),inside=mask[my*maskSize+mx],info=cells[Math.floor(y/lod)*16+Math.floor(x/lod)],gx=cx*256+Math.floor(x*16/lod),gy=cy*256+Math.floor(y*16/lod),h=hashCell([gx,gy],world.seed),idx=(y*size+x)*4;
+      const mx=Math.floor(x*samples/lod),my=Math.floor(y*samples/lod),inside=mask[my*maskSize+mx],info=cells[Math.floor(y/lod)*16+Math.floor(x/lod)],gx=cx*256+Math.floor(x*16/lod),gy=cy*256+Math.floor(y*16/lod),h=hashCell([gx,gy],world.seed),idx=(y*size+x)*4;
       let color,shade=0;
       if(inside){
         color=info.base;shade=((h>>>8)%9)-4;

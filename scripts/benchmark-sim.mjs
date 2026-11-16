@@ -10,4 +10,4 @@ for(const population of [13,60,120,250,500,1000,2500,5000,10000]){
   results.push({ants:population,medianTickMs:samples[100],p95TickMs:samples[190],maxTickMs:samples[199],startupMaxMs:Math.max(...warm),pathCalls:c.world.runtime.pathCalls,scope:'Node CPU simulation only; not phone rendering or thermal performance'});
 }
 console.table(results.map(r=>({ants:r.ants,median_ms:r.medianTickMs.toFixed(3),p95_ms:r.p95TickMs.toFixed(3),startup_max_ms:r.startupMaxMs.toFixed(3)})));
-if(process.argv[2])writeFileSync(process.argv[2],JSON.stringify({version:'0.8',recordedAt:new Date().toISOString(),node:process.version,platform:process.platform,results},null,2));
+if(process.argv[2])writeFileSync(process.argv[2],JSON.stringify({version:'0.9',recordedAt:new Date().toISOString(),node:process.version,platform:process.platform,results},null,2));

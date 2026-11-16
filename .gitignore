@@ -27,3 +27,7 @@ qa-v06/
 qa-v07/
 
 qa-v08/
+
+.checkpoint-v08/
+qa-v09/
+provision-*.json

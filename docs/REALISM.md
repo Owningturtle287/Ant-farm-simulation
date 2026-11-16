@@ -1,4 +1,4 @@
-# Living movement · v0.8
+# Crops, space and groundwater · v0.9
 
 The reference species is the red imported fire ant, **Solenopsis invicta**, using the **single-queen (monogyne)** social form. This is a mechanistic, research-informed game model. It is not a reconstruction of neurons, a fitted whole-colony biological model, or an exact ant brain.
 
@@ -24,7 +24,7 @@ Remembered passages and shared aggregate reserves still simplify navigation and 
 
 ## Finite resources and nutrition
 
-Water and non-grass food are drawn as discrete portions, each representing up to two model units. Pickup removes exactly the carried quantity; empty sources have no resource squares. Collection, cargo transfer and consumption are distinct events. Nectar supplies energy; insect pieces supply mostly protein; seeds remain opportunistic mixed food. Aggregate reserve units stand in for the full larval processing, storage and trophallaxis network.
+Water and non-grass food are drawn as discrete portions, each representing up to two model units. Pickup removes exactly the carried quantity; empty sources have no resource squares. Collection, cargo transfer and consumption are distinct events. Nectar supplies energy; insect pieces supply mostly protein; seeds remain opportunistic mixed food. Food and protein counters now summarize physical parcels, crop contents and in-transit food; they are not remotely accessible stockpiles. Larval processing remains simplified.
 
 Rain creates new water in topographic depressions. Plants can produce new grain or nectar after a delay. A harvested insect is never refilled: later wildlife inputs create a new finite entity with a new ID. Player-placed insect pieces and nectar drops do not regenerate. Uneaten insect pieces decay. Resource ledgers account for environmental inputs, remaining stock, harvested amounts, evaporation, decay and burial. These ecological inputs are accelerated game rules, not a calibrated field food web.
 
@@ -95,3 +95,29 @@ Additional research:
 - [Draft et al., 2018, Carpenter ants use diverse antennae sampling strategies to track odor trails](https://pubmed.ncbi.nlm.nih.gov/30266788/) documents distinct sampling behaviors and different left/right antenna use in **Camponotus pennsylvanicus**. Bilateral sampling and casting here extrapolate that mechanism to the game; the paper does not establish identical fire-ant motor parameters.
 - [Gravish et al., 2013, Climbing, falling, and jamming during ant locomotion in confined environments](https://pmc.ncbi.nlm.nih.gov/articles/PMC3683784/) studies **S. invicta** and supports considering body, appendage and wall interactions in narrow passages. The game does not model falls or antenna-based jamming.
 - [Comparative Quantification of Trail-Following Behavior in Pest Ants, 2020](https://www.mdpi.com/2075-4450/11/1/5) includes **S. invicta** and shows species differences in trail deviation and speed. Motion remains restrained rather than applying a large generic zigzag to every ant.
+
+
+## v0.9 crops, food caches and individual space
+
+Food and water have separate displayed crop budgets, both increasing with body size. The food budget contains energy-bearing and protein components. These are functional game compartments, not a claim that a real ant has two independent crop organs. Body energy/hydration remain separate from held supplies. Ants consume their own contents, and antennal encounters can move a bounded amount between crops without manufacturing nutrients. Queen attendants and nurses must obtain and carry their food before feeding locally. Protein can provide metabolic energy when necessary, and queen egg production consumes local nutrients. Nutrient accounting includes collection, consumption and losses.
+
+When body energy and the food crop are full, excess carried food is placed into individual dry nest spaces. Ants retrieve specific parcels when supplies are needed. Each parcel holds at most two game units; a partly consumed parcel shrinks and disappears when empty. Stored food may represent any requested food type, including liquid-derived nutrients as a game extension. Documented fire-ant prey drying/storage supports solid insect caches; it does not establish that every type of liquid food is cached. Liquid water is never made into a nest cache. The header counts food energy plus protein and water held in crops.
+
+Every resource portion and food parcel reserves one third-cell lattice slot. Every grounded egg, larva and pupa reserves a whole cell, excluding other items from that bed. A carried brood item reserves a destination while in transit; physical placement checks that the bed is still free. Abandoned claims are removed when colony demand is refreshed. There is no hidden stacking or visual suppression of multiple brood items at one bed. Adult movement and carried items are not rigid-body collision simulations. Free-bed and storage shortages encourage new excavation; normal play cannot conjure completed storage rooms.
+
+Old virtual reserves are materialized once. Crowded older brood is separated while retaining IDs, stages, nutritional state and elapsed time. If an old inventory cannot fit, a one-time annex supplies migration space; the removed original earth is included in both excavation and removed-earth accounting. Existing food is retained as parcels. Old water first fills available crops; overflow is released outside, with unretained runoff explicitly counted rather than made into indoor storage. Outside portions unable to fit a legacy source's available space are counted as buried material. Modern saves preserve exact seeded continuation.
+
+## v0.9 groundwater and drought
+
+The default groundwater horizon is about 56 game cells below the reference surface, with independently seeded, smooth lateral contours. Rain/dry periods shift it slowly, and a player depth change moves gradually toward its target. The setting spans 24–240 cells. Distances are game units, not calibrated meters. Fully saturated openings are unsuitable for ant travel; the earth remains diggable, with no stone layer.
+
+During a shortage or prolonged dry surface conditions, workers can propose short descending probes from explored ground, using nearby moisture conditions. Workers then physically excavate and haul the earth. Water scouts can investigate accessible lower passages. A source is learned only after local detection; the brain receives no remote aquifer coordinates. Digging avoids the saturated extreme and can expose a capillary fringe. An exposed column has a finite 48-unit reserve, at most two units available at its seep, and a bounded release rate. Rain can recharge it. Moving horizons drain obsolete seeps and expose others. This is a bounded reservoir/capillary-fringe model, not a Darcy-flow or flooding-physics solver.
+
+Surface puddles evaporate during dry spells, with natural depressions determining space and capacity. Rain admits actual finite portions; water that cannot occupy a source is not silently stacked. Rain graphics use varying streaks, surface splashes, pool shimmer and localized ripples.
+
+Research supporting the direction of this update:
+
+- [Tschinkel et al., 2008, Fire ants dry and store insect pieces](https://pmc.ncbi.nlm.nih.gov/articles/PMC3127378/) documents stored dried prey and later larval feeding. It also distinguishes crop-carried liquid from solid prey transport.
+- [Modeling temperature-mediated fluctuation in colony size in the fire ant, 2012](https://www.sciencedirect.com/science/article/abs/pii/S0022519312001282) describes drought survival through tunnels/chambers extending toward the water table. It does not validate the game's exact search rule or depth.
+- [Monaenkova et al., 2015, Behavioral and mechanical determinants of collective subsurface nest excavation](https://pubmed.ncbi.nlm.nih.gov/25954041/) reports deepest construction at intermediate moisture and poor excavation at the dry/saturated extremes.
+- [Internal distribution of liquid foods in isolated fire-ant workers, 1981](https://www.sciencedirect.com/science/article/pii/0022191081900342) studies worker size and crop retention. The two capacity formulas and displayed bars remain game tuning.

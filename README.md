@@ -73,3 +73,6 @@ v0.7 addresses camera lag: detailed terrain is painted in a worker, with a 24 Mi
 
 
 v0.8 adds a local sensorimotor layer: separately sampled moving antennae, gradual acceleration and turning, rounded waypoint passing, local body avoidance and brief bounded scouting samples. Distance-driven tripod gait frames and articulated head/antenna poses replace the four-frame clock animation. Pheromone trails use soft connected ribbons, with separate food-odor and moisture halos, a matching legend and left/right readings in the ant profile. Existing colonies upgrade in place; the 120 default and 10,000 experimental ceiling remain unchanged.
+
+
+v0.9 adds separate size-dependent food/water crop bars, contact-based transfers, and visible food parcels in the nest. Personal feeding comes first; full ants carry solid excess into reserved cache space. Water remains in crops. Supplies and brood share a collision-free item lattice, and each egg, larva or pupa needs a separate bed. Crowding creates construction demand. A seeded, deep groundwater horizon supplies finite exposed seeps; dry spells can prompt local downward moisture probes. Groundwater depth is adjustable from 24 to 240 game cells (default 56), and the camera can zoom out to 0.10×. Rain, pool shimmer, splashes and ripples have been updated.

@@ -105,7 +105,7 @@ test('a collected water portion removes visible finite squares and survives a sa
   await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.screenshot({path:info.outputPath('finite-water-before.png')});
   await expect.poll(async()=>{
     await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
-    return page.evaluate(id=>{const c=JSON.parse(localStorage.getItem('little-colony.web.v1')).colony;return c.ants.some(a=>a.cargoKind==='water'&&a.carried>0)||c.waterDelivered>0;},patchID);
+    return page.evaluate(id=>{const c=JSON.parse(localStorage.getItem('little-colony.web.v1')).colony;return c.ants.some(a=>(a.deliveryKind==='water'&&a.socialWater>0)||(a.cargoKind==='water'&&a.carried>0))||c.waterDelivered>0;},patchID);
   },{timeout:20000,intervals:[500,1000]}).toBe(true);
   await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
   const remaining=await page.evaluate(id=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.world.patches.find(p=>p.id===id).amount,patchID);expect(remaining).toBeLessThan(3);expect(remaining).toBeGreaterThanOrEqual(0);
@@ -181,4 +181,18 @@ test('articulated ants expose bilateral sensing and layered chemical cues',async
   // Atlas evidence shows all three body sizes and distinct limb/antenna poses.
   const atlas=await page.evaluate(async()=>{const {buildAntAtlas}=await import('./ant-art.mjs');return buildAntAtlas('worker').toDataURL().split(',')[1];});await info.attach('articulated-worker-atlas.png',{body:Buffer.from(atlas,'base64'),contentType:'image/png'});
   expect(errors).toEqual([]);
+});
+
+
+test('separate social crops, physical food caches and individual brood beds survive reopening',async({page},info)=>{
+  const raw=readFileSync(new URL('../fixtures/v9-drought.json',import.meta.url),'utf8');await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});
+  await page.getByRole('button',{name:'Open colony roster'}).click();await expect(page.locator('#supply-stats')).toContainText('separate stored food parcels');await expect(page.locator('#supply-stats')).toContainText('water carried in crops');await page.locator('[data-ant="0"]').click();await page.locator('#crop-food-value').scrollIntoViewIfNeeded();await expect(page.locator('#crop-food-value')).toContainText('%');await expect(page.locator('#crop-water-value')).toContainText('%');await page.screenshot({path:info.outputPath('social-stomach-food-and-water.png')});
+  await page.getByRole('button',{name:'Close ant profile'}).click();await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();await expect(page.getByRole('status').filter({hasText:'Your colony is saved'})).toBeVisible();
+  const check=await page.evaluate(()=>{const c=JSON.parse(localStorage.getItem('little-colony.web.v1')).colony,slots=[];for(const p of c.world.patches)for(const i of p.pieces??[])slots.push(i.pos.map(v=>Math.round(v*3)).join(','));for(const p of c.foodItems)slots.push(p.pos.map(v=>Math.round(v*3)).join(','));for(const b of c.brood)if(b.carriedBy==null)for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++)slots.push((b.cell[0]*3+x)+','+(b.cell[1]*3+y));return{all:slots.length,unique:new Set(slots).size,caches:c.foodItems.length,version:c.supplyVersion,seep:c.world.patches.some(p=>p.origin==='seep'),waterCaches:c.foodItems.some(p=>p.kind==='water')};});expect(check.all).toBe(check.unique);expect(check.caches).toBeGreaterThan(0);expect(check.version).toBe(1);expect(check.seep).toBe(true);expect(check.waterCaches).toBe(false);await info.attach('individual-item-spaces.json',{body:JSON.stringify(check),contentType:'application/json'});await page.reload();await expect(page.locator('#game')).toHaveAttribute('data-ready','true');
+});
+
+test('water-table depth and a much wider camera view work on a phone',async({page},info)=>{
+  test.setTimeout(90000);const raw=readFileSync(new URL('../fixtures/v9-drought.json',import.meta.url),'utf8');await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();
+  await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Colony & reproduction',exact:true}).click();await expect(page.locator('#water-depth')).toHaveValue('24');await page.locator('#water-depth').selectOption('80');await page.getByRole('button',{name:'Back to the colony',exact:true}).click();await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.settings.waterTableDepth)).toBe(80);
+  for(let i=0;i<18;i++)await page.getByRole('button',{name:'Zoom out',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-camera-zoom','0.100');await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:45000});await page.screenshot({path:info.outputPath('deep-water-table-and-wide-view.png')});
 });
