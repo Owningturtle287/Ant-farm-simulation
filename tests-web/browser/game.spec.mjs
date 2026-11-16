@@ -165,3 +165,20 @@ test('10000-ant saves use atomic database generations and the roster stays paged
 test('terrain rendering falls back to bounded row batches when workers are unavailable',async({page},info)=>{
   await page.addInitScript(()=>{window.Worker=undefined;});await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:30000});await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Show performance',exact:true}).click();await expect.poll(async()=>JSON.parse(await page.locator('#performance-panel').getAttribute('data-readings')).terrain.worker).toBe(false);await page.screenshot({path:info.outputPath('budgeted-fallback.png')});
 });
+
+test('articulated ants expose bilateral sensing and layered chemical cues',async({page},info)=>{
+  const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.getByRole('button',{name:'Show pheromone trails'}).click();
+  await expect(page.getByRole('complementary',{name:'Chemical signal colors'})).toContainText('Food scent');await expect(page.locator('#trail-legend')).toContainText('Moisture');
+  await page.getByRole('button',{name:'Open colony roster'}).click();await page.locator('[data-ant="1"]').click();await page.getByRole('button',{name:'Follow this ant',exact:true}).click();
+  for(let i=0;i<3;i++)await page.getByRole('button',{name:'Zoom in',exact:true}).click();
+  await expect(page.locator('#ant-sensing')).toContainText(/Left [\d.]+ · right [\d.]+/);await expect(page.locator('#ant-senses')).toContainText('Antennae');
+  await page.evaluate(()=>new Promise(resolve=>{let frames=0;const step=()=>++frames>=24?resolve():requestAnimationFrame(step);requestAnimationFrame(step);}));
+  await page.screenshot({path:info.outputPath('living-ant-and-bilateral-senses.png')});
+  await page.getByRole('button',{name:'Close ant profile'}).click();await page.getByRole('button',{name:'Return to nest'}).click();
+  await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});
+  await page.screenshot({path:info.outputPath('layered-pheromones-and-source-scent.png')});
+  // Atlas evidence shows all three body sizes and distinct limb/antenna poses.
+  const atlas=await page.evaluate(async()=>{const {buildAntAtlas}=await import('./ant-art.mjs');return buildAntAtlas('worker').toDataURL().split(',')[1];});await info.attach('articulated-worker-atlas.png',{body:Buffer.from(atlas,'base64'),contentType:'image/png'});
+  expect(errors).toEqual([]);
+});

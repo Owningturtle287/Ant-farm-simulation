@@ -1,5 +1,5 @@
 const key=c=>c.join(',');
-export const SIGNAL_COLORS={food:'#b4ce8a',water:'#73bfd2',alarm:'#ed8060',brood:'#e6c574',queen:'#ba9dc9',home:'#b7c4b1'};
+export const SIGNAL_COLORS={food:'#bce77f',water:'#77d9e8',alarm:'#ff916b',brood:'#f5d27a',queen:'#d4a5e3',home:'#acc2b3'};
 const HALF_LIFE={food:45,water:35,alarm:5,brood:8,queen:14,home:80};
 export function initSignals(w,data={}){
   w.signals={};for(const kind of Object.keys(HALF_LIFE))w.signals[kind]=new Map(data.signals?.[kind]??data.trails?.[kind]??(kind==='food'?data.pheromones??[]:[]));
@@ -21,3 +21,24 @@ export function decaySignals(w,elapsed){
   for(const kind of ['food','water'])for(const [id,value] of w.signals[kind])w.pheromones.set(id,Math.max(value,w.pheromones.get(id)??0));
 }
 export function signalsJSON(w){return Object.fromEntries(Object.entries(w.signals).map(([kind,map])=>[kind,[...map]]));}
+
+// Spatial interpolation gives the two antennae different local readings.
+export function sampleField(map,[x,y],w){
+  if(!map)return 0;const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy;let sum=0;
+  for(let dy=0;dy<=1;dy++)for(let dx=0;dx<=1;dx++){if(w?.solid([ix+dx,iy+dy]))continue;sum+=(map.get((ix+dx)+','+(iy+dy))??0)*(dx?fx:1-fx)*(dy?fy:1-fy);}return sum;
+}
+export function resourceOdor(w,[x,y]){
+  if(w.solid([Math.round(x),Math.round(y)]))return {food:0,water:0};
+  // Bins hold live source references. Collection immediately reduces the sensed cue.
+  if(w.odorIndexSource!==w.patches||w.odorIndexSize!==w.patches.length||w.odorIndexRevision!==w.revision){
+    w.odorIndex=new Map();for(const p of w.patches){const id=Math.floor(p.cell[0]/8)+','+Math.floor(p.cell[1]/8);if(!w.odorIndex.has(id))w.odorIndex.set(id,[]);w.odorIndex.get(id).push(p);}
+    w.odorIndexSource=w.patches;w.odorIndexSize=w.patches.length;w.odorIndexRevision=w.revision;
+  }
+  let food=0,water=0;const bx=Math.floor(x/8),by=Math.floor(y/8);
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)for(const p of w.odorIndex.get((bx+dx)+','+(by+dy))??[]){
+    if(p.amount<=.001)continue;const distance=Math.hypot(x-p.cell[0],y-p.cell[1]);if(distance>3.2)continue;
+    // Food odor and a local moisture cue are separate from deposited trail pheromone.
+    const value=Math.min(1,p.amount/6)*(1-distance/3.2)**2;
+    if(p.kind==='water')water=Math.max(water,value);else food=Math.max(food,value*(p.origin==='prey'?1:p.origin==='nectar'?.8:.25));
+  }return {food,water};
+}

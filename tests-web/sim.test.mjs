@@ -368,3 +368,42 @@ test('database read failures protect the large-colony marker from automatic repl
   const {ColonyStore}=await import('../web/large-saves.mjs'),data=new Map([['little-colony.web.v1.database','1']]),storage={getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)},database={open(){throw Error('Database unavailable');}},store=new ColonyStore(storage,database);
   await assert.rejects(()=>store.load(),/Database unavailable/);assert.equal(store.blocked,true);assert.equal(await store.save(new Colony()),false);assert.equal(storage.getItem('little-colony.web.v1.database'),'1');assert.equal(storage.getItem('little-colony.web.v1'),null);
 });
+
+const motionWorld=()=>({seed:287,revision:0,patches:[],signals:Object.fromEntries(['food','water','alarm','brood','queen','home'].map(k=>[k,new Map()])),solid:([x,y])=>Math.abs(x)>12||Math.abs(y)>12,walkable(c){return !this.solid(c);}});
+test('continuous locomotion accelerates and rounds turns without snapping or crossing soil',async()=>{
+  const {updateMotion,moveAnt,wrapAngle,clearSegment}=await import('../web/locomotion.mjs'),w=motionWorld(),a=initializeBrain(createAnt(4,'worker',[0,0],287),287);a.task='toDig';a.route=[[1,0],[2,0],[3,1],[3,2],[4,2]];
+  const headings=new Set();let subcellArrivals=0,maxStep=0,firstSpeed=0;
+  for(let i=0;i<180&&a.route.length;i++){const previous=[...a.pos],angle=a.motion.angle;updateMotion(a,w,i*.1,.1);const arrived=moveAnt(a,w,i*.1,.1);if(i===0)firstSpeed=a.motion.speed;maxStep=Math.max(maxStep,distanceForTest(previous,a.pos));assert.ok(Math.abs(wrapAngle(a.motion.angle-angle))<=.751);assert.ok(clearSegment(w,previous,a.pos));if(arrived&&a.route.length&&distanceForTest(a.pos,a.cell)>.005)subcellArrivals++;headings.add(a.motion.angle.toFixed(2));}
+  assert.equal(a.route.length,0);assert.ok(firstSpeed<2);assert.ok(maxStep<.38);assert.ok(headings.size>8);assert.ok(subcellArrivals>0);assert.ok(distanceForTest(a.pos,[4,2])<.08);
+});
+const distanceForTest=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+test('separate antenna samples causally steer toward a local trail rather than cosmetic wobble',async()=>{
+  const {updateMotion,moveAnt}=await import('../web/locomotion.mjs');const trajectories=[];
+  for(const side of [-1,1]){const w=motionWorld(),a=initializeBrain(createAnt(7,'worker',[0,0],287),287);a.task='exploring';a.foragingKind='food';a.route=[[8,0]];a.motion.angle=0;a.motion.phase=0;a.motion.nextPause=100;
+    for(let x=0;x<=8;x++)w.signals.food.set(key([x,side]),2);
+    updateMotion(a,w,0,.1);assert.ok(side*(a.brain.antennae.right.food-a.brain.antennae.left.food)>0);assert.ok(side*a.motion.turn>0);assert.notDeepEqual(a.brain.antennae.tips.left,a.brain.antennae.tips.right);
+    for(let i=0;i<12;i++){updateMotion(a,w,i*.1,.1);moveAnt(a,w,i*.1,.1);}trajectories.push(a.pos[1]);
+  }assert.ok(trajectories[0]<-.05);assert.ok(trajectories[1]>.05);
+});
+test('exploratory sampling pauses are bounded and a loaded ant keeps delivering',async()=>{
+  const {updateMotion,moveAnt}=await import('../web/locomotion.mjs');
+  for(const loaded of [false,true]){const w=motionWorld(),a=initializeBrain(createAnt(5,'worker',[0,0],287),287);a.task=loaded?'returningFood':'exploring';a.route=[[1,0],[2,0]];a.motion.angle=0;a.motion.nextPause=0;a.carried=loaded?1:0;
+    updateMotion(a,w,1,.1);if(!loaded){assert.ok(a.motion.pauseUntil>1&&a.motion.pauseUntil<1.43);assert.ok(a.motion.nextPause>=7);}else assert.equal(a.motion.pauseUntil,0);
+    for(let i=0;i<50&&a.route.length;i++){updateMotion(a,w,1+i*.1,.1);moveAnt(a,w,1+i*.1,.1);}assert.equal(a.route.length,0);
+  }
+});
+test('nearby source odors deplete immediately and remain separate from deposited pheromones',async()=>{
+  const {resourceOdor}=await import('../web/signals.mjs'),w=motionWorld(),p={kind:'food',origin:'prey',amount:12,cell:[1,0]};w.patches=[p];
+  const before=resourceOdor(w,[0,0]).food;assert.ok(before>0);p.amount=1;assert.ok(resourceOdor(w,[0,0]).food<before);p.amount=0;assert.equal(resourceOdor(w,[0,0]).food,0);assert.equal(w.signals.food.size,0);
+  assert.equal(resourceOdor(w,[-8,0]).food,0);
+});
+test('steered carriers traverse rounded diagonal exits and retain their loads',async()=>{
+  const {updateMotion,moveAnt}=await import('../web/locomotion.mjs');
+  for(const seed of [17,287,914]){const c=new Colony(seed),a=c.ants[1],start=c.world.nest,goal=c.world.foragingExit(start);a.cell=[...start];a.pos=[...start];a.task='haulingSoil';a.carried=1;a.cargoKind='soil';a.route=c.world.path(start,goal);
+    for(let i=0;i<500&&a.route.length;i++){updateMotion(a,c.world,i*.1,.1);moveAnt(a,c.world,i*.1,.1);}assert.equal(a.route.length,0,`seed ${seed} must pass the narrow mouth`);assert.equal(a.carried,1);assert.ok(distanceForTest(a.pos,goal)<.08);
+  }
+});
+test('nearby bodies cause bounded passing and slowing rather than synchronized overlap',async()=>{
+  const {updateMotion}=await import('../web/locomotion.mjs'),w=motionWorld(),a=initializeBrain(createAnt(4,'worker',[0,0],287),287),b=initializeBrain(createAnt(5,'worker',[0,0],287),287);a.task='toFood';a.route=[[1,0]];a.motion.angle=0;b.pos=[.6,0];
+  updateMotion(a,w,1,.1,new Map([['0,0',[a,b]]]));assert.ok(a.motion.separation>0&&a.motion.separation<=.32);assert.ok(a.motion.yielding>=.7&&a.motion.yielding<1);
+});

@@ -70,3 +70,6 @@ The v0.6 terrain update adds supported low mound slopes, narrow shallow entrance
 
 
 v0.7 addresses camera lag: detailed terrain is painted in a worker, with a 24 MiB LRU bitmap cache, zoom-dependent detail, small visible margins and a bounded fallback. Biology ticks yield between batches while preserving the same fixed-step rules. Distant overlapping crowds use fewer redundant draw calls; every ant still has its own simulated state. The roster loads 100 ants at a time. Large colonies use chunked IndexedDB generations with a recoverable backup instead of exceeding localStorage capacity. Saving holds biology at a completed tick while the camera remains available. The 10,000 ceiling is experimental; it is not a promise of 128× or a fixed frame rate on an iPhone.
+
+
+v0.8 adds a local sensorimotor layer: separately sampled moving antennae, gradual acceleration and turning, rounded waypoint passing, local body avoidance and brief bounded scouting samples. Distance-driven tripod gait frames and articulated head/antenna poses replace the four-frame clock animation. Pheromone trails use soft connected ribbons, with separate food-odor and moisture halos, a matching legend and left/right readings in the ant profile. Existing colonies upgrade in place; the 120 default and 10,000 experimental ceiling remain unchanged.

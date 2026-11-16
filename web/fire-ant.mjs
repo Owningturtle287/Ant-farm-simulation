@@ -1,3 +1,4 @@
+import {initializeMotion} from './locomotion.mjs';
 import {DAY,clamp,adultDays,Random} from './biology.mjs';
 export const SPECIES=Object.freeze({name:'Red imported fire ant',scientific:'Solenopsis invicta',socialForm:'Single-queen (monogyne)',eggDays:8,larvaDays:10,pupaDays:12});
 export function colonyOdor(seed){const r=new Random(seed^0x8a421);return [.18+r.float()*.6,.18+r.float()*.6,.18+r.float()*.6];}
@@ -9,7 +10,7 @@ export function initializeBrain(a,seed){
   a.odor??=odor.map(v=>v+(r.float()-.5)*.025);a.recognitionTemplate??=[...odor];
   a.brain??={arousal:0,habituation:0,lastDecision:0,contacts:0,recognized:0,lastContact:'No recent antennal contact',recruitedKind:null,recruitUntil:0,senses:{},taskHistory:[]};
   a.traits.lifeDays=a.fireAnt?a.traits.lifeDays:lifespanFor(a,seed);
-  a.fireAnt=true;a.knownBrood??=[];a.cargoNutrition??=null;return a;
+  initializeMotion(a,seed);a.fireAnt=true;a.knownBrood??=[];a.cargoNutrition??=null;return a;
 }
 export function recognize(a,b){return Math.sqrt(a.recognitionTemplate.reduce((s,v,i)=>s+(v-(b.odor?.[i]??-1))**2,0))<.20;}
 export function contact(a,b,time){

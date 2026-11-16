@@ -38,7 +38,7 @@
     </div>
     <div class="pace"><button id="speed" aria-label="Simulation speed: 1 times">1×</button><button id="pause" aria-label="Pause simulation"><span id="pause-icon">Ⅱ</span></button></div>
   </header>
-  <aside id="trail-legend" class="panel trail-legend" aria-label="Chemical signal colors" hidden><span class="food-signal">Food</span><span class="water-signal">Water</span><span class="alarm-signal">Alarm</span><span class="brood-signal">Brood</span><span class="queen-signal">Queen</span><span class="home-signal">Home</span></aside>
+  <aside id="trail-legend" class="panel trail-legend" aria-label="Chemical signal colors" hidden><span class="food-signal">Food trail</span><span class="water-signal">Water trail</span><span class="alarm-signal">Alarm</span><span class="brood-signal">Brood</span><span class="queen-signal">Queen</span><span class="home-signal">Home</span><span class="odor-signal">Food scent</span><span class="moisture-signal">Moisture</span></aside>
   <div id="pause-badge" class="pause-badge panel" hidden>PAUSED</div>
   <aside id="inspector" class="panel inspector" aria-label="Ant profile" hidden>
     <div class="inspector-heading"><span class="eyebrow">ANT PROFILE</span><button id="close-profile" class="icon-button" aria-label="Close ant profile"><svg><use href="#i-close"/></svg></button></div>
@@ -50,7 +50,7 @@
       <div class="meter"><div><span>Hydration</span><span id="hydration-value"></span></div><div class="track"><i id="hydration-bar" class="health"></i></div></div>
       <div class="personal-stats"><div><span>AGE</span><strong id="ant-age"></strong></div><div><span>EXPERIENCE</span><strong id="ant-experience"></strong></div><div><span>TRIPS</span><strong id="ant-trips"></strong></div></div>
       <p id="ant-reason" class="muted reason"></p>
-      <p id="ant-memory" class="muted small"></p><p id="ant-senses" class="muted small"></p><p id="ant-social" class="muted small"></p>
+      <p id="ant-memory" class="muted small"></p><p id="ant-senses" class="muted small"></p><p id="ant-sensing" class="muted small"></p><p id="ant-social" class="muted small"></p>
       <button id="follow" class="secondary full">Follow this ant</button>
     </div>
   </aside>
@@ -91,7 +91,7 @@
 <dialog id="menu" class="panel menu-dialog" aria-labelledby="menu-title">
   <div class="dialog-heading"><h2 id="menu-title">A little care</h2><button data-close="menu" class="icon-button" aria-label="Close menu"><svg><use href="#i-close"/></svg></button></div>
   <div class="menu-actions"><button id="species-button" class="secondary">Fire ant behavior</button><button id="disturb-button" class="secondary">Disturb the ground</button><button id="settings-button" class="secondary">Colony &amp; reproduction</button><button id="performance-button" class="secondary">Show performance</button><button id="materials-button" class="secondary">Terrain guide</button><button id="save-now" class="secondary">Save colony now</button><button id="install-button" class="secondary">Save to my Home Screen</button><button id="help" class="secondary">How to play</button><button id="export" class="secondary">Export colony backup</button><button id="reset" class="danger">Start a new colony</button></div>
-  <p id="offline-state" class="offline-state muted" role="status">Preparing offline play…</p><p class="muted small">Responsive terrain · v0.7<br>Solenopsis invicta · single-queen fire ants. Large workers forage, build, share food, and respond to local alarms. Growth follows resources, brood care, and nest conditions. Use Colony &amp; reproduction to control growth.</p>
+  <p id="offline-state" class="offline-state muted" role="status">Preparing offline play…</p><p class="muted small">Living movement · v0.8<br>Solenopsis invicta · single-queen fire ants. Large workers forage, build, share food, and respond to local alarms. Growth follows resources, brood care, and nest conditions. Use Colony &amp; reproduction to control growth.</p>
 </dialog>
 <dialog id="settings" class="panel settings-dialog" aria-labelledby="settings-title">
   <div class="dialog-heading"><div><span class="eyebrow">GROW AT YOUR OWN PACE</span><h2 id="settings-title">Colony &amp; reproduction</h2></div><button data-close="settings" class="icon-button" aria-label="Close colony settings"><svg><use href="#i-close"/></svg></button></div>
@@ -115,6 +115,7 @@
   <p>One reproductive queen and a range of sterile female worker sizes. Large workers are not a separate permanent soldier caste.</p>
   <p>Workers weigh nutritional signals, brood contact, antennal encounters, local chemical trails, age, size, and experience. Young workers tend toward brood care; older workers are more likely to forage. These are tendencies that can change with need.</p>
   <p>Nestmates recognize a familiar blend of contact odors. Returning foragers activate nearby recruits. Food and water trails fade; an unsuccessful trip lowers a remembered source’s reliability.</p>
+  <p>Each antenna samples its own local chemical and touch cues. Workers compare left and right, cast wider when a trail weakens, and sometimes pause briefly to sample. Carrying food, soil or brood takes priority over wandering. Open an ant to see its current readings.</p>
   <p>Use <strong>More → Disturb the ground</strong> at 1× to see a brief local alarm response. With no threat, large workers return to useful work or wait as recruitable reserves.</p>
   <p>Narrow peripheral mouths connect to shallow foraging passages. The mound above them can contain its own tunnel network. New colonies generate the revised layout; established colonies keep their ground.</p>
   <p class="muted small">A research-informed behavioral approximation, not an exact ant brain. Timings, distance, nutrition, the population ceiling, and resource squares use game-scale units. Full mating flights, multiple-queen societies, rival colonies, and detailed neural/chemical physiology are not modeled.</p>

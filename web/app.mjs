@@ -49,6 +49,8 @@ function updateUI(){
     for(const metric of ['energy','health','hydration']){$(metric+'-value').textContent=Math.round(ant[metric]*100)+'%';$(metric+'-bar').style.width=ant[metric]*100+'%';}
     $('ant-age').textContent=adultDays(ant).toFixed(1)+' d';$('ant-experience').textContent=ant.experience;$('ant-trips').textContent=ant.trips;$('ant-reason').textContent=reason(ant);$('follow').textContent=state.following?'Following ant':'Follow this ant';
     const senses=ant.brain.senses;$('ant-senses').textContent=`Antennae · food ${(senses.food??0).toFixed(2)} · water ${(senses.water??0).toFixed(2)} · alarm ${(senses.alarm??0).toFixed(2)} · brood ${(senses.brood??0).toFixed(2)}`;
+    const feelers=ant.brain.antennae,channel=feelers?.kind??'food',odor=channel==='food'?'foodOdor':'moisture',reading=side=>((feelers?.[side]?.[channel]??0)+(feelers?.[side]?.[odor]??0)*.8).toFixed(2);
+    $('ant-sensing').textContent=`Left ${reading('left')} · right ${reading('right')} · ${channel} cue. ${ant.motion?.mode==='sampling'?'Pausing to sample':ant.motion?.mode==='tracking'?'Following the local gradient':ant.motion?.mode==='searching'?'Casting for a scent':ant.motion?.mode==='carrying'?'Keeping the load moving':'Scanning nearby cues'}.`;
     $('ant-social').textContent=`${ant.brain.recognized} recognized contacts · ${ant.brain.lastContact}`;
     $('ant-memory').textContent=ant.memories.length+' remembered source'+(ant.memories.length===1?'':'s')+' · skills improve with successful work.';
   }else{state.selected=null;state.following=false;}
@@ -114,7 +116,7 @@ $('confirm-reset').addEventListener('click',async()=>{await settleForEdit();colo
 $('export').addEventListener('click',async()=>{await settleForEdit();
   const blob=new Blob([JSON.stringify({version:4,savedAt:Date.now(),colony})],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='little-colony-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Colony backup exported.');
 });
-$('export-performance').addEventListener('click',()=>{const blob=new Blob([JSON.stringify({version:'0.7',recordedAt:new Date().toISOString(),...performanceSnapshot(),settings:colony.settings,viewport:{width:renderer.width,height:renderer.height,dpr:renderer.dpr}},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='little-colony-performance.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Performance readings exported.');});
+$('export-performance').addEventListener('click',()=>{const blob=new Blob([JSON.stringify({version:'0.8',recordedAt:new Date().toISOString(),...performanceSnapshot(),settings:colony.settings,viewport:{width:renderer.width,height:renderer.height,dpr:renderer.dpr}},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='little-colony-performance.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Performance readings exported.');});
 $('install-button').addEventListener('click',()=>openDialog('install'));
 for(const [id,factor] of [['zoom-in',1.25],['zoom-out',.8]])$(id).addEventListener('click',()=>{lastCameraInput=performance.now();state.following=false;renderer.zoom(factor);});
 const pointers=new Map();let start=null,lastPoint=null,moved=false,pinchDistance=0;

@@ -1,4 +1,4 @@
-# Responsive terrain · v0.7
+# Living movement · v0.8
 
 The reference species is the red imported fire ant, **Solenopsis invicta**, using the **single-queen (monogyne)** social form. This is a mechanistic, research-informed game model. It is not a reconstruction of neurons, a fitted whole-colony biological model, or an exact ant brain.
 
@@ -78,3 +78,20 @@ Regression coverage includes 1,500 deposition cycles across seeds with intermitt
 ## v0.7 population experiments
 
 Ceilings up to 10,000 are growth controls rather than biological changes or supported-device claims. The default remains 12 workers plus a queen and a 120-adult ceiling. Every ant retains individual physiology, memory, contact behavior and task decisions. Cooperative scheduling may slow simulated time under load; it does not replace ants with aggregate agents. At a distant view, overlapping sprites and brood are drawn with a density limit; selection always shows the selected ant. See the development notes for camera rendering, complete-tick saving and stress-test scope.
+
+
+## v0.8 local sensing and movement
+
+The two antenna tips move in body coordinates, each sampling interpolated local concentrations independently. Their left/right contrast bends steering and biases the next exploration choice. Nearby finite sources add a separate local food odor or moisture cue; a consumed source immediately ceases producing that cue. Water is represented by a moisture cue, not an assertion that ants smell liquid water as a pheromone. Signals remain six functional game channels, not a chemical reconstruction. The faint overlay colors are an observation aid; ants read numeric fields rather than pixels.
+
+Heading changes are bounded; speed accelerates, slows into turns, and varies gradually between individuals. Look-ahead rounds traversable corners. Continuous body positions are collision-checked against the same interpolated soil contour as the renderer, with a support check for surface walking. Wall contact redirects toward the passage centerline rather than waiting indefinitely. Short-range body encounters produce bounded passing adjustments and slowing; this is not a rigid-body or six-foot traction simulation.
+
+Searching ants show correlated meanders and occasional 0.12–0.42-second sampling pauses with a 6–18-second cooldown. Strong cues narrow sampling; weak cues produce broader casting. Those values are game tuning, not measured species-specific rates or evidence of human-like distraction. Food/soil/brood carriers and urgent nutrition or queen-care travel retain their destination and are not randomly distracted. Scouts plan their next local step as they pass a waypoint, avoiding an artificial stop at every cell. Resting ants keep their feet planted while their antennae remain active.
+
+Twelve cached alternating-tripod gait poses, separately indexed antenna poses, head motion and a restrained body bob animate the ant. Walking cadence responds to movement speed, with a presentation limit at extreme time lapse. Antenna pose and sensory sampling share one model; rendering interpolates its phase. Geometry and the local sampling strategy are simplified, research-inspired models. Stored paths and the existing nearby-resource identification range still simplify navigation.
+
+Additional research:
+
+- [Draft et al., 2018, Carpenter ants use diverse antennae sampling strategies to track odor trails](https://pubmed.ncbi.nlm.nih.gov/30266788/) documents distinct sampling behaviors and different left/right antenna use in **Camponotus pennsylvanicus**. Bilateral sampling and casting here extrapolate that mechanism to the game; the paper does not establish identical fire-ant motor parameters.
+- [Gravish et al., 2013, Climbing, falling, and jamming during ant locomotion in confined environments](https://pmc.ncbi.nlm.nih.gov/articles/PMC3683784/) studies **S. invicta** and supports considering body, appendage and wall interactions in narrow passages. The game does not model falls or antenna-based jamming.
+- [Comparative Quantification of Trail-Following Behavior in Pest Ants, 2020](https://www.mdpi.com/2075-4450/11/1/5) includes **S. invicta** and shows species differences in trail deviation and speed. Motion remains restrained rather than applying a large generic zigzag to every ant.

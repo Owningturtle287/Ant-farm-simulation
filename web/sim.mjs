@@ -4,8 +4,9 @@ import {terrainHeight,initHabitat,ensureHabitat,tickHabitat,harvest,restoreHabit
 import {NUTRITION,addStock,removeStock} from './resources.mjs';
 import {SPECIES,initializeBrain,lifespanFor,colonyOdor,contact,cropCapacity,developmentalRate,taskScores,rememberTask} from './fire-ant.mjs';
 import {founderNest,planPeripheralExit,planMoundPassage} from './architecture.mjs';
+import {moveAnt,updateMotion,wrapAngle} from './locomotion.mjs';
 import {chamberCells,curvedPassage} from './geometry.mjs';
-import {initSignals,emit,senseSignal,decaySignals,signalsJSON} from './signals.mjs';
+import {initSignals,emit,senseSignal,decaySignals,signalsJSON,sampleField,resourceOdor} from './signals.mjs';
 export {DAY,BROOD_DURATION,LIMIT,DEFAULT_SETTINGS,Random,createAnt,adultDays,broodStage};
 export const key=([x,y])=>x+','+y;
 export const cell=s=>s.split(',').map(Number);
@@ -292,7 +293,7 @@ export class Colony{
       if(other.id===a.id||distance(a.pos,other.pos)>1.4)continue;if(checked++>=8)return;
       if(!other.brain)initializeBrain(other,this.world.seed);
       if(!contact(a,other,this.time)){emit(this.world,'alarm',a.cell,1);this.alarmEvents++;continue;}
-      this.recognitions++;
+      this.recognitions++;a.motion.contactUntil=this.time+.45;
       if(other.needsAt>a.needsAt&&other.knownNeeds){a.knownNeeds={...other.knownNeeds};a.needsAt=other.needsAt;}
       if(a.energy<.4&&other.energy>.75){const transfer=Math.min(.10,other.energy-.65);if(transfer>0){other.energy-=transfer;a.energy+=transfer;this.socialTransfers++;}}
       if(a.hydration<.4&&other.hydration>.75){other.hydration-=.08;a.hydration+=.08;this.socialTransfers++;}
@@ -307,7 +308,7 @@ export class Colony{
   disturb(c){let responders=0;for(const a of this.ants)if(a.caste!=='queen'&&distance(a.pos,c)<5){emit(this.world,'alarm',a.cell,1.5);a.brain.arousal=1;a.senseAt=0;if(!a.carried&&!a.carryingBrood){a.busyUntil=this.time;a.route=[];this.sense(a);this.chooseJob(a);}responders++;}if(responders){this.alarmEvents++;this.record('Nearby workers released alarm after a local disturbance.');}else this.record('The ground was disturbed, with no workers nearby.');return responders;}
 
   updateAnt(a,dt){
-    if(!a.brain)initializeBrain(a,this.world.seed);this.sense(a);
+    if(!a.brain)initializeBrain(a,this.world.seed);this.sense(a);updateMotion(a,this.world,this.time,dt,this.occupancy);
     a.age+=dt;const active=a.route.length?1.5:a.task==='digging'?1.8:.65;
     a.energy=clamp(a.energy-dt*active/(DAY*5),.01,1);a.hydration=clamp(a.hydration-dt*active/(DAY*4));
     const inNest=distance(a.cell,this.world.nest)<7;
@@ -328,17 +329,13 @@ export class Colony{
     if(a.route.length){
       const next=a.route[0];
       if(!this.world.walkable(next)){a.route=[];const goal=a.destination;if(goal&&this.world.walkable(goal))a.route=this.world.path(a.cell,goal)??[];return;}
-      const dx=next[0]-a.pos[0],dy=next[1]-a.pos[1],length=Math.hypot(dx,dy),traffic=Math.max(0,(this.occupancy.get(key(next))?.length??0)-1);
-      const speed=(a.caste==='queen'?.85:a.caste==='major'?2.5:3)*(a.carried||a.carryingBrood?.72:1)*(.7+a.energy*.3)/(1+Math.min(traffic,7)*.18);
-      if(length<=speed*dt){
-        a.cell=[...next];a.pos=[...next];a.route.shift();
-        if(a.task.startsWith('returning')){
-          const kind=a.task==='returningWater'?'water':'food',trail=this.world.trails[kind],strength=(.12+.20*Math.exp(-(this.time-a.sourceAt)/50))*a.carried/2.5;
-          emit(this.world,kind,next,strength);this.world.pheromones.set(key(next),Math.max(trail.get(key(next)),this.world.pheromones.get(key(next))??0));
-        }
-        if(a.carryingBrood){const b=this.broodItem(a.carryingBrood);if(b){b.cell=[...a.cell];b.pos=[...a.pos];}}
-        if(a.task==='exploring'&&this.time>=a.perceptionAt){a.perceptionAt=this.time+.8;this.discover(a);}
-      }else{a.pos[0]+=dx/length*speed*dt;a.pos[1]+=dy/length*speed*dt;if(a.carryingBrood){const b=this.broodItem(a.carryingBrood);if(b)b.pos=[...a.pos];}}return;
+      const traffic=Math.max(0,(this.occupancy.get(key(next))?.length??0)-1),arrived=moveAnt(a,this.world,this.time,dt,traffic);
+      if(arrived&&a.task.startsWith('returning')){
+        const kind=a.task==='returningWater'?'water':'food',trail=this.world.trails[kind],strength=(.12+.20*Math.exp(-(this.time-a.sourceAt)/50))*a.carried/2.5;
+        emit(this.world,kind,next,strength);this.world.pheromones.set(key(next),Math.max(trail.get(key(next))??0,this.world.pheromones.get(key(next))??0));
+      }
+      if(a.carryingBrood){const b=this.broodItem(a.carryingBrood);if(b){b.cell=[...a.cell];b.pos=[...a.pos];}}
+      if(a.task==='exploring'&&this.time>=a.perceptionAt){a.perceptionAt=this.time+.8;this.discover(a);}if(a.task==='exploring'&&!a.route.length)this.explore(a);return;
     }
     if(this.time<a.busyUntil)return;
     if(a.caste==='queen'){this.updateQueen(a);return;}
@@ -492,12 +489,12 @@ export class Colony{
   }
   explore(a){
     a.task='exploring';if(!this.world.inForagingZone(a.cell)){const exit=this.world.foragingExit(a.cell);if(exit)this.send(a,exit);else{a.busyUntil=this.time+2;a.decision='No exterior passage is currently accessible. Rechecking the nest routes.';}return;}if(this.discover(a))return;
-    if(this.rng.float()<.06)a.heading*=-1;
+    if(this.rng.float()<.025)a.heading*=-1;
     const kind=a.foragingKind??'food',trail=this.world.trails[kind],current=trail.get(key(a.cell))??0;
     const choices=this.world.neighbors(a.cell).filter(c=>this.world.inForagingZone(c)).map(c=>{
-      const forward=Math.sign(c[0]-a.cell[0])===a.heading?2:1,visits=a.recent.filter(id=>id===key(c)).length;
-      const concentration=trail.get(key(c))??0,gradient=Math.max(0,concentration-current),avoidance=Math.pow(.24,visits);
-      return {c,weight:forward*avoidance*(1+gradient*9+concentration*.6)*(.85+this.rng.float()*.3)};
+      const angle=Math.atan2(c[1]-a.pos[1],c[0]-a.pos[0]),forward=Math.exp(Math.cos(wrapAngle(angle-a.motion.angle))*.85),visits=a.recent.filter(id=>id===key(c)).length;
+      const concentration=sampleField(trail,c,this.world),gradient=Math.max(0,concentration-current),avoidance=Math.pow(.24,visits),odor=resourceOdor(this.world,c),scent=kind==='food'?odor.food:odor.water,antennaBias=1+Math.sin(wrapAngle(angle-a.motion.angle))*(a.brain.antennae?.contrast??0)*.6;
+      return {c,weight:forward*avoidance*antennaBias*(1+gradient*9+concentration*.6+scent*4)*(.85+this.rng.float()*.3)};
     });
     if(!choices.length){a.task='resting';a.busyUntil=this.time+2;return;}
     const total=choices.reduce((sum,v)=>sum+v.weight,0);let pick=this.rng.float()*total,selected=choices[0].c;
