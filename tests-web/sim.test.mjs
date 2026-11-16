@@ -353,7 +353,7 @@ test('cooperative ticks yield and finish with the same colony and RNG state as s
 });
 test('population ceilings support 10000 while retaining small defaults and valid saved adults',()=>{
   const c=new Colony(287,{populationCap:10000});assert.equal(LIMIT,10000);assert.equal(c.settings.populationCap,10000);assert.equal(c.ants.length,13);assert.equal(new Colony().settings.populationCap,120);c.setSettings({populationCap:12000});assert.equal(c.settings.populationCap,10000);
-  const d=JSON.parse(JSON.stringify(c));d.ants=Array.from({length:10000},(_,id)=>({id,caste:id?'worker':'queen',cell:[0,11],pos:[0,11]}));const restored=Colony.fromJSON(d);assert.equal(restored.ants.length,10000);assert.equal(restored.settings.populationCap,10000);assert.equal(restored.ants.at(-1).id,9999);
+  const d=JSON.parse(JSON.stringify(c));d.ants=Array.from({length:10000},(_,id)=>({id,caste:id?'worker':'queen',cell:[0,11],pos:[0,11]}));d.water=0;d.nutrition.water=0;d.supplyLedger.water={introduced:0,consumed:0,lost:0};const restored=Colony.fromJSON(d);assert.equal(restored.ants.length,10000);assert.equal(restored.settings.populationCap,10000);assert.equal(restored.ants.at(-1).id,9999);
 });
 test('terrain cache keeps revisited chunks and evicts by bytes in least-recent order',async()=>{
   const {TerrainCache}=await import('../web/render-cache.mjs'),cache=new TerrainCache(12);cache.put('a',{bytes:4});cache.put('b',{bytes:4});cache.put('c',{bytes:4});assert.ok(cache.get('a'));cache.put('d',{bytes:4});assert.equal(cache.get('b'),undefined);assert.equal(cache.bytes,12);assert.equal(cache.size,3);cache.put('a',{bytes:8});assert.ok(cache.bytes<=12);cache.clear();assert.equal(cache.bytes,0);
@@ -471,4 +471,10 @@ test('far zoom terrain sampling remains bounded while preserving the full-detail
 });
 test('abandoned transport and storage claims cannot permanently block unused nest space',()=>{
   const c=new Colony(),a=c.ants[1],b=c.brood[0],free=[...c.world.excavated].map(k=>k.split(',').map(Number)).find(p=>freeCell(c.world,p));assert.ok(free);a.broodID=b.id;a.broodDestination=[...free];for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++)c.world.itemSlots.set((free[0]*3+x)+','+(free[1]*3+y),'b:'+b.id);a.task='resting';c.updateDemand();assert.equal(a.broodDestination,null);assert.ok(freeCell(c.world,free));
+});
+test('a nurse with a full energy crop can fetch solid protein and physically feed a larva',()=>{
+  const c=new Colony(287,{eggRate:0}),a=c.ants[1],queen=c.ants[0],baby=c.brood[1];for(const b of c.brood)if(b!==baby)bedRelease(c,b);c.brood=[baby];baby.nutrition=.1;
+  c.ants=[queen,a];primeCrop(c,queen,socialCapacity(queen)*.6,socialCapacity(queen)*.4,waterCapacity(queen));primeCrop(c,a,socialCapacity(a),0,1);queen.task='queenRest';queen.busyUntil=1e9;a.cell=[...c.world.nest];a.pos=[...a.cell];a.route=[];a.busyUntil=0;a.knownBrood=[baby.id];c.updateDemand();assert.equal(c.assignCare(a),true);assert.equal(a.task,'toCache');let carried=false;
+  for(let i=0;i<1000&&baby.nutrition<.5;i++){c.step();if(a.cargoKind==='broodMeal'&&a.carried>0)carried=true;}
+  assert.ok(carried,'A full crop must not prevent solid-food transport.');assert.ok(baby.nutrition>=.5,'The pellet must be delivered to the larva, not consumed remotely.');
 });

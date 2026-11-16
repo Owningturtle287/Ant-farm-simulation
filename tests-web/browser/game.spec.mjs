@@ -108,7 +108,7 @@ test('a collected water portion removes visible finite squares and survives a sa
     return page.evaluate(id=>{const c=JSON.parse(localStorage.getItem('little-colony.web.v1')).colony;return c.ants.some(a=>(a.deliveryKind==='water'&&a.socialWater>0)||(a.cargoKind==='water'&&a.carried>0))||c.waterDelivered>0;},patchID);
   },{timeout:20000,intervals:[500,1000]}).toBe(true);
   await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
-  const remaining=await page.evaluate(id=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.world.patches.find(p=>p.id===id).amount,patchID);expect(remaining).toBeLessThan(3);expect(remaining).toBeGreaterThanOrEqual(0);
+  const remaining=await page.evaluate(id=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.world.patches.find(p=>p.id===id).amount,patchID);expect(remaining).toBeLessThan(original.world.patches.find(p=>p.id===patchID).amount);expect(remaining).toBeGreaterThanOrEqual(0);const pieces=await page.evaluate(id=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.world.patches.find(p=>p.id===id).pieces.reduce((s,p)=>s+p.amount,0),patchID);expect(Math.abs(pieces-remaining)).toBeLessThan(1e-7);
   await page.screenshot({path:info.outputPath('finite-water-after.png')});await page.reload();await expect(page.locator('#game')).toHaveAttribute('data-ready','true');
 });
 

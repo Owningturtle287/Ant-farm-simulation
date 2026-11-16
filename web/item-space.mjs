@@ -43,5 +43,5 @@ export function findBed(w,near,id=null){let best=null,score=Infinity;for(const c
 export function cachePositions(w,near){const cells=openNestCells(w);return [...cells].sort((a,b)=>Math.hypot(a[0]-near[0],a[1]-near[1])-Math.hypot(b[0]-near[0],b[1]-near[1])).flatMap(c=>{const out=[];for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++)out.push([c[0]+x/SUB,c[1]+y/SUB]);return out;});}
 export function findCacheSlot(w,near){
   const anchor=cellKey(near);if(w.cachePoolRevision!==w.revision||w.cachePoolAnchor!==anchor){w.cachePoolRevision=w.revision;w.cachePoolAnchor=anchor;w.cachePool=cachePositions(w,near);w.cacheCursor=0;}
-  for(let i=0;i<w.cachePool.length;i++){const p=w.cachePool[w.cacheCursor++%w.cachePool.length];if(!w.itemSlots.has(slotKey(p))&&densityAt(...p,(x,y)=>w.solid([x,y]))<.42)return [...p];}return null;
+  for(let i=0;i<w.cachePool.length;i++){const p=w.cachePool[w.cacheCursor++%w.cachePool.length];if(!w.itemSlots.has(slotKey(p))&&w.walkable(p.map(Math.round))&&w.conditions(p.map(Math.round)).humidity<.88&&densityAt(...p,(x,y)=>w.solid([x,y]))<.42)return [...p];}return null;
 }

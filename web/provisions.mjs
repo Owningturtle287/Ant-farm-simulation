@@ -6,7 +6,7 @@ export const foodFill=a=>(a.socialFood??0)+(a.socialProtein??0);
 export function initCrop(a){a.socialFood??=0;a.socialProtein??=0;a.socialWater??=0;}
 const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
 const anchor=c=>c.world.rooms.find(r=>r.kind==='storage')?.center??c.world.nest;
-export function updateSupplyTotals(c){let energy=0,protein=0,water=0;for(const a of c.ants){initCrop(a);energy+=a.socialFood;protein+=a.socialProtein;water+=a.socialWater;if(a.cargoKind==='food'){energy+=a.carried*(a.cargoNutrition?.energy??.5);protein+=a.carried*(a.cargoNutrition?.protein??.5);}}for(const p of c.foodItems){energy+=p.energy;protein+=p.protein;}c.nutrition={energy,protein,water};}
+export function updateSupplyTotals(c){let energy=0,protein=0,water=0;for(const a of c.ants){initCrop(a);energy+=a.socialFood;protein+=a.socialProtein;water+=a.socialWater;if(a.cargoKind==='food'||a.cargoKind==='broodMeal'){energy+=a.carried*(a.cargoNutrition?.energy??.5);protein+=a.carried*(a.cargoNutrition?.protein??.5);}}for(const p of c.foodItems){energy+=p.energy;protein+=p.protein;}c.nutrition={energy,protein,water};}
 function legacyAnnex(c){
   const w=c.world,index=w.rooms.filter(r=>r.legacyAnnex).length,x=(index%2?-1:1)*(12+Math.floor(index/2)*11),y=Math.max(w.baseSurface(x)+5,11),center=[x,y],previous=w.rooms.filter(r=>r.kind==='storage').at(-1)?.center??w.nest;
   const added=[];for(let yy=y-2;yy<=y+2;yy++)for(let xx=x-4;xx<=x+4;xx++)added.push([xx,yy]);let p=[...previous];while(p[0]!==x||p[1]!==y){p=[...p];if(p[0]!==x)p[0]+=Math.sign(x-p[0]);else p[1]+=Math.sign(y-p[1]);added.push(p);}
@@ -65,8 +65,14 @@ export function shareCrops(c,donor,receiver,force=false){
   if(moved>0)c.socialTransfers++;return moved;
 }
 export function takeCache(c,a,item){
-  if(!item||dist(a.pos,item.pos)>1.4)return false;const total=item.energy+item.protein,n=Math.min(total,Math.max(0,cropCapacity(a)-foodFill(a)));if(n<=1e-9)return false;
-  const e=n*item.energy/total,p=n-e;item.energy-=e;item.protein-=p;a.socialFood+=e;a.socialProtein+=p;cleanCache(c);return true;
+  if(!item||dist(a.pos,item.pos)>1.4)return false;let total=item.energy+item.protein,moved=0,n=Math.min(total,Math.max(0,cropCapacity(a)-foodFill(a)));
+  if(n>1e-9){const e=n*item.energy/total,p=n-e;item.energy-=e;item.protein-=p;a.socialFood+=e;a.socialProtein+=p;moved+=n;}
+  // Solid prey can reach larvae in the mandibles even when the nurse's crop is full.
+  total=item.energy+item.protein;if(a.cachePurpose==='care'&&a.socialProtein<.05&&!a.carried&&!a.carryingBrood&&item.protein>.001&&total>1e-9){n=Math.min(ITEM_UNIT,total,cropCapacity(a));const e=n*item.energy/total,p=n-e;item.energy-=e;item.protein-=p;a.carried=n;a.cargoKind='broodMeal';a.cargoNutrition={energy:e/n,protein:p/n};moved+=n;}
+  cleanCache(c);return moved>0;
+}
+export function feedBroodCargo(c,a,wanted){
+  if(a.cargoKind!=='broodMeal'||!a.carried||!(a.cargoNutrition?.protein>0))return 0;const mix=a.cargoNutrition,n=Math.min(a.carried,wanted/mix.protein),protein=n*mix.protein,energy=n*mix.energy;a.carried-=n;c.nutrition.energy-=energy;c.nutrition.protein-=protein;c.supplyLedger.energy.consumed+=energy;c.supplyLedger.protein.consumed+=protein;if(a.carried<1e-9){a.carried=0;a.cargoKind=null;a.cargoNutrition=null;}return protein;
 }
 export function nearestCache(c,a,protein=false){
   const candidates=c.foodItems.filter(p=>c.world.walkable(p.pos.map(Math.round))&&(protein?p.protein>.001:p.energy>.001));let best=null,d=Infinity;for(const p of candidates){const n=dist(a.pos,p.pos)+(protein?p.energy:p.protein)/Math.max(.001,p.energy+p.protein)*12;if(n<d){d=n;best=p;}}return best;
@@ -84,7 +90,7 @@ export function freeBedCount(c){let count=0;for(const p of openNestCells(c.world
 
 export function supplyBalance(c,kind){const held=c.nutrition[kind],l=c.supplyLedger[kind];return {held,...l,error:l.introduced-held-l.consumed-l.lost};}
 export function accountIntake(c,kind,n,mix={energy:.5,protein:.5}){if(kind==='water')c.supplyLedger.water.introduced+=n;else{c.supplyLedger.energy.introduced+=n*mix.energy;c.supplyLedger.protein.introduced+=n*mix.protein;}}
-export function accountDeath(c,a){for(const [kind,n] of [['energy',a.socialFood+(a.cargoKind==='food'?a.carried*(a.cargoNutrition?.energy??.5):0)],['protein',a.socialProtein+(a.cargoKind==='food'?a.carried*(a.cargoNutrition?.protein??.5):0)],['water',a.socialWater]])c.supplyLedger[kind].lost+=n;}
+export function accountDeath(c,a){for(const [kind,n] of [['energy',a.socialFood+((a.cargoKind==='food'||a.cargoKind==='broodMeal')?a.carried*(a.cargoNutrition?.energy??.5):0)],['protein',a.socialProtein+((a.cargoKind==='food'||a.cargoKind==='broodMeal')?a.carried*(a.cargoNutrition?.protein??.5):0)],['water',a.socialWater]])c.supplyLedger[kind].lost+=n;}
 
 export function rebuildReservations(c){
   const w=c.world;w.itemSlots=new Map();
