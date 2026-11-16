@@ -48,7 +48,7 @@ export function harvest(w,p,amount,time){
   const taken=removeStock(w,p,amount);
   if(p.amount<.001)p.depletedAt=time;
   if(p.amount<.001&&p.origin!=='grass'&&p.renewable!==false)p.regrowAt=time+DAY*(p.origin==='prey'?2+w.ecologyRng.float()*3:1+w.ecologyRng.float());
-  if(p.origin==='grass'&&p.amount<.001){p.amount=0;p.stage='dead';p.growth=0;p.regrowAt=time+DAY*(.6+(terrainHash(p.cell[0],w.seed)%10)/10);w.changed([p.cell[0],w.baseSurface(p.cell[0])]);}
+  if(p.origin==='grass'&&p.amount<.001){removeStock(w,p,p.amount,'decayed');p.stage='dead';p.growth=0;p.regrowAt=time+DAY*(.6+(terrainHash(p.cell[0],w.seed)%10)/10);w.changed([p.cell[0],w.baseSurface(p.cell[0])]);}
   return taken;
 }
 export function tickHabitat(w,time){
@@ -77,7 +77,7 @@ export function tickHabitat(w,time){
     const x=region*32+w.ecologyRng.int(2,29),p={id:w.nextPatchID++,kind:'food',origin:'prey',renewable:false,nutrition:NUTRITION.prey,cell:[x,w.surface(x)-1],amount:0,capacity:w.ecologyRng.int(12,24),regrowAt:1e12,decayAt:time+DAY*4};
     w.patches.push(p);addStock(w,p,p.capacity);w.nextPrey.set(region,time+DAY*(2+w.ecologyRng.float()*3));
   }
-  w.patches=w.patches.filter(p=>!(p.origin==='prey'&&p.amount<.001&&time-(p.depletedAt??time)>DAY));
+  w.patches=w.patches.filter(p=>{if(p.origin==='prey'&&p.amount<.001&&time-(p.depletedAt??time)>DAY){removeStock(w,p,p.amount,'decayed');return false;}return true;});
   if(weather.raining){
     for(const region of w.habitatRegions)for(const basin of basins(w,region*32,(region+1)*32-1)){
       addPuddle(w,basin,elapsed*weather.intensity*(.12+Math.min(20,basin.right-basin.left)*.025));

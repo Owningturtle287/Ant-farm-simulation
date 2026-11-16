@@ -358,3 +358,8 @@ test('terrain snapshots are isolated, preserve full-detail pixels, and support l
   assert.equal(createHash('sha256').update(full.data).digest('hex'),'54830c2ac29cd093852ef5af29b6e8a9125a1e4e8e31c5cd8afc0cb045dabdae');const rows=rasterRows(s);let r,yields=0;do{r=rows.next();yields++;}while(!r.done);assert.ok(yields>30);assert.deepEqual(r.value.data,full.data);
   c.world.deposits.clear();assert.deepEqual(rasterTerrain(s).data,full.data);const low=rasterTerrain({...s,lod:8});assert.equal(low.size,128);assert.equal(low.data.length,full.data.length/4);
 });
+
+test('sub-threshold grain and insect residues are accounted for before their source disappears',()=>{
+  const w=new World(287),grass=w.patches.find(p=>p.origin==='grass');harvest(w,grass,grass.amount-.0004,0);assert.equal(grass.amount,0);assert.ok(Math.abs(resourceBalance(w,'food').error)<1e-7);
+  const prey=w.patches.find(p=>p.origin==='prey');harvest(w,prey,prey.amount-.0003,0);prey.decayAt=1e10;w.weather.nextRain=1e10;tickHabitat(w,DAY+2);assert.equal(w.patches.includes(prey),false);assert.ok(Math.abs(resourceBalance(w,'food').error)<1e-7);
+});

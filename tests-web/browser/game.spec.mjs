@@ -1,13 +1,21 @@
 import {test,expect} from '@playwright/test';
 import {createStaticServer} from '../../scripts/serve-web.mjs';
 import {readFileSync} from 'node:fs';
+async function zoomCamera(page,browserName,delta){
+  if(browserName!=='webkit'){await page.mouse.wheel(0,delta);return;}
+  // Mobile WebKit's driver has no wheel API. Exercise the app's two-pointer pinch path.
+  await page.evaluate(async delta=>{const canvas=document.querySelector('#world'),r=canvas.getBoundingClientRect(),x=r.left+r.width*.6,y=r.top+r.height*.55,original=canvas.setPointerCapture;canvas.setPointerCapture=()=>{};
+    const fire=(type,id,dx)=>canvas.dispatchEvent(new PointerEvent(type,{pointerId:id,pointerType:'touch',isPrimary:id===71,clientX:x+dx,clientY:y,buttons:type==='pointerup'?0:1,bubbles:true,cancelable:true}));
+    try{fire('pointerdown',71,-30);fire('pointerdown',72,30);for(let i=1;i<=12;i++){const span=30*Math.exp(-delta*.0015*i/12);fire('pointermove',71,-span);fire('pointermove',72,span);await new Promise(requestAnimationFrame);}fire('pointerup',71,-30);fire('pointerup',72,30);}finally{canvas.setPointerCapture=original;}
+  },delta);
+}
 test.beforeEach(async({page})=>{
   await page.goto('./');await page.getByRole('button',{name:'Enter the clearing'}).click();await expect(page.locator('#game')).toHaveAttribute('data-ready','true');await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});
 });
 test('colony controls, inspection, food placement, and safe reset',async({page},info)=>{
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.screenshot({path:info.outputPath('first-clearing.png')});
-  await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.getByRole('button',{name:'Resume simulation'})).toBeVisible();
+  await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});await expect(page.getByRole('button',{name:'Resume simulation'})).toBeVisible();
   await page.getByRole('button',{name:'Resume simulation'}).click();await page.getByRole('button',{name:'Simulation speed: 1 times'}).click();await expect(page.getByRole('button',{name:'Simulation speed: 2 times'})).toBeVisible();
   await page.getByRole('button',{name:'Open colony roster'}).click();await page.locator('[data-ant="0"]').click();await expect(page.locator('#ant-name')).toHaveText('Queen Aurelia');
   await page.screenshot({path:info.outputPath('individual-ant.png')});await page.getByRole('button',{name:'Follow this ant',exact:true}).click();await expect(page.getByRole('button',{name:'Following ant',exact:true})).toBeVisible();
@@ -53,14 +61,14 @@ test('128x remains interactive, records actual performance, and builds a disting
   await expect.poll(async()=>Number(await page.locator('#perf-fps').textContent()),{timeout:15000}).toBeGreaterThan(0);
   await expect.poll(async()=>Number(await page.locator('#perf-mound').textContent()),{timeout:15000}).toBeGreaterThan(0);
   await expect(page.locator('#perf-speed')).toContainText('/ 128×');await page.screenshot({path:info.outputPath('living-soil-mound.png')});
-  await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.getByRole('button',{name:'Resume simulation',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});await expect(page.getByRole('button',{name:'Resume simulation',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Terrain guide',exact:true}).click();await expect(page.getByRole('heading',{name:'Loose mound soil',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Diggable earth',exact:true})).toBeVisible();
   await page.screenshot({path:info.outputPath('terrain-guide.png')});
 });
 test('an existing colony upgrades with its population and mound intact',async({page},info)=>{
   const legacy=readFileSync(new URL('../fixtures/v1-colony.json',import.meta.url),'utf8'),data=JSON.parse(legacy).colony;
   // Seed before application startup; pagehide correctly saves the outgoing colony.
-  await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),legacy);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#ants-count')).toHaveText(String(data.ants.length));
+  await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),legacy);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});await expect(page.locator('#ants-count')).toHaveText(String(data.ants.length));
   await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Show performance',exact:true}).click();expect(Number(await page.locator('#perf-mound').textContent())).toBeGreaterThanOrEqual(data.world.soilDeposited);
   await page.screenshot({path:info.outputPath('upgraded-colony-mound.png')});
 });
@@ -77,7 +85,7 @@ test('portrait phone layout and Home Screen metadata are complete',async({page},
 test('rainy grassland, nursery stages, and queen production information survive reopening',async({page},info)=>{
   const raw=readFileSync(new URL('../fixtures/v3-living.json',import.meta.url),'utf8');
   await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();
-  await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#weather')).toContainText('Rain');
+  await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});await expect(page.locator('#weather')).toContainText('Rain');
   await page.screenshot({path:info.outputPath('rain-grass-and-brood.png')});
   await page.getByRole('button',{name:'Open colony roster'}).click();await expect(page.locator('#brood-breakdown')).toContainText('eggs');await expect(page.locator('#brood-breakdown')).toContainText('larvae');await expect(page.locator('#brood-breakdown')).toContainText('pupae');await expect(page.locator('#queen-laying')).toContainText('eggs / colony day');
   await page.screenshot({path:info.outputPath('brood-and-laying-info.png')});
@@ -87,7 +95,7 @@ test('rainy grassland, nursery stages, and queen production information survive 
 test('fire-ant society, chemical senses, and local alarm tool work on a phone',async({page},info)=>{
   await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Fire ant behavior',exact:true}).click();await expect(page.getByRole('heading',{name:'A fire ant society',exact:true})).toBeVisible();await expect(page.getByText('Large workers are not a separate permanent soldier caste.',{exact:false})).toBeVisible();
   await page.screenshot({path:info.outputPath('fire-ant-behavior.png')});await page.getByRole('button',{name:'Close fire ant behavior'}).click();
-  await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await page.getByRole('button',{name:'Show pheromone trails'}).click();await expect(page.getByRole('complementary',{name:'Chemical signal colors'})).toBeVisible();
+  await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});await page.getByRole('button',{name:'Show pheromone trails'}).click();await expect(page.getByRole('complementary',{name:'Chemical signal colors'})).toBeVisible();
   await page.getByRole('button',{name:'Open colony roster'}).click();await expect(page.locator('#habitat-stats')).toContainText('Solenopsis invicta');await expect(page.locator('#growth-status')).not.toBeEmpty();await page.locator('[data-ant="1"]').click();await expect(page.locator('#ant-senses')).toContainText('Antennae');await expect(page.locator('#ant-social')).toContainText('recognized contacts');await page.screenshot({path:info.outputPath('worker-senses-and-contact.png')});
   await page.getByRole('button',{name:'Close ant profile'}).click();await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Disturb the ground',exact:true}).click();
   await expect(page.locator('#placement-text')).toContainText('brief local alarm');const viewport=page.viewportSize();await page.locator('#world').click({position:{x:viewport.width*.5-(viewport.width>550?115:0),y:viewport.height*(viewport.width>550?.48:.30)}});await expect(page.getByRole('status').filter({hasText:'raised an alarm'})).toBeVisible();await page.screenshot({path:info.outputPath('local-alarm-response.png')});
@@ -99,14 +107,14 @@ test('a collected water portion removes visible finite squares and survives a sa
     await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
     return page.evaluate(id=>{const c=JSON.parse(localStorage.getItem('little-colony.web.v1')).colony;return c.ants.some(a=>a.cargoKind==='water'&&a.carried>0)||c.waterDelivered>0;},patchID);
   },{timeout:20000,intervals:[500,1000]}).toBe(true);
-  await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
+  await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
   const remaining=await page.evaluate(id=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.world.patches.find(p=>p.id===id).amount,patchID);expect(remaining).toBeLessThan(3);expect(remaining).toBeGreaterThanOrEqual(0);
   await page.screenshot({path:info.outputPath('finite-water-after.png')});await page.reload();await expect(page.locator('#game')).toHaveAttribute('data-ready','true');
 });
 
 test('mature low mounds, organic galleries and chemical signals render together',async({page},info)=>{
   const raw=readFileSync(new URL('../fixtures/v6-mature.json',import.meta.url),'utf8');
-  await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await page.getByRole('button',{name:'Show pheromone trails'}).click();await page.screenshot({path:info.outputPath('mature-mound-and-organic-galleries.png')});
+  await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});await page.getByRole('button',{name:'Show pheromone trails'}).click();await page.screenshot({path:info.outputPath('mature-mound-and-organic-galleries.png')});
 });
 test('a v0.4 colony upgrades without retaining its old patrol loop',async({page})=>{
   const data=JSON.parse(readFileSync(new URL('../fixtures/v4-colony.json',import.meta.url),'utf8'));data.colony.ants[1].task='patrolling';data.colony.ants[1].caste='major';
@@ -116,42 +124,42 @@ test('a v0.4 colony upgrades without retaining its old patrol loop',async({page}
 
 test('an unstable older mound settles without losing the colony or its soil',async({page},info)=>{
   const raw=readFileSync(new URL('../fixtures/v5-unstable.json',import.meta.url),'utf8'),original=JSON.parse(raw).colony;
-  await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();
+  await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});
   await expect(page.locator('#ants-count')).toHaveText(String(original.ants.length));await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
   const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony);expect(saved.world.geometryVersion).toBe(2);expect(saved.world.soilDeposited).toBe(original.world.soilDeposited);expect(saved.food).toBeGreaterThan(original.food-.5);
   const peak=Math.min(...saved.world.deposits.map(id=>Number(id.split(',')[1])));expect(peak).toBeGreaterThan(-10);await page.screenshot({path:info.outputPath('older-mound-settled.png')});
 });
 
-test('fine contours remain readable when zoomed and in portrait orientation',async({page},info)=>{
-  const raw=readFileSync(new URL('../fixtures/v6-mature.json',import.meta.url),'utf8');await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();
+test('fine contours remain readable when zoomed and in portrait orientation',async({page,browserName},info)=>{
+  const raw=readFileSync(new URL('../fixtures/v6-mature.json',import.meta.url),'utf8');await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});
   if(page.viewportSize().width>1000){await page.getByRole('button',{name:'Zoom in',exact:true}).click();await page.getByRole('button',{name:'Zoom in',exact:true}).click();await page.screenshot({path:info.outputPath('fine-terrain-closeup.png')});}
   await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'Return to nest'}).click();await expect(page.getByRole('button',{name:'Open menu'})).toBeInViewport();expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);await page.screenshot({path:info.outputPath('mature-contours-portrait.png')});
 });
 
 
-test('camera sweeps use background terrain and retain a bounded cache',async({page},info)=>{
-  const raw=readFileSync(new URL('../fixtures/v6-mature.json',import.meta.url),'utf8');await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});
+test('camera sweeps use background terrain and retain a bounded cache',async({page,browserName},info)=>{
+  const raw=readFileSync(new URL('../fixtures/v6-mature.json',import.meta.url),'utf8');await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});
   await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Show performance',exact:true}).click();
   await expect.poll(async()=>JSON.parse(await page.locator('#performance-panel').getAttribute('data-readings')).terrain.worker).toBe(true);
   await page.evaluate(()=>{window.cameraFrames=[];let previous=performance.now();const frame=now=>{cameraFrames.push(now-previous);previous=now;if(cameraFrames.length<360)requestAnimationFrame(frame);};requestAnimationFrame(frame);});
-  const {width,height}=page.viewportSize();for(let i=0;i<4;i++){await page.mouse.move(width*.6,height*.6);await page.mouse.down();await page.mouse.move(width*(i%2?.85:.25),height*.65,{steps:18});await page.mouse.up();await page.mouse.wheel(0,i%2?-400:400);}
+  const {width,height}=page.viewportSize();for(let i=0;i<4;i++){await page.mouse.move(width*.6,height*.6);await page.mouse.down();await page.mouse.move(width*(i%2?.85:.25),height*.65,{steps:18});await page.mouse.up();await zoomCamera(page,browserName,i%2?-400:400);}
   await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});
   const report=await page.evaluate(()=>{const frames=cameraFrames.slice(3).sort((a,b)=>a-b);return {frames:frames.length,p95:frames[Math.floor(frames.length*.95)],max:frames.at(-1),...JSON.parse(document.querySelector('#performance-panel').dataset.readings)};});expect(report.frames).toBeGreaterThan(20);expect(report.p95).toBeLessThan(110);expect(report.terrain.worker).toBe(true);expect(report.terrainCacheBytes).toBeLessThanOrEqual(24*1024*1024);expect(report.terrain.built).toBeGreaterThan(0);await info.attach('camera-performance.json',{body:JSON.stringify(report,null,2),contentType:'application/json'});await page.screenshot({path:info.outputPath('responsive-camera.png')});
 });
 
-test('10000-ant saves use atomic database generations and the roster stays paged',async({page},info)=>{
+test('10000-ant saves use atomic database generations and the roster stays paged',async({page,browserName},info)=>{
   test.setTimeout(120000);const d=JSON.parse(readFileSync(new URL('../fixtures/v6-mature.json',import.meta.url),'utf8'));d.colony.settings.populationCap=10000;d.colony.settings.eggRate=0;const baby=d.colony.brood[0];const open=d.colony.world.excavated.map(id=>id.split(',').map(Number));
   d.colony.ants=Array.from({length:10000},(_,id)=>({id,caste:id?'worker':'queen',cell:open[id%open.length],pos:open[id%open.length],task:id?'reserve':'queenRest',busyUntil:1e9,energy:1,hydration:1,health:1,age:0,initialAgeDays:1}));
   d.colony.brood=Array.from({length:1000},(_,i)=>({...baby,id:100000+i,cell:open[i%open.length],carriedBy:null,age:6000,nutrition:1,vitality:1}));d.colony.nextID=101000;
   await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),JSON.stringify(d));await page.reload();await expect(page.locator('#ants-count')).toHaveText('10000');
-  await page.evaluate(()=>{window.largeFrames=[];let previous=performance.now();const frame=now=>{largeFrames.push(now-previous);previous=now;if(largeFrames.length<240)requestAnimationFrame(frame);};requestAnimationFrame(frame);});const viewport=page.viewportSize();for(let i=0;i<2;i++){await page.mouse.move(viewport.width*.65,viewport.height*.65);await page.mouse.down();await page.mouse.move(viewport.width*.35,viewport.height*.6,{steps:24});await page.mouse.up();await page.mouse.wheel(0,i?-250:250);}
-  const motion=await page.evaluate(()=>{const frames=largeFrames.slice(3).sort((a,b)=>a-b);return {frames:frames.length,p95:frames[Math.floor(frames.length*.95)],max:frames.at(-1)};});expect(motion.frames).toBeGreaterThan(12);expect(motion.p95).toBeLessThan(150);await info.attach('10000-ant-camera.json',{body:JSON.stringify(motion),contentType:'application/json'});await page.getByRole('button',{name:'Pause simulation',exact:true}).click();
+  await page.evaluate(()=>{window.largeFrames=[];let previous=performance.now();const frame=now=>{largeFrames.push(now-previous);previous=now;if(largeFrames.length<240)requestAnimationFrame(frame);};requestAnimationFrame(frame);});const viewport=page.viewportSize();for(let i=0;i<2;i++){await page.mouse.move(viewport.width*.65,viewport.height*.65);await page.mouse.down();await page.mouse.move(viewport.width*.35,viewport.height*.6,{steps:24});await page.mouse.up();await zoomCamera(page,browserName,i?-250:250);}
+  const motion=await page.evaluate(()=>{const frames=largeFrames.slice(3).sort((a,b)=>a-b);return {frames:frames.length,p95:frames[Math.floor(frames.length*.95)],max:frames.at(-1)};});expect(motion.frames).toBeGreaterThan(12);expect(motion.p95).toBeLessThan(150);await info.attach('10000-ant-camera.json',{body:JSON.stringify(motion),contentType:'application/json'});await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});
   await page.getByRole('button',{name:'Open colony roster'}).click();expect(await page.locator('.ant-row').count()).toBe(100);await page.getByRole('button',{name:'Show next 100 ants',exact:true}).click();expect(await page.locator('.ant-row').count()).toBe(200);await page.getByRole('button',{name:'Close colony roster'}).click();
   await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Colony & reproduction',exact:true}).click();await expect(page.locator('#population-cap')).toHaveValue('10000');for(const cap of ['20','40','750','1000','2000','5000','7500','10000'])expect(await page.locator(`#population-cap option[value="${cap}"]`).count()).toBe(1);await page.getByRole('button',{name:'Back to the colony',exact:true}).click();
   await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();await expect(page.getByRole('status').filter({hasText:'Your colony is saved'})).toBeVisible({timeout:45000});
-  expect(await page.evaluate(()=>localStorage.getItem('little-colony.web.v1.database'))).toBe('1');await page.reload();await expect(page.locator('#ants-count')).toHaveText('10000');await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();await expect(page.getByRole('status').filter({hasText:'Your colony is saved'})).toBeVisible({timeout:45000});
+  expect(await page.evaluate(()=>localStorage.getItem('little-colony.web.v1.database'))).toBe('1');await page.reload();await expect(page.locator('#ants-count')).toHaveText('10000');await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();await expect(page.getByRole('status').filter({hasText:'Your colony is saved'})).toBeVisible({timeout:45000});
   const heads=await page.evaluate(async()=>{const {ColonyStore}=await import('./large-saves.mjs'),s=new ColonyStore(localStorage);return s.read(['primary','backup']);});expect(heads[0].ants).toBe(10000);expect(heads[1].ants).toBe(10000);expect(heads[0].id).not.toBe(heads[1].id);await info.attach('large-save-heads.json',{body:JSON.stringify(heads),contentType:'application/json'});
-  await page.evaluate(async id=>{const {ColonyStore}=await import('./large-saves.mjs'),s=new ColonyStore(localStorage);await s.put(id+':meta',null);},heads[0].id);await page.reload();await expect(page.locator('#ants-count')).toHaveText('10000');await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();await expect(page.getByRole('status').filter({hasText:'Your colony is saved'})).toBeVisible({timeout:45000});const backup=await page.evaluate(async()=>{const {ColonyStore}=await import('./large-saves.mjs');return (await new ColonyStore(localStorage).read(['backup']))[0];});expect(backup.id).toBe(heads[1].id);
+  await page.evaluate(async id=>{const {ColonyStore}=await import('./large-saves.mjs'),s=new ColonyStore(localStorage);await s.put(id+':meta',null);},heads[0].id);await page.reload();await expect(page.locator('#ants-count')).toHaveText('10000');await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();await expect(page.getByRole('status').filter({hasText:'Your colony is saved'})).toBeVisible({timeout:45000});const backup=await page.evaluate(async()=>{const {ColonyStore}=await import('./large-saves.mjs');return (await new ColonyStore(localStorage).read(['backup']))[0];});expect(backup.id).toBe(heads[1].id);
 });
 
 test('terrain rendering falls back to bounded row batches when workers are unavailable',async({page},info)=>{
