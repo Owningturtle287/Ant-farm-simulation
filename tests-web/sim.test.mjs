@@ -13,7 +13,7 @@ import {broodStage} from '../web/biology.mjs';
 import {advanceSimulation} from '../web/clock.mjs';
 import {cropCapacity as socialCapacity,waterCapacity,foodFill,consumeSelf,shareCrops,updateSupplyTotals,supplyBalance,accountIntake,bedRelease,initializeSupplies} from '../web/provisions.mjs';
 import {tickGroundwater,tableLevel} from '../web/hydrology.mjs';
-import {freeCell,slotKey} from '../web/item-space.mjs';
+import {freeCell,slotKey,findBed,holdCell,releaseCell} from '../web/item-space.mjs';
 import {SaveStore,SAVE_KEY,decodeSave} from '../web/persistence.mjs';
 function primeCrop(c,a,food=0,protein=0,water=0){for(const [field,kind,n] of [['socialFood','energy',food],['socialProtein','protein',protein],['socialWater','water',water]]){c.supplyLedger[kind].introduced+=n-(a[field]??0);a[field]=n;}updateSupplyTotals(c);}
 function clearBrood(c){for(const b of c.brood)bedRelease(c,b);c.brood=[];}
@@ -491,4 +491,8 @@ test('a protein-rich crop fuels work without a repeated empty energy-cache visit
 test('groundwater preserves dry route caches and invalidates them when passages flood',()=>{
   const w=new World(287);assert.ok(w.path(w.nest,[-4,12]));assert.ok(w.pathCache.size>0);tickGroundwater(w,2);assert.ok(w.pathCache.size>0,'A distant groundwater horizon must not discard dry routes every two seconds.');
   w.carve([0,35],1,1);assert.ok(w.walkable([0,35]));assert.ok(w.path(w.nest,[-4,12]));w.groundwater.targetDepth=24;tickGroundwater(w,1000);assert.equal(w.walkable([0,35]),false);assert.equal(w.pathCache.size,0,'Flooded topology must invalidate routes.');
+});
+test('nursery searches reuse geometry while observing new reservations, releases and excavation',()=>{
+  const c=new Colony(),w=c.world,near=w.nest,first=findBed(w,near);assert.ok(first);assert.ok(holdCell(w,first,'test-bed'));const other=findBed(w,near);assert.ok(other);assert.notDeepEqual(other,first);releaseCell(w,first,'test-bed');assert.deepEqual(findBed(w,near),first);
+  const far=[100,12];findBed(w,far);w.carve(far,1,1);assert.deepEqual(findBed(w,far),far);assert.ok(w.bedPools.size<=16);
 });

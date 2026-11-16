@@ -43,8 +43,8 @@ function updateUI(){
   const clockMinutes=Math.floor((colony.time%DAY)/DAY*1440);
   $('weather').textContent=colony.world.weather.raining?'Rain · puddles filling':'Dry weather · grassland';
   $('day').textContent=`Day ${colony.day} · ${String(Math.floor(clockMinutes/60)).padStart(2,'0')}:${String(clockMinutes%60).padStart(2,'0')}`;$('event').textContent=colony.events[0]?.text??'Life, one small step at a time.';
-  $('pause-badge').hidden=!state.paused;$('pause').setAttribute('aria-label',state.paused?'Resume simulation':'Pause simulation');$('pause-icon').textContent=state.paused?'▶':'Ⅱ';
-  $('speed').textContent=state.speed+'×';$('speed').setAttribute('aria-label',`Simulation speed: ${state.speed} times`);
+  const pauseLabel=state.paused?'Resume simulation':'Pause simulation',pauseIcon=state.paused?'▶':'Ⅱ';$('pause-badge').hidden=!state.paused;if($('pause').getAttribute('aria-label')!==pauseLabel)$('pause').setAttribute('aria-label',pauseLabel);if($('pause-icon').textContent!==pauseIcon)$('pause-icon').textContent=pauseIcon;
+  const speedText=state.speed+'×';if($('speed').textContent!==speedText){$('speed').textContent=speedText;$('speed').setAttribute('aria-label',`Simulation speed: ${state.speed} times`);}
   const ant=selectedAnt();$('inspector').hidden=!ant;
   if(ant){$('ant-name').textContent=antName(ant);$('ant-caste').textContent=casteLabel(ant).toUpperCase();$('ant-task').textContent=taskLabels[ant.task];
     for(const metric of ['energy','health','hydration']){$(metric+'-value').textContent=Math.round(ant[metric]*100)+'%';$(metric+'-bar').style.width=ant[metric]*100+'%';}

@@ -39,7 +39,12 @@ export function restorePieces(w){
   for(const p of w.patches){const amount=p.amount;p.pieces??=[];for(const item of p.pieces)if(item.amount>0&&(w.itemSlots.has(slotKey(item.pos))||!reserveSlot(w,item.pos,owner(p))))throw Error('Overlapping resource items in saved ground');if(!p.pieces.length&&amount>0){const placed=allocatePieces(w,p,amount);if(placed<amount-1e-7){p.amount=placed;if(w.resourceLedger)w.resourceLedger[p.kind].buried+=amount-placed;}}}
 }
 export function openNestCells(w){if(w.itemCellsRevision!==w.revision){w.itemCellsRevision=w.revision;w.itemCells=[...w.excavated,...w.moundTunnels].map(k=>k.split(',').map(Number)).filter(c=>w.walkable(c)&&!w.onSurface(c)&&w.conditions(c).humidity<.88);const seen=new Set();w.itemCells=w.itemCells.filter(c=>{const k=cellKey(c);if(seen.has(k))return false;seen.add(k);return true;});}return w.itemCells;}
-export function findBed(w,near,id=null){let best=null,score=Infinity;for(const c of openNestCells(w)){if(!freeCell(w,c,id))continue;const d=Math.hypot(c[0]-near[0],c[1]-near[1]);if(d<score){score=d;best=c;}}return best&&[...best];}
+export function findBed(w,near,id=null){
+  const cells=openNestCells(w);if(w.bedPoolCells!==cells){w.bedPoolCells=cells;w.bedPools=new Map();}
+  const key=cellKey(near);let ordered=w.bedPools.get(key);if(!ordered){ordered=cells.map(c=>({c,d:Math.hypot(c[0]-near[0],c[1]-near[1])})).sort((a,b)=>a.d-b.d).map(v=>v.c);if(w.bedPools.size>=16)w.bedPools.delete(w.bedPools.keys().next().value);w.bedPools.set(key,ordered);}
+  // Geometry order is cached; actual reservations are always checked at pickup time.
+  const best=ordered.find(c=>freeCell(w,c,id));return best&&[...best];
+}
 export function cachePositions(w,near){const cells=openNestCells(w);return [...cells].sort((a,b)=>Math.hypot(a[0]-near[0],a[1]-near[1])-Math.hypot(b[0]-near[0],b[1]-near[1])).flatMap(c=>{const out=[];for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++)out.push([c[0]+x/SUB,c[1]+y/SUB]);return out;});}
 export function findCacheSlot(w,near){
   const anchor=cellKey(near);if(w.cachePoolRevision!==w.revision||w.cachePoolAnchor!==anchor){w.cachePoolRevision=w.revision;w.cachePoolAnchor=anchor;w.cachePool=cachePositions(w,near);w.cacheCursor=0;}
