@@ -488,3 +488,7 @@ test('a protein-rich crop fuels work without a repeated empty energy-cache visit
   const c=new Colony(287,{eggRate:0}),q=c.ants[0],a=c.ants[1];primeCrop(c,q,3,1,2);primeCrop(c,a,0,socialCapacity(a),1);a.energy=.5;clearBrood(c);c.updateDemand();c.chooseJob(a);assert.notEqual(a.cachePurpose==='self'&&a.task==='toCache',true);
   for(let i=0;i<20;i++)consumeSelf(c,a,1);assert.ok(a.energy>.95);assert.ok(a.socialProtein<socialCapacity(a));assert.ok(Math.abs(supplyBalance(c,'protein').error)<1e-7);
 });
+test('groundwater preserves dry route caches and invalidates them when passages flood',()=>{
+  const w=new World(287);assert.ok(w.path(w.nest,[-4,12]));assert.ok(w.pathCache.size>0);tickGroundwater(w,2);assert.ok(w.pathCache.size>0,'A distant groundwater horizon must not discard dry routes every two seconds.');
+  w.carve([0,35],1,1);assert.ok(w.walkable([0,35]));assert.ok(w.path(w.nest,[-4,12]));w.groundwater.targetDepth=24;tickGroundwater(w,1000);assert.equal(w.walkable([0,35]),false);assert.equal(w.pathCache.size,0,'Flooded topology must invalidate routes.');
+});

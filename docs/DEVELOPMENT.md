@@ -142,3 +142,5 @@ Do not turn path waypoints into position teleports. Validate continuous segments
 The minimum zoom is 0.10. Two- and four-pixel terrain levels lower contour-sampling cost at distant views, while the 16-pixel raster checksum remains unchanged. The worker accepts up to four distant tiles per batch, keeping the existing byte-bounded cache and cooperative fallback. New modules are precached for offline reopening.
 
 Regression coverage includes shared item-space uniqueness, local crop transfers and mass balance, dry-pool depletion, finite/recharged aquifer columns, depth changes, legacy stacked-brood conversion, abandoned-claim cleanup, crop/cache persistence, the broader phone camera, and the existing 10,000-ant save/camera scenarios. The drought fixture was produced by actual worker digging and collection, not a pre-carved instant water source.
+
+Groundwater sampling retains route and neighbor caches while traversability is unchanged. Crossing a flooded-cell boundary invalidates them; depth changes also refresh dry item-space candidates. This avoids making every ant repeat its route search on the two-second water sampling interval.
