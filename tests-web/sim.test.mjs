@@ -340,3 +340,21 @@ test('mound branches reuse nearby passages instead of repeatedly opening the que
   let planned=false;for(let i=0;i<10&&!planned;i++)planned=planMoundPassage(w,new Random(i+1600),1000);assert.ok(planned);
   const original=w.construction.filter(c=>c[1]>=w.baseSurface(c[0]));assert.ok(original.length<18);assert.ok(original.every(c=>Math.hypot(c[0]-w.nest[0],c[1]-w.nest[1])>1));
 });
+
+test('cooperative ticks yield and finish with the same colony and RNG state as synchronous ticks',async()=>{
+  const {SimulationRunner}=await import('../web/clock.mjs'),a=new Colony(287,{startingWorkers:40}),b=Colony.fromJSON(JSON.parse(JSON.stringify(a))),runner=new SimulationRunner();let clock=0,yielded=false;
+  for(let i=0;i<30;i++){runner.advance(a,.1,1,false,()=>clock++,1);yielded||=runner.busy;}
+  await runner.finish(a);const ticks=Math.round(a.time/.1);for(let i=0;i<ticks;i++)b.step();assert.ok(yielded);assert.ok(ticks>0);assert.deepEqual(a.toJSON(),b.toJSON());
+});
+test('population ceilings support 10000 while retaining small defaults and valid saved adults',()=>{
+  const c=new Colony(287,{populationCap:10000});assert.equal(LIMIT,10000);assert.equal(c.settings.populationCap,10000);assert.equal(c.ants.length,13);assert.equal(new Colony().settings.populationCap,120);c.setSettings({populationCap:12000});assert.equal(c.settings.populationCap,10000);
+  const d=JSON.parse(JSON.stringify(c));d.ants=Array.from({length:10000},(_,id)=>({id,caste:id?'worker':'queen',cell:[0,11],pos:[0,11]}));const restored=Colony.fromJSON(d);assert.equal(restored.ants.length,10000);assert.equal(restored.settings.populationCap,10000);assert.equal(restored.ants.at(-1).id,9999);
+});
+test('terrain cache keeps revisited chunks and evicts by bytes in least-recent order',async()=>{
+  const {TerrainCache}=await import('../web/render-cache.mjs'),cache=new TerrainCache(12);cache.put('a',{bytes:4});cache.put('b',{bytes:4});cache.put('c',{bytes:4});assert.ok(cache.get('a'));cache.put('d',{bytes:4});assert.equal(cache.get('b'),undefined);assert.equal(cache.bytes,12);assert.equal(cache.size,3);cache.put('a',{bytes:8});assert.ok(cache.bytes<=12);cache.clear();assert.equal(cache.bytes,0);
+});
+test('terrain snapshots are isolated, preserve full-detail pixels, and support lower zoom detail',async()=>{
+  const {snapshotTerrain,rasterTerrain,rasterRows}=await import('../web/terrain-raster.mjs'),{createHash}=await import('node:crypto'),c=Colony.fromJSON(JSON.parse(readFileSync(new URL('./fixtures/v6-mature.json',import.meta.url),'utf8')).colony),s=snapshotTerrain(c.world,0,1),full=rasterTerrain(s);
+  assert.equal(createHash('sha256').update(full.data).digest('hex'),'54830c2ac29cd093852ef5af29b6e8a9125a1e4e8e31c5cd8afc0cb045dabdae');const rows=rasterRows(s);let r,yields=0;do{r=rows.next();yields++;}while(!r.done);assert.ok(yields>30);assert.deepEqual(r.value.data,full.data);
+  c.world.deposits.clear();assert.deepEqual(rasterTerrain(s).data,full.data);const low=rasterTerrain({...s,lod:8});assert.equal(low.size,128);assert.equal(low.data.length,full.data.length/4);
+});

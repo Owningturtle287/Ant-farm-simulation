@@ -1,4 +1,4 @@
-# Living terrain · v0.6
+# Responsive terrain · v0.7
 
 The reference species is the red imported fire ant, **Solenopsis invicta**, using the **single-queen (monogyne)** social form. This is a mechanistic, research-informed game model. It is not a reconstruction of neurons, a fitted whole-colony biological model, or an exact ant brain.
 
@@ -73,3 +73,8 @@ Passage candidates use curved centerlines with connected raster bridges; chamber
 When an older save contains an unstable mound or a wide near-surface breach, a one-time correction regrades its existing solid spoil. Some of the same spoil closes excess shallow openings around a retained narrow shaft. Remaining spoil forms a supported surface pile. Ant identities, brood, stores, elapsed time, soil totals and original excavation records survive. Surface occupants and occupants of filled cells move to valid nearby positions; carried brood stays with its carrier. Already stable mounds retain their layout. Geometry version 2 prevents repeated corrections on subsequent loads.
 
 Regression coverage includes 1,500 deposition cycles across seeds with intermittent gallery digging, support/height checks, legacy repair, connected curved routes, contour chunk boundaries, mature 120-ant screenshots, close-up and portrait views. The 120-day Actions scenario now checks exterior slopes and gallery share as well as population and material accounting.
+
+
+## v0.7 population experiments
+
+Ceilings up to 10,000 are growth controls rather than biological changes or supported-device claims. The default remains 12 workers plus a queen and a 120-adult ceiling. Every ant retains individual physiology, memory, contact behavior and task decisions. Cooperative scheduling may slow simulated time under load; it does not replace ants with aggregate agents. At a distant view, overlapping sprites and brood are drawn with a density limit; selection always shows the selected ant. See the development notes for camera rendering, complete-tick saving and stress-test scope.

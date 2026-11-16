@@ -48,3 +48,6 @@ Grain appears on grass heads. Harvested clumps wither, then regrow after a delay
 Food placement now supplies finite insect pieces and nectar. Water squares vanish as ants collect portions. Natural rain and plants add new stock; later insect arrivals are distinct resources. **Trails** shows the chemical cue legend. At **1×**, use **More → Disturb the ground**, then tap close to workers to watch a temporary alarm. Tapping empty ground produces no worker alarm.
 
 Updates preserve existing progress. Start a new colony only when you want the revised narrow peripheral founder entrance. Existing workers adopt the new behavior in place, including release from old patrol loops.
+
+
+Population ceilings now range from 20 to 10,000 under More → Colony & reproduction; the default stays 120. High ceilings are experimental. Large colonies save in the browser's database with a previous complete generation as backup. Keep the same browser/Home Screen origin, and export a backup before clearing site data. Actual speed in More → Show performance records what the device sustains.

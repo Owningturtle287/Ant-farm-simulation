@@ -1,9 +1,8 @@
+import {TerrainCache} from './render-cache.mjs';
+import {rasterRows,coarseTerrain,snapshotTerrain} from './terrain-raster.mjs';
 import {cell,key,broodStage} from './sim.mjs';
-import {MATERIALS,baseMaterial,hashCell} from './materials.mjs';
 import {resourceTiles} from './resources.mjs';
-import {terrainMask,densityAt,TERRAIN_PIXELS,CONTOUR_SAMPLES} from './geometry.mjs';
 import {SIGNAL_COLORS} from './signals.mjs';
-const rgbCache=new Map();function rgb(hex){if(!rgbCache.has(hex))rgbCache.set(hex,[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)));return rgbCache.get(hex);}
 function buffer(w,h) { const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
 function antSprite(caste,frame) {
   const image=buffer(32,18),c=image.getContext('2d');
@@ -24,7 +23,8 @@ function broodPixel(c,stage,x,y,z){
 export class Renderer {
   constructor(canvas) {
     this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});this.width=1;this.height=1;this.camera={x:0,y:0,zoom:1};
-    this.chunks=new Map();this.sprites={};this.positions=new Map();
+    this.chunks=new TerrainCache();this.sprites={};this.positions=new Map();this.frameID=0;this.epoch=0;this.active=null;this.requests=new Map();this.fallback=null;this.renderStats={worker:false,built:0,hits:0,misses:0,mainRasterMs:0,workerRasterMs:0,drawnAnts:0};
+    try{this.worker=new Worker(new URL('./terrain-worker.mjs',import.meta.url),{type:'module'});this.renderStats.worker=true;this.worker.onmessage=e=>this.acceptTerrain(e.data);this.worker.onerror=()=>this.workerFailed();}catch{this.worker=null;}
     for(const caste of ['queen','worker','major']) this.sprites[caste]=Array.from({length:4},(_,frame)=>antSprite(caste,frame));
     this.resize();this.home();
   }
@@ -40,7 +40,7 @@ export class Renderer {
     this.camera.zoom=Math.max(.35,Math.min(this.camera.zoom,(this.width-48)/((maxX-minX+6)*14),Math.max(100,bottom-top)/((maxY-minY+6)*14)));
     this.camera.x=(minX+maxX)/2;this.camera.y=minY-3-(top-this.height*.30)/this.unit;
   }
-  reset() {this.chunks.clear();this.positions.clear();this.home();}
+  reset() {this.epoch++;this.chunks.clear();this.positions.clear();this.requests.clear();this.active=null;this.fallback=null;this.home();}
   screen([x,y]) {return [this.width/2+(x-this.camera.x)*this.unit,this.height*.30+(y-this.camera.y)*this.unit];}
   world([x,y]) {return [(x-this.width/2)/this.unit+this.camera.x,(y-this.height*.30)/this.unit+this.camera.y];}
   zoom(factor,anchor=[this.width/2,this.height/2]) {
@@ -51,38 +51,30 @@ export class Renderer {
     const wide=this.width>550;
     return {x:a.pos[0]+(wide?115/this.unit:0),y:a.pos[1]-(wide?this.height*.18/this.unit:0)};
   }
-  chunk(world,cx,cy) {
-    const id=key([cx,cy]),version=world.chunkRevisions.get(id)??0,old=this.chunks.get(id);
-    if(old?.version===version) return old.image;
-    const size=16*TERRAIN_PIXELS,image=buffer(size,size),c=image.getContext('2d'),pixels=c.createImageData(size,size),data=pixels.data,mask=terrainMask(world,cx,cy),maskSize=16*CONTOUR_SAMPLES;
-    const palette={};for(const [name,m] of Object.entries(MATERIALS)){palette[name]={colors:m.colors.map(rgb),light:rgb(m.light),dark:rgb(m.dark)};}
-    const ox=cx*16-.5,oy=cy*16-.5,solid=(x,y)=>world.solid([x,y]);
-    const filled=(x,y)=>x>=0&&x<maskSize&&y>=0&&y<maskSize?mask[y*maskSize+x]:densityAt(ox+(x+.5)/CONTOUR_SAMPLES,oy+(y+.5)/CONTOUR_SAMPLES,solid)>=.5;
-    const cells=[];for(let ly=0;ly<16;ly++)for(let lx=0;lx<16;lx++){
-      const wx=cx*16+lx,wy=cy*16+ly,type=world.deposits.has(key([wx,wy]))||wy<world.baseSurface(wx)?'spoil':baseMaterial([wx,wy],world.seed,world.baseSurface(wx));
-      cells.push({wx,wy,type,base:palette[type].colors[0],wall:world.coveredMound([wx,wy])||(wy<world.baseSurface(wx)&&wy>world.surface(wx)),grass:type==='topsoil'&&wy===world.baseSurface(wx)&&!world.patches.some(p=>p.origin==='grass'&&p.stage==='dead'&&Math.abs(p.cell[0]-wx)<=1)});
-    }
-    for(let y=0;y<size;y++)for(let x=0;x<size;x++){
-      const mx=x>>1,my=y>>1,inside=mask[my*maskSize+mx],info=cells[(y>>4)*16+(x>>4)],gx=cx*size+x,gy=cy*size+y,h=hashCell([gx,gy],world.seed),idx=(y*size+x)*4;
-      let color,shade=0;
-      if(inside){
-        color=info.base;shade=((h>>>8)%9)-4;
-        if(info.type!=='spoil'){const depth=oy+(y+.5)/TERRAIN_PIXELS-world.baseSurface(info.wx),mix=Math.max(0,Math.min(1,(depth-3+Math.sin((ox+x/TERRAIN_PIXELS)*.18+world.seed)*.65)/5));color=palette.topsoil.colors[0].map((v,i)=>v*(1-mix)+palette.earth.colors[0][i]*mix);}
-        // Fine grains replace the old repeating eight-pixel blocks; crumb clusters remain distinct from rooted earth.
-        const cluster=hashCell([Math.floor(gx/3),Math.floor(gy/2)],world.seed);
-        if(info.type==='spoil'){if(cluster%7===0)color=palette.spoil.light;else if(cluster%9===0)color=palette.spoil.dark;}
-        else if(h%29===0)color=palette[info.type].light;else if(h%37===0)color=palette[info.type].dark;
-        if(info.type==='topsoil'&&cluster%127===0)shade-=18;
-        if(!filled(mx,my-1))shade+=15;if(!filled(mx-1,my))shade+=6;if(!filled(mx,my+1))shade-=23;
-        if(info.grass&&!filled(mx,my-1))color=rgb('#879d58');
-      }else if(oy+(y+.5)/TERRAIN_PIXELS>=world.baseSurface(info.wx)-.5||info.wall){
-        color=rgb(info.wall?'#58432e':info.type==='topsoil'?'#302a22':'#423525');shade=(h%9)-4;
-        if(filled(mx,my-1)||filled(mx-1,my))shade-=10;
-      }else continue;
-      data[idx]=Math.max(0,Math.min(255,color[0]+shade));data[idx+1]=Math.max(0,Math.min(255,color[1]+shade));data[idx+2]=Math.max(0,Math.min(255,color[2]+shade));data[idx+3]=255;
-    }
-    c.putImageData(pixels,0,0);
-    this.chunks.set(id,{image,version});return image;
+  terrainImage(result){const image=buffer(result.size,result.size);image.getContext('2d').putImageData(new ImageData(result.data,result.size,result.size),0,0);return image;}
+  acceptTerrain(job){
+    if(job.epoch!==this.epoch)return;const active=this.active;if(!active||active.id!==job.id)return;this.active=null;
+    if(job.error){this.workerFailed();return;}
+    this.chunks.put(job.id,{image:this.terrainImage({data:new Uint8ClampedArray(job.pixels),size:job.size}),bytes:job.size*job.size*4,version:job.version,detail:true,at:performance.now()});this.renderStats.built++;this.renderStats.workerRasterMs=job.cost;
+  }
+  workerFailed(){this.worker?.terminate();this.worker=null;this.active=null;this.fallback=null;this.renderStats.worker=false;}
+  chunk(world,cx,cy,lod){
+    const id=`${cx},${cy},${lod}`,version=world.chunkRevisions.get(key([cx,cy]))??0,old=this.chunks.get(id);
+    if(old?.version===version&&old.detail){this.renderStats.hits++;return old.image;}
+    if(old?.detail&&performance.now()-old.at<100)return old.image;
+    this.renderStats.misses++;this.requests.set(id,{id,cx,cy,lod,version,priority:(old?.detail?1000:0)+Math.hypot(cx*16+8-this.camera.x,cy*16+8-this.camera.y)});
+    if(old)return old.image;
+    const alternate=this.chunks.get(`${cx},${cy},${lod===16?8:16}`);if(alternate)return alternate.image;
+    if(performance.now()>this.previewDeadline)return null;
+    const began=performance.now(),snapshot=snapshotTerrain(world,cx,cy,lod),result=coarseTerrain(snapshot),image=this.terrainImage(result);this.chunks.put(id,{image,bytes:16*16*4,version,detail:false});this.renderStats.mainRasterMs+=performance.now()-began;return image;
+  }
+  serviceTerrain(world){
+    if(this.active)return;
+    if(this.fallback){const until=performance.now()+1.5;let result;do{result=this.fallback.rows.next();}while(!result.done&&performance.now()<until);if(result.done){const f=this.fallback;this.fallback=null;this.chunks.put(f.job.id,{image:this.terrainImage(result.value),bytes:result.value.size**2*4,version:f.job.version,detail:true,at:performance.now()});this.renderStats.built++;}return;}
+    const job=[...this.requests.values()].sort((a,b)=>a.priority-b.priority)[0];if(!job)return;
+    const snapshot=snapshotTerrain(world,job.cx,job.cy,job.lod);
+    if(this.worker){this.active=job;this.worker.postMessage({...job,epoch:this.epoch,snapshot},[snapshot.solid.buffer,snapshot.ground.buffer,snapshot.surface.buffer,snapshot.deposits.buffer,snapshot.covered.buffer]);}
+    else this.fallback={job,rows:rasterRows(snapshot)};
   }
   landscape(world) {
     const c=this.ctx,w=this.width,h=this.height,ground=this.screen([0,.5])[1],scale=this.camera.zoom;
@@ -142,20 +134,22 @@ export class Renderer {
 
   draw(colony,options,dt,clock) {
     const c=this.ctx,u=this.unit,z=this.camera.zoom;c.setTransform(this.dpr,0,0,this.dpr,0,0);c.imageSmoothingEnabled=false;
-    this.landscape(colony.world);
-    const min=this.world([-u*16,-u*16]),max=this.world([this.width+u*16,this.height+u*16]),visible=new Set();
+    this.frameID++;this.landscape(colony.world);
+    this.requests.clear();this.previewDeadline=performance.now()+1.5;this.renderStats.drawnAnts=0;this.renderStats.crowdSkipped=0;const crowd=new Map(),broodCrowd=new Map();const lod=u*this.dpr>=13?16:8;
+    const min=this.world([-u,-u]),max=this.world([this.width+u,this.height+u]);
     for(let cy=Math.floor(min[1]/16);cy<=Math.floor(max[1]/16);cy++) for(let cx=Math.floor(min[0]/16);cx<=Math.floor(max[0]/16);cx++) {
-      const [x,y]=this.screen([cx*16-.5,cy*16-.5]);visible.add(key([cx,cy]));c.drawImage(this.chunk(colony.world,cx,cy),Math.round(x),Math.round(y),Math.ceil(u*16)+.2,Math.ceil(u*16)+.2);
+      const [x,y]=this.screen([cx*16-.5,cy*16-.5]),image=this.chunk(colony.world,cx,cy,lod);if(image)c.drawImage(image,Math.round(x),Math.round(y),Math.ceil(u*16)+.2,Math.ceil(u*16)+.2);else{const ground=this.screen([cx*16,colony.world.baseSurface(cx*16)-.5])[1],top=Math.max(y,ground);if(top<y+u*16){c.fillStyle='#806446';c.fillRect(x,top,u*16,y+u*16-top);}}
     }
-    for(const id of this.chunks.keys()) if(!visible.has(id))this.chunks.delete(id);
+    this.serviceTerrain(colony.world);
     if(options.trails)for(const [kind,map] of Object.entries(colony.world.signals))for(const [id,strength] of map)if(strength>.08){const [x,y]=this.screen(cell(id));c.globalAlpha=Math.min(.8,strength*.4);c.fillStyle=SIGNAL_COLORS[kind];c.fillRect(x-2*z,y-4*z,kind==='alarm'?6*z:4*z,kind==='alarm'?4*z:2*z);c.globalAlpha=1;}
     const visualClock=options.paused?colony.time:clock;
     this.surfaceLife(colony.world,visualClock);
-    for(const baby of colony.brood)if(baby.carriedBy==null){const [x,y]=this.screen(baby.cell);broodPixel(c,broodStage(baby),x+(baby.id%3-1)*2*z,y+2*z,z);}
+    for(const baby of colony.brood)if(baby.carriedBy==null&&baby.cell[0]>=min[0]-1&&baby.cell[0]<=max[0]+1&&baby.cell[1]>=min[1]-1&&baby.cell[1]<=max[1]+1){const bucket=key(baby.cell),count=broodCrowd.get(bucket)??0;if(count>=8)continue;broodCrowd.set(bucket,count+1);const [x,y]=this.screen(baby.cell);broodPixel(c,broodStage(baby),x+(baby.id%3-1)*2*z,y+2*z,z);}
     const carriedBrood=new Map(colony.brood.filter(b=>b.carriedBy!=null).map(b=>[b.carriedBy,b]));
     const live=new Set();
     for(const ant of colony.ants) {
-      live.add(ant.id);let p=this.positions.get(ant.id);if(!p){p={x:ant.pos[0],y:ant.pos[1],angle:0};this.positions.set(ant.id,p);}
+      live.add(ant.id);if(ant.pos[0]<min[0]-3||ant.pos[0]>max[0]+3||ant.pos[1]<min[1]-3||ant.pos[1]>max[1]+3)continue;const bucket=key(ant.cell),count=crowd.get(bucket)??0;if(count>=(z<1?6:16)&&ant.id!==options.selected&&ant.caste!=='queen'){this.renderStats.crowdSkipped++;continue;}crowd.set(bucket,count+1);this.renderStats.drawnAnts++;let p=this.positions.get(ant.id);if(!p){p={x:ant.pos[0],y:ant.pos[1],angle:0};this.positions.set(ant.id,p);}
+      if(p.frame!==this.frameID-1){p.x=ant.pos[0];p.y=ant.pos[1];}p.frame=this.frameID;
       const blend=options.speed>4?1:1-Math.exp(-dt*22);p.x+=(ant.pos[0]-p.x)*blend;p.y+=(ant.pos[1]-p.y)*blend;
       if(ant.route.length){const next=ant.route[0],dx=next[0]-ant.pos[0],dy=next[1]-ant.pos[1];if(Math.abs(dx)+Math.abs(dy)>.01)p.angle=Math.atan2(dy,dx);}
       const [x,y]=this.screen([p.x,p.y]);if(x<-50 || y<-50 || x>this.width+50 || y>this.height+50)continue;

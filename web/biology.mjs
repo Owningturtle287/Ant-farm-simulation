@@ -1,7 +1,8 @@
 // Tunable, accelerated biological model. One colony day is ten simulation minutes.
 export const DAY=600;
 export const BROOD_DURATION=30*DAY;
-export const LIMIT=500;
+export const LIMIT=10000;
+export const POPULATION_CAPS=Object.freeze([20,40,60,100,120,200,250,500,750,1000,2000,2500,5000,7500,10000]);
 export const DEFAULT_SETTINGS=Object.freeze({startingWorkers:12,populationCap:120,eggRate:1,broodRate:1});
 export const SPEEDS=Object.freeze([1,2,4,8,16,32,64,128]);
 export const clamp=(n,min=0,max=1)=>Math.max(min,Math.min(max,n));

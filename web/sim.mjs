@@ -188,10 +188,8 @@ export class Colony{
   get alive(){return this.ants.some(a=>a.caste==='queen');}
   get nursery(){
     const rooms=this.world.rooms.filter(r=>['nursery','mound'].includes(r.kind)&&this.world.walkable(r.center));
-    rooms.sort((a,b)=>{
-      const score=r=>Math.abs(this.world.conditions(r.center).humidity-.62)+this.brood.filter(b=>distance(b.cell,r.center)<4).length*.012;
-      return score(a)-score(b);
-    });return rooms[0]?.center??[-5,10];
+    const scores=new Map();for(const r of rooms){let count=0;for(const b of this.brood)if(distance(b.cell,r.center)<4)count++;scores.set(r,Math.abs(this.world.conditions(r.center).humidity-.62)+count*.012);}
+    rooms.sort((a,b)=>scores.get(a)-scores.get(b));return rooms[0]?.center??[-5,10];
   }
   setSettings(changes){this.settings=settingsFrom({...this.settings,...changes});}
   record(text){this.events.unshift({time:this.time,text});this.events=this.events.slice(0,6);}
@@ -205,14 +203,15 @@ export class Colony{
       dig:clamp((desiredSpace-this.world.excavated.size-this.world.moundTunnels.size)/Math.max(12,desiredSpace))/(1+diggers*.2),desiredSpace};
     this.lastDemand=this.time;
   }
-  step(dt=.1){
+  step(dt=.1){for(const _ of this.tick(dt)){} }
+  *tick(dt=.1){
     if(!Number.isFinite(dt)||dt<=0||dt>1)return;
     this.time+=dt;tickHabitat(this.world,this.time);
     if(this.time-this.lastDemand>=1||!this.demand)this.updateDemand();
     if(this.time-this.lastDecay>=2){
       decaySignals(this.world,this.time-this.lastDecay);
       const queen=this.ants.find(a=>a.caste==='queen');if(queen)emit(this.world,'queen',queen.cell,1);
-      for(const baby of this.brood)emit(this.world,'brood',baby.cell,.3+(broodStage(baby)==='larva'?(1-baby.nutrition)*.6:0));
+      let cueCount=0;for(const baby of this.brood){emit(this.world,'brood',baby.cell,.3+(broodStage(baby)==='larva'?(1-baby.nutrition)*.6:0));if(++cueCount%128===0)yield;}
       for(const e of this.world.entrances.filter(e=>e.state==='open'))emit(this.world,'home',e.mouth,1);
       this.lastDecay=this.time;
     }
@@ -223,13 +222,14 @@ export class Colony{
       this.lastPlan=this.time;
     }
     this.occupancy=new Map();this.reserved=new Set();this.broodClaims=new Set(this.ants.filter(a=>['toBrood','carryingBrood'].includes(a.task)).map(a=>a.broodID));
-    for(const a of this.ants){const id=key(a.cell);if(!this.occupancy.has(id))this.occupancy.set(id,[]);this.occupancy.get(id).push(a);if(a.target&&['toDig','digging'].includes(a.task))this.reserved.add(key(a.target));}
+    let indexed=0;for(const a of this.ants){const id=key(a.cell);if(!this.occupancy.has(id))this.occupancy.set(id,[]);this.occupancy.get(id).push(a);if(a.target&&['toDig','digging'].includes(a.task))this.reserved.add(key(a.target));if(++indexed%128===0)yield;}
+    this.broodByID=new Map();this.localBrood=new Map();this.indexedBrood=this.brood;let babies=0;for(const b of this.brood){this.broodByID.set(b.id,b);const id=key(b.cell);if(!this.localBrood.has(id))this.localBrood.set(id,[]);this.localBrood.get(id).push(b);if(++babies%128===0)yield;}
     if(this.broodSource!==this.brood||this.broodIDs?.size!==this.brood.length){this.broodIDs=new Set(this.brood.map(b=>b.id));this.broodSource=this.brood;}
-    for(const a of this.ants){this.updateAnt(a,dt);this.auditProgress(a);if(this.world.onSurface(a.cell))ensureHabitat(this.world,a.cell[0]);}
+    let updated=0;for(const a of this.ants){this.updateAnt(a,dt);this.auditProgress(a);if(this.world.onSurface(a.cell))ensureHabitat(this.world,a.cell[0]);if(++updated%24===0)yield;}
     for(const a of this.ants)if(!this.world.walkable(a.cell)){a.cell=this.world.escapeCell(a.cell);a.pos=[...a.cell];a.route=[];}
     const lost=this.ants.filter(a=>a.health<=0);for(const a of lost){if(a.cargoKind==='soil')this.world.soilAbandoned+=a.carried;this.releaseBrood(a);}
     this.deaths+=lost.length;if(lost.some(a=>a.caste==='queen'))this.record('The queen has died. A new colony can begin when you are ready.');
-    if(lost.length)this.ants=this.ants.filter(a=>a.health>0);this.updateBrood(dt);
+    if(lost.length)this.ants=this.ants.filter(a=>a.health>0);yield* this.broodTick(dt);
   }
   needsFor(a){
     if(!this.demand)this.updateDemand();
@@ -262,7 +262,7 @@ export class Colony{
   }
   releaseBrood(a){
     if(a.broodID!=null)this.broodClaims.delete(a.broodID);
-    const b=this.brood.find(b=>b.id===a.carryingBrood);
+    const b=this.broodItem(a.carryingBrood);
     if(b){b.carriedBy=null;b.cell=[...a.cell];delete b.pos;b.needsTransport=true;}
     a.carryingBrood=null;a.broodID=null;
   }
@@ -274,12 +274,15 @@ export class Colony{
     else a.memories.push({cell:[...source],kind,confidence,lastSeen:this.time,failures:0,avoidUntil:0,nutrition:observed?.nutrition??null});
     a.memories.sort((x,y)=>y.confidence-x.confidence||y.lastSeen-x.lastSeen);a.memories=a.memories.slice(0,3);a.memory=[...source];
   }
+  broodItem(id){return this.indexedBrood===this.brood&&this.broodByID?.size===this.brood.length?this.broodByID.get(id):this.brood.find(b=>b.id===id);}
+  nearbyBrood(c){if(this.indexedBrood!==this.brood||!this.localBrood)return this.brood.filter(b=>distance(b.cell,c)<3.1);const out=[];for(let y=-3;y<=3;y++)for(let x=-3;x<=3;x++)for(const b of this.localBrood.get(key([c[0]+x,c[1]+y]))??[])if(distance(b.cell,c)<3.1)out.push(b);return out;}
+  careCandidates(a){return a.knownBrood.map(id=>this.broodItem(id)).filter(Boolean);}
   sense(a){
     const brain=a.brain;
     if(this.time<(a.senseAt??0))return;const elapsed=this.time-(a.sensedAt??this.time);a.sensedAt=this.time;a.senseAt=this.time+1;
     brain.arousal=Math.max(0,brain.arousal-elapsed*.08);
     brain.senses={food:senseSignal(this.world,'food',a.cell),water:senseSignal(this.world,'water',a.cell),alarm:senseSignal(this.world,'alarm',a.cell),brood:senseSignal(this.world,'brood',a.cell),queen:senseSignal(this.world,'queen',a.cell),construction:this.world.frontier().some(c=>distance(c,a.cell)<3)?1:0};
-    for(const baby of this.brood)if(baby.carriedBy==null&&distance(baby.cell,a.cell)<3.1){if(!a.knownBrood.includes(baby.id))a.knownBrood.push(baby.id);}
+    const known=new Set(a.knownBrood);for(const baby of this.nearbyBrood(a.cell))if(baby.carriedBy==null&&!known.has(baby.id)){known.add(baby.id);a.knownBrood.push(baby.id);}
     const ids=this.broodIDs??new Set(this.brood.map(b=>b.id));a.knownBrood=a.knownBrood.filter(id=>ids.has(id)).slice(-96);
   }
   encounter(a){
@@ -333,9 +336,9 @@ export class Colony{
           const kind=a.task==='returningWater'?'water':'food',trail=this.world.trails[kind],strength=(.12+.20*Math.exp(-(this.time-a.sourceAt)/50))*a.carried/2.5;
           emit(this.world,kind,next,strength);this.world.pheromones.set(key(next),Math.max(trail.get(key(next)),this.world.pheromones.get(key(next))??0));
         }
-        if(a.carryingBrood){const b=this.brood.find(b=>b.id===a.carryingBrood);if(b){b.cell=[...a.cell];b.pos=[...a.pos];}}
+        if(a.carryingBrood){const b=this.broodItem(a.carryingBrood);if(b){b.cell=[...a.cell];b.pos=[...a.pos];}}
         if(a.task==='exploring'&&this.time>=a.perceptionAt){a.perceptionAt=this.time+.8;this.discover(a);}
-      }else{a.pos[0]+=dx/length*speed*dt;a.pos[1]+=dy/length*speed*dt;if(a.carryingBrood){const b=this.brood.find(b=>b.id===a.carryingBrood);if(b)b.pos=[...a.pos];}}return;
+      }else{a.pos[0]+=dx/length*speed*dt;a.pos[1]+=dy/length*speed*dt;if(a.carryingBrood){const b=this.broodItem(a.carryingBrood);if(b)b.pos=[...a.pos];}}return;
     }
     if(this.time<a.busyUntil)return;
     if(a.caste==='queen'){this.updateQueen(a);return;}
@@ -377,7 +380,7 @@ export class Colony{
       case 'toBrood':this.collectBrood(a);break;
       case 'carryingBrood':this.carryBrood(a);break;
       case 'nursing':{
-        const baby=this.brood.find(b=>b.id===a.broodID);
+        const baby=this.broodItem(a.broodID);
         if(!baby||baby.carriedBy!=null){if(!this.assignCare(a))this.chooseJob(a);break;}
         if(distance(a.cell,baby.cell)>1.5){this.send(a,baby.cell);break;}
         baby.lastCare=this.time;
@@ -459,7 +462,7 @@ export class Colony{
     this.sense(a);
     if(this.assignQueenCare(a))return true;
     if(this.assignBroodTransport(a))return true;
-    const targets=this.brood.filter(b=>b.carriedBy==null&&!this.broodClaims.has(b.id)&&(a.knownBrood.includes(b.id)||distance(a.cell,b.cell)<3.1)).map(b=>({b,priority:b.lastCare+distance(a.cell,b.cell)*.5})).sort((x,y)=>x.priority-y.priority).map(item=>item.b);
+    const targets=this.careCandidates(a).filter(b=>b.carriedBy==null&&!this.broodClaims.has(b.id)&&(a.knownBrood.includes(b.id)||distance(a.cell,b.cell)<3.1)).map(b=>({b,priority:b.lastCare+distance(a.cell,b.cell)*.5})).sort((x,y)=>x.priority-y.priority).map(item=>item.b);
     for(const b of targets){const route=this.world.path(a.cell,b.cell);if(route){if(a.lastJob!=='care')a.jobSince=this.time;a.task='nursing';a.route=route;a.target=[...b.cell];a.destination=[...b.cell];a.broodID=b.id;a.lastJob='care';return true;}}
     const gradient=this.world.neighbors(a.cell).filter(c=>!this.world.onSurface(c)).sort((x,y)=>senseSignal(this.world,'brood',y)-senseSignal(this.world,'brood',x));
     if(gradient[0]&&senseSignal(this.world,'brood',gradient[0])>.04){a.task='nursing';a.broodID=null;this.send(a,gradient[0]);return true;}return false;
@@ -501,19 +504,20 @@ export class Colony{
     for(const v of choices){pick-=v.weight;if(pick<=0){selected=v.c;break;}}
     a.recent.push(key(a.cell));if(a.recent.length>20)a.recent.shift();a.route=[[...selected]];a.target=[...selected];a.destination=[...selected];
   }
-  updateBrood(dt){
-    for(const b of this.brood){
+  updateBrood(dt){for(const _ of this.broodTick(dt)){} }
+  *broodTick(dt){
+    let updated=0;for(const b of this.brood){
       const stage=broodStage(b),condition=this.world.conditions(b.cell);
       if(stage==='larva')b.nutrition=clamp(b.nutrition-dt/(DAY*2));
       const temperature=developmentalRate(condition.temperature),moisture=clamp(1-Math.abs(condition.humidity-.62)*1.8,0,1);
       const care=this.time-b.lastCare<15?1:.78,feeding=stage==='larva'?clamp((b.nutrition-.03)/.22):1;
       b.age+=dt*this.settings.broodRate*temperature*moisture*care*feeding;
-      if((stage==='larva'&&b.nutrition<.05)||moisture<.2)b.vitality=clamp(b.vitality-dt/DAY*.5);
+      if((stage==='larva'&&b.nutrition<.05)||moisture<.2)b.vitality=clamp(b.vitality-dt/DAY*.5);if(++updated%64===0)yield;
     }
-    const bornIDs=new Set();
+    const bornIDs=new Set();let emerged=0;
     for(const b of this.brood.filter(b=>b.age>=BROOD_DURATION&&b.vitality>0))if(this.ants.length<this.settings.populationCap&&b.carriedBy==null){
       const a=initializeBrain(createAnt(b.id,'worker',b.cell,this.world.seed),this.world.seed);
-      const quality=clamp((b.fed??2)/3,.35,1);a.bodySize=clamp(a.bodySize*quality,.18,.95);a.caste=a.bodySize>.78?'major':'worker';a.traits.lifeDays=lifespanFor(a,this.world.seed);a.bornAt=this.time;this.ants.push(a);bornIDs.add(b.id);this.births++;this.record(antName(a)+' emerged as a '+casteLabel(a).toLowerCase()+'.');
+      const quality=clamp((b.fed??2)/3,.35,1);a.bodySize=clamp(a.bodySize*quality,.18,.95);a.caste=a.bodySize>.78?'major':'worker';a.traits.lifeDays=lifespanFor(a,this.world.seed);a.bornAt=this.time;this.ants.push(a);bornIDs.add(b.id);this.births++;this.record(antName(a)+' emerged as a '+casteLabel(a).toLowerCase()+'.');if(++emerged%24===0)yield;
     }
     const lostBrood=this.brood.filter(b=>b.vitality<=0).length;this.broodLost+=lostBrood;
     if(bornIDs.size||lostBrood)this.brood=this.brood.filter(b=>!bornIDs.has(b.id)&&b.vitality>0);
@@ -571,7 +575,7 @@ export class Colony{
   }
 
   assignBroodTransport(a){
-    for(const b of this.brood.filter(b=>b.carriedBy==null&&!this.broodClaims.has(b.id)).sort((x,y)=>Number(y.needsTransport)-Number(x.needsTransport)||distance(a.cell,x.cell)-distance(a.cell,y.cell))){
+    for(const b of this.careCandidates(a).filter(b=>b.carriedBy==null&&!this.broodClaims.has(b.id)).sort((x,y)=>Number(y.needsTransport)-Number(x.needsTransport)||distance(a.cell,x.cell)-distance(a.cell,y.cell))){
       if(!a.knownBrood.includes(b.id)&&distance(a.cell,b.cell)>3.1)continue;
       if(!b.needsTransport&&this.time-(b.lastMoved??0)<DAY*.5)continue;
       const destination=this.broodSite(b),ideal=broodStage(b)==='pupa'?.55:.65;
@@ -583,13 +587,13 @@ export class Colony{
     }return false;
   }
   collectBrood(a){
-    const b=this.brood.find(b=>b.id===a.broodID);
+    const b=this.broodItem(a.broodID);
     if(!b||b.carriedBy!=null){this.releaseBrood(a);this.chooseJob(a);return;}
     if(distance(a.cell,b.cell)>1.1){this.send(a,b.cell);return;}
     b.carriedBy=a.id;a.carryingBrood=b.id;b.pos=[...a.pos];a.task='carryingBrood';this.carryBrood(a);
   }
   carryBrood(a){
-    const b=this.brood.find(b=>b.id===a.carryingBrood);
+    const b=this.broodItem(a.carryingBrood);
     if(!b){this.releaseBrood(a);this.chooseJob(a);return;}
     if(!a.broodDestination||!this.world.walkable(a.broodDestination))a.broodDestination=this.broodSite(b);
     if(!same(a.cell,a.broodDestination)){this.send(a,a.broodDestination);return;}
@@ -600,7 +604,7 @@ export class Colony{
 
   place(kind,x){if(!['food','water'].includes(kind))return;this.world.place(kind,x);this.record(kind==='food'?'Finite insect pieces and nectar placed. Ants must discover and carry them.':'A water source appeared on the surface.');}
   toJSON(){
-    const {occupancy,reserved,broodClaims,broodIDs,broodSource,...data}=this;return {...data,world:this.world.toJSON(),rng:{state:this.rng.state}};
+    const {occupancy,reserved,broodClaims,broodIDs,broodSource,broodByID,localBrood,indexedBrood,...data}=this;return {...data,world:this.world.toJSON(),rng:{state:this.rng.state}};
   }
   static fromJSON(d){
     if(!d||!Number.isFinite(d.time)||d.time<0||!Number.isFinite(d.food)||!Number.isFinite(d.water)||!Array.isArray(d.ants)||d.ants.length>LIMIT)throw Error('Invalid colony save');

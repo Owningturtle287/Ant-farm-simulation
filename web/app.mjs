@@ -1,28 +1,32 @@
 import {Colony,antName,casteLabel,taskLabels,reason,distance,adultDays,DAY,broodStage} from './sim.mjs';
-import {SPEEDS} from './biology.mjs';
+import {SPEEDS,POPULATION_CAPS} from './biology.mjs';
 import {SPECIES} from './fire-ant.mjs';
 import {resourceBalance} from './resources.mjs';
-import {advanceSimulation,PerformanceMonitor} from './clock.mjs';
-import {SaveStore} from './persistence.mjs';
+import {SimulationRunner,PerformanceMonitor} from './clock.mjs';
+import {ColonyStore} from './large-saves.mjs';
 import {Renderer} from './render.mjs';
 const $=id=>document.getElementById(id), canvas=$('world');
 let storage,store,colony,saveError;
-try {storage=window.localStorage;store=new SaveStore(storage);const loaded=store.load();colony=loaded?.colony;if(loaded?.recovered)saveError='Recovered your colony from its backup.';}catch(error){saveError=error.message;}
+try {storage=window.localStorage;store=new ColonyStore(storage);const loaded=await store.load();colony=loaded?.colony;if(loaded?.recovered)saveError='Recovered your colony from its backup.';}catch(error){saveError=error.message;}
 colony??=new Colony(Date.now()>>>0);
 const renderer=new Renderer(canvas),state={speed:1,paused:false,trails:false,selected:null,following:false,tool:null};
 renderer.home(colony.world);
-const monitor=new PerformanceMonitor();
+const monitor=new PerformanceMonitor(),runner=new SimulationRunner();
+for(const cap of POPULATION_CAPS){const option=document.createElement('option');option.value=cap;option.textContent=cap.toLocaleString()+' ants'+(cap===120?' · default':cap>=1000?' · experimental':'');$('population-cap').append(option);}
 let last=performance.now(),accumulator=0,lastUI=0,lastSave=last,toastTimer,hidden=document.hidden,lastAlive=colony.alive;
 const dialogs=[...document.querySelectorAll('dialog')];
 function toast(text) {clearTimeout(toastTimer);$('toast').textContent=text;$('toast').hidden=false;toastTimer=setTimeout(()=>$('toast').hidden=true,5000);}
 function openDialog(id) {for(const d of dialogs)if(d.open)d.close();$(id).showModal();state.tool=null;updateTools();}
 function closeDialog(id) {$(id).close();last=performance.now();}
 for(const b of document.querySelectorAll('[data-close]'))b.addEventListener('click',()=>closeDialog(b.dataset.close));
-function save(explicit=false) {
-  lastSave=performance.now();
-  try {if(!store)throw Error('Local saving is unavailable in this browser. Export a backup from More.');if(store.save(colony,explicit)){$('save-status').textContent='COLONY SAVED';return true;}}
-  catch(error){$('save-status').textContent='SAVE NEEDS ATTENTION';if(explicit)toast(error.message);}
-  return false;
+let saveTask=null,saving=false,lastCameraInput=0;
+async function settleForEdit(){if(saveTask)await saveTask;await runner.finish(colony);}
+function save(explicit=false){
+  if(saveTask)return saveTask;lastSave=performance.now();const target=colony;
+  saveTask=(async()=>{await runner.finish(target);if(target!==colony)return false;saving=true;$('save-status').textContent='SAVING COLONY…';
+    try{if(!store)throw Error('Local saving is unavailable. Export a colony backup.');if(await store.save(target,explicit)){$('save-status').textContent='COLONY SAVED';return true;}}
+    catch(error){$('save-status').textContent='SAVE NEEDS ATTENTION';if(explicit)toast(error.message);}finally{saving=false;}return false;
+  })().finally(()=>{saveTask=null;});return saveTask;
 }
 function selectedAnt(){return colony.ants.find(a=>a.id===state.selected);}
 function select(id,focus=false){state.selected=id;state.following=false;state.tool=null;updateTools();if(focus){const a=selectedAnt();if(a)Object.assign(renderer.camera,renderer.focus(a));}updateUI();}
@@ -52,9 +56,9 @@ function updateUI(){
   $('performance-button').textContent=$('performance-panel').hidden?'Show performance':'Hide performance';
   if(!$('performance-panel').hidden)updatePerformance();
 }
-function performanceSnapshot(){return {...monitor.values,routeRecoveries:colony.world.runtime.recoveries,recognitions:colony.recognitions,socialTransfers:colony.socialTransfers,alarmEvents:colony.alarmEvents,taskCounts:Object.fromEntries([...new Set(colony.ants.map(a=>a.task))].map(task=>[task,colony.ants.filter(a=>a.task===task).length])),resourceBalance:{food:resourceBalance(colony.world,'food'),water:resourceBalance(colony.world,'water')},moundTunnels:colony.world.moundTunnels.size,entrances:colony.world.entrances.filter(e=>e.state==='open').length,requestedSpeed:state.speed,ants:colony.ants.length,brood:colony.brood.length,populationCap:colony.settings.populationCap,soilDeposited:colony.world.soilDeposited,openCells:colony.world.excavated.size,cachedChunks:renderer.chunks.size,pathCalls:colony.world.runtime.pathCalls,routingMs:colony.world.runtime.pathCalls?colony.world.runtime.pathMs/colony.world.runtime.pathCalls:0};}
+function performanceSnapshot(){const taskCounts={};for(const a of colony.ants)taskCounts[a.task]=(taskCounts[a.task]??0)+1;return {...monitor.values,routeRecoveries:colony.world.runtime.recoveries,recognitions:colony.recognitions,socialTransfers:colony.socialTransfers,alarmEvents:colony.alarmEvents,taskCounts,resourceBalance:{food:resourceBalance(colony.world,'food'),water:resourceBalance(colony.world,'water')},moundTunnels:colony.world.moundTunnels.size,entrances:colony.world.entrances.filter(e=>e.state==='open').length,requestedSpeed:state.speed,ants:colony.ants.length,brood:colony.brood.length,populationCap:colony.settings.populationCap,soilDeposited:colony.world.soilDeposited,openCells:colony.world.excavated.size,cachedChunks:renderer.chunks.size,terrainCacheBytes:renderer.chunks.bytes,terrain:{...renderer.renderStats,queued:renderer.requests.size,active:!!renderer.active},pathCalls:colony.world.runtime.pathCalls,routingMs:colony.world.runtime.pathCalls?colony.world.runtime.pathMs/colony.world.runtime.pathCalls:0};}
 function updatePerformance(){
-  const m=performanceSnapshot();$('perf-fps').textContent=m.fps.toFixed(0);$('perf-frame').textContent=m.frameMs.toFixed(1)+' ms';$('perf-tick').textContent=m.tickMs.toFixed(2)+' ms';$('perf-draw').textContent=m.drawMs.toFixed(2)+' ms';$('perf-speed').textContent=m.effective.toFixed(1)+'× / '+m.requestedSpeed+'×';$('perf-population').textContent=m.ants+' / '+m.populationCap;$('perf-mound').textContent=m.soilDeposited;$('perf-routing').textContent=m.routingMs.toFixed(2)+' ms';$('perf-recoveries').textContent=colony.world.runtime.recoveries;
+  const m=performanceSnapshot();$('performance-panel').dataset.readings=JSON.stringify(m);$('perf-fps').textContent=m.fps.toFixed(0);$('perf-frame').textContent=m.frameMs.toFixed(1)+' ms';$('perf-tick').textContent=m.tickMs.toFixed(2)+' ms';$('perf-draw').textContent=m.drawMs.toFixed(2)+' ms';$('perf-speed').textContent=m.effective.toFixed(1)+'× / '+m.requestedSpeed+'×';$('perf-population').textContent=m.ants+' / '+m.populationCap;$('perf-mound').textContent=m.soilDeposited;$('perf-routing').textContent=m.routingMs.toFixed(2)+' ms';$('perf-recoveries').textContent=colony.world.runtime.recoveries;
 }
 function syncSettings(){
   for(const [id,field] of [['egg-rate','eggRate'],['brood-rate','broodRate'],['starting-workers','startingWorkers'],['population-cap','populationCap']])$(id).value=String(colony.settings[field]);
@@ -73,12 +77,17 @@ function buildRoster(){
   }
   const nursery=colony.world.conditions(colony.nursery);
   $('soil-stats').textContent=`${colony.world.soilExcavated} soil excavated · ${colony.world.soilDeposited} deposited · protein ${colony.protein.toFixed(1)} · nursery ${Math.round(nursery.humidity*100)}% humidity, ${nursery.temperature.toFixed(1)}°C`;
-  $('ant-list').replaceChildren();
-  for(const ant of colony.ants){const button=document.createElement('button');button.className='ant-row';button.dataset.ant=ant.id;
+  $('ant-list').replaceChildren();rosterPage=0;appendRoster();
+}
+let rosterPage=0;const ROSTER_PAGE=100;
+function appendRoster(){
+  $('roster-more')?.remove();const fragment=document.createDocumentFragment();
+  for(const ant of colony.ants.slice(rosterPage*ROSTER_PAGE,(rosterPage+1)*ROSTER_PAGE)){const button=document.createElement('button');button.className='ant-row';button.dataset.ant=ant.id;
     const icon=document.createElementNS('http://www.w3.org/2000/svg','svg'),use=document.createElementNS('http://www.w3.org/2000/svg','use');use.setAttribute('href','#i-ant');icon.append(use);
     const info=document.createElement('div'),strong=document.createElement('strong'),small=document.createElement('small'),caste=document.createElement('span');strong.textContent=antName(ant);small.textContent=taskLabels[ant.task];caste.textContent=casteLabel(ant);caste.className='caste';info.append(strong,small);button.append(icon,info,caste);
-    button.addEventListener('click',()=>{closeDialog('roster');select(ant.id,true);});$('ant-list').append(button);
+    button.addEventListener('click',()=>{closeDialog('roster');select(ant.id,true);});fragment.append(button);
   }
+  $('ant-list').append(fragment);rosterPage++;if(rosterPage*ROSTER_PAGE<colony.ants.length){const more=document.createElement('button');more.id='roster-more';more.className='secondary full';more.textContent='Show next 100 ants';more.onclick=appendRoster;$('ant-list').append(more);}
 }
 $('pause').addEventListener('click',()=>{state.paused=!state.paused;accumulator=0;updateUI();});
 $('speed').addEventListener('click',()=>{state.speed=SPEEDS[(SPEEDS.indexOf(state.speed)+1)%SPEEDS.length];updateUI();});
@@ -90,7 +99,7 @@ $('close-profile').addEventListener('click',()=>select(null));
 $('follow').addEventListener('click',()=>{state.following=!state.following;const a=selectedAnt();if(a && state.following)Object.assign(renderer.camera,renderer.focus(a));updateUI();});
 $('roster-button').addEventListener('click',()=>{buildRoster();openDialog('roster');});
 $('menu-button').addEventListener('click',()=>openDialog('menu'));
-$('save-now').addEventListener('click',()=>{closeDialog('menu');if(save(true))toast('Your colony is saved on this device.');});
+$('save-now').addEventListener('click',async()=>{closeDialog('menu');if(await save(true))toast('Your colony is saved on this device.');});
 $('help').addEventListener('click',()=>openDialog('guide'));
 $('settings-button').addEventListener('click',()=>{syncSettings();openDialog('settings');});
 $('materials-button').addEventListener('click',()=>openDialog('materials'));
@@ -98,50 +107,50 @@ $('species-button').addEventListener('click',()=>openDialog('species'));
 $('disturb-button').addEventListener('click',()=>{closeDialog('menu');state.tool='disturb';state.selected=null;updateTools();updateUI();});
 $('performance-button').addEventListener('click',()=>{$('performance-panel').hidden=!$('performance-panel').hidden;closeDialog('menu');updateUI();});
 $('close-performance').addEventListener('click',()=>{$('performance-panel').hidden=true;updateUI();});
-for(const [id,field] of [['egg-rate','eggRate'],['brood-rate','broodRate'],['starting-workers','startingWorkers'],['population-cap','populationCap']])$(id).addEventListener('change',()=>{colony.setSettings({[field]:Number($(id).value)});syncSettings();toast(save()?'Colony settings saved.':'Colony settings updated for this session.');});
+for(const [id,field] of [['egg-rate','eggRate'],['brood-rate','broodRate'],['starting-workers','startingWorkers'],['population-cap','populationCap']])$(id).addEventListener('change',async()=>{await settleForEdit();colony.setSettings({[field]:Number($(id).value)});syncSettings();toast(await save()?'Colony settings saved.':'Colony settings updated for this session.');});
 $('enter').addEventListener('click',()=>{try{storage?.setItem('little-colony.guide','seen');}catch{}closeDialog('guide');});
 $('reset').addEventListener('click',()=>openDialog('reset-confirm'));
-$('confirm-reset').addEventListener('click',()=>{colony=new Colony(Date.now()>>>0,colony.settings);state.selected=null;state.following=false;state.paused=false;accumulator=0;lastAlive=true;renderer.reset();monitor.reset();closeDialog('reset-confirm');save(true);updateUI();toast('A small colony takes root.');});
-$('export').addEventListener('click',()=>{
+$('confirm-reset').addEventListener('click',async()=>{await settleForEdit();colony=new Colony(Date.now()>>>0,colony.settings);state.selected=null;state.following=false;state.paused=false;accumulator=0;lastAlive=true;runner.reset();renderer.reset();monitor.reset();closeDialog('reset-confirm');save(true);updateUI();toast('A small colony takes root.');});
+$('export').addEventListener('click',async()=>{await settleForEdit();
   const blob=new Blob([JSON.stringify({version:4,savedAt:Date.now(),colony})],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='little-colony-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Colony backup exported.');
 });
-$('export-performance').addEventListener('click',()=>{const blob=new Blob([JSON.stringify({version:'0.5',recordedAt:new Date().toISOString(),...performanceSnapshot(),settings:colony.settings,viewport:{width:renderer.width,height:renderer.height,dpr:renderer.dpr}},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='little-colony-performance.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Performance readings exported.');});
+$('export-performance').addEventListener('click',()=>{const blob=new Blob([JSON.stringify({version:'0.7',recordedAt:new Date().toISOString(),...performanceSnapshot(),settings:colony.settings,viewport:{width:renderer.width,height:renderer.height,dpr:renderer.dpr}},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='little-colony-performance.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Performance readings exported.');});
 $('install-button').addEventListener('click',()=>openDialog('install'));
-for(const [id,factor] of [['zoom-in',1.25],['zoom-out',.8]])$(id).addEventListener('click',()=>{state.following=false;renderer.zoom(factor);});
+for(const [id,factor] of [['zoom-in',1.25],['zoom-out',.8]])$(id).addEventListener('click',()=>{lastCameraInput=performance.now();state.following=false;renderer.zoom(factor);});
 const pointers=new Map();let start=null,lastPoint=null,moved=false,pinchDistance=0;
 function localPoint(event){const r=canvas.getBoundingClientRect();return [event.clientX-r.left,event.clientY-r.top];}
-canvas.addEventListener('pointerdown',event=>{canvas.focus({preventScroll:true});canvas.setPointerCapture(event.pointerId);const p=localPoint(event);pointers.set(event.pointerId,p);if(pointers.size===1){start=p;lastPoint=p;moved=false;}else{moved=true;pinchDistance=distance(...[...pointers.values()].slice(0,2));}});
+canvas.addEventListener('pointerdown',event=>{lastCameraInput=performance.now();canvas.focus({preventScroll:true});canvas.setPointerCapture(event.pointerId);const p=localPoint(event);pointers.set(event.pointerId,p);if(pointers.size===1){start=p;lastPoint=p;moved=false;}else{moved=true;pinchDistance=distance(...[...pointers.values()].slice(0,2));}});
 canvas.addEventListener('pointermove',event=>{
-  if(!pointers.has(event.pointerId))return;const p=localPoint(event);pointers.set(event.pointerId,p);
+  if(!pointers.has(event.pointerId))return;lastCameraInput=performance.now();const p=localPoint(event);pointers.set(event.pointerId,p);
   if(pointers.size>=2){const [a,b]=[...pointers.values()],d=distance(a,b);if(pinchDistance>0)renderer.zoom(d/pinchDistance,[(a[0]+b[0])/2,(a[1]+b[1])/2]);pinchDistance=d;state.following=false;moved=true;return;}
   if(start && distance(start,p)>6)moved=true;
   if(moved && lastPoint){renderer.camera.x-=(p[0]-lastPoint[0])/renderer.unit;renderer.camera.y-=(p[1]-lastPoint[1])/renderer.unit;state.following=false;}lastPoint=p;
 });
-canvas.addEventListener('pointerup',event=>{
+canvas.addEventListener('pointerup',async event=>{
   const p=localPoint(event);pointers.delete(event.pointerId);
   if(!moved && pointers.size===0){const world=renderer.world(p);
-    if(state.tool){const kind=state.tool;let responders=0;if(kind==='disturb')responders=colony.disturb(world.map(Math.round));else colony.place(kind,world[0]);state.tool=null;updateTools();toast(kind==='disturb'?(responders?'Nearby workers raised an alarm. Watch at 1×.':'Ground disturbed. No workers were close enough to react.'):kind==='food'?'Food placed. Insect pieces supply protein; nectar supplies energy.':'Water placed. Its finite squares disappear as workers collect it.');}
+    if(state.tool){await settleForEdit();const kind=state.tool;let responders=0;if(kind==='disturb')responders=colony.disturb(world.map(Math.round));else colony.place(kind,world[0]);state.tool=null;updateTools();toast(kind==='disturb'?(responders?'Nearby workers raised an alarm. Watch at 1×.':'Ground disturbed. No workers were close enough to react.'):kind==='food'?'Food placed. Insect pieces supply protein; nectar supplies energy.':'Water placed. Its finite squares disappear as workers collect it.');}
     else{const ants=colony.ants.filter(a=>distance(renderer.screen(a.pos),p)<26).sort((a,b)=>a.id-b.id),current=ants.findIndex(a=>a.id===state.selected);select(ants.length?ants[(current+1)%ants.length].id:null);}
   }
   if(pointers.size===1){lastPoint=[...pointers.values()][0];moved=true;}else{start=null;lastPoint=null;}pinchDistance=0;
 });
 canvas.addEventListener('pointercancel',event=>{pointers.delete(event.pointerId);start=null;lastPoint=null;moved=true;pinchDistance=0;});
-canvas.addEventListener('wheel',event=>{event.preventDefault();renderer.zoom(Math.exp(-event.deltaY*.0015),localPoint(event));state.following=false;},{passive:false});
+canvas.addEventListener('wheel',event=>{lastCameraInput=performance.now();event.preventDefault();renderer.zoom(Math.exp(-event.deltaY*.0015),localPoint(event));state.following=false;},{passive:false});
 canvas.addEventListener('keydown',event=>{if(event.key===' '){event.preventDefault();state.paused=!state.paused;updateUI();}if(['+','=','-'].includes(event.key)){event.preventDefault();renderer.zoom(event.key==='-'?.8:1.25);}if(event.key==='Escape'){state.tool=null;select(null);}});
 new ResizeObserver(()=>renderer.resize()).observe(canvas);
-document.addEventListener('visibilitychange',()=>{hidden=document.hidden;if(hidden)save();else{last=performance.now();monitor.reset(last);}accumulator=0;});
-window.addEventListener('pagehide',()=>save());
+function lifecycleSave(){if(!runner.busy&&!saving&&!store?.blocked&&colony.ants.length<600&&colony.brood.length<1000){try{if(store?.small.save(colony))storage.removeItem('little-colony.web.v1.database');}catch{}}else save();}
+document.addEventListener('visibilitychange',()=>{hidden=document.hidden;if(hidden)lifecycleSave();else{last=performance.now();monitor.reset(last);}accumulator=0;});
+window.addEventListener('pagehide',lifecycleSave);
 function frame(now){
   const dt=Math.max(0,Math.min(.1,(now-last)/1000));last=now;
-  const paused=state.paused || hidden || dialogs.some(d=>d.open);
+  const paused=state.paused || hidden || saving || dialogs.some(d=>d.open);
   let stats={ticks:0,simulated:0,cost:0};
-  if(!paused){stats=advanceSimulation(colony,accumulator,dt,state.speed);accumulator=stats.pending;}
-  else accumulator=0;
+  stats=runner.advance(colony,dt,state.speed,paused,()=>performance.now(),renderer.requests.size?3:5);
   if(state.following){const a=selectedAnt();if(a){const target=renderer.focus(a);renderer.camera.x+=(target.x-renderer.camera.x)*.1;renderer.camera.y+=(target.y-renderer.camera.y)*.1;}}
   const drawBegan=performance.now();renderer.draw(colony,{...state,paused},dt,now/1000);monitor.frame(now,stats,performance.now()-drawBegan);
   if(now-lastUI>250){updateUI();lastUI=now;}
-  if(now-lastSave>20000)save();
-  if($('game').dataset.ready!=='true')$('game').dataset.ready='true';requestAnimationFrame(frame);
+  if(now-lastSave>(colony.ants.length>=600?60000:20000)&&pointers.size===0&&now-lastCameraInput>800&&!runner.busy&&!saveTask)save();
+  if($('game').dataset.ready!=='true')$('game').dataset.ready='true';const terrainReady=renderer.requests.size===0&&!renderer.active&&!renderer.fallback;if(canvas.dataset.terrainReady!==String(terrainReady))canvas.dataset.terrainReady=String(terrainReady);requestAnimationFrame(frame);
 }
 function networkState(){const cached=$('offline-state').dataset.cached==='true' || !!navigator.serviceWorker?.controller;$('offline-state').textContent=!navigator.onLine?(cached?'Offline · your colony is ready to play.':'Offline · open once online to cache the game.'):(cached?'Ready for offline play · saves stay on this device.':'Preparing offline play…');}
 for(const event of ['online','offline'])window.addEventListener(event,networkState);

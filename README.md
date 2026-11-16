@@ -29,7 +29,7 @@ The first online visit caches the game for offline reopening. Progress saves loc
 - Food/water placement, colony roster, local autosaves, recovery copy, and JSON export.
 - Portrait and landscape phone layouts, Home Screen icon, and offline reopening.
 
-New colonies start with **12 workers and one queen**, plus three brood. The default population ceiling is **120**, adjustable to 60, 250, or 500. Higher ceilings are experimental; they do not establish a tested iPhone capacity. Existing saves keep their ants, terrain and settings while behaviors upgrade and old patrol loops are released. **Start a new colony for the revised fire-ant founder nest and peripheral mouth.**
+New colonies start with **12 workers and one queen**, plus three brood. The default population ceiling is **120**, adjustable through 20, 40, 60, 100, 120, 200, 250, 500, 750, 1,000, 2,000, 2,500, 5,000, 7,500 and 10,000. Higher ceilings are experimental; they do not establish a tested iPhone capacity. Existing saves keep their ants, terrain and settings while behaviors upgrade and old patrol loops are released. **Start a new colony for the revised fire-ant founder nest and peripheral mouth.**
 
 This is a research-informed, accelerated model of **Solenopsis invicta**, using its single-queen social form. It does not reproduce an exact neural brain. Its biological time and physical scale are gameplay approximations. Quantitative biological calibration, a complete trophallaxis/larval-processing network, rival colonies, reproductive flights, flooding physics, and persistent world streaming remain future milestones. The colony rests while the page is closed, hidden, or a menu is open. See [model and research notes](docs/REALISM.md).
 
@@ -37,7 +37,7 @@ This is a research-informed, accelerated model of **Solenopsis invicta**, using 
 
 **Deploy Little Colony** checks the simulation, builds the offline app, and runs Chromium and WebKit browser checks. Passing builds deploy to GitHub Pages.
 
-The workflow's **deploy** box and run summary contain the clickable live URL. Browser artifacts contain screenshots and test evidence. The `simulation-performance` artifact records repeatable CPU-only samples at 13, 60, 120, 250, and 500 ants; it is not an iPhone rendering or battery benchmark. Future pushes that change web code update the same bookmark address.
+The workflow's **deploy** box and run summary contain the clickable live URL. Browser artifacts contain screenshots and test evidence. The `simulation-performance` artifact records repeatable CPU-only samples at 13–10,000 ants; it is not an iPhone rendering or battery benchmark. Future pushes that change web code update the same bookmark address.
 
 Asset and service-worker URLs respect the repository subpath. Each build fingerprints its offline cache, replacing this game's old cache versions.
 
@@ -67,3 +67,6 @@ See [continuation notes](docs/DEVELOPMENT.md) and the [original roadmap](docs/RO
 
 
 The v0.6 terrain update adds supported low mound slopes, narrow shallow entrances, roofed/spaced mound galleries, curved passage plans and varied organic chamber outlines. Fine pixel textures and subcell cutaway contours replace full-cell square boundaries. Older unstable mounds settle once using their existing soil; the colony and its stores remain.
+
+
+v0.7 addresses camera lag: detailed terrain is painted in a worker, with a 24 MiB LRU bitmap cache, zoom-dependent detail, small visible margins and a bounded fallback. Biology ticks yield between batches while preserving the same fixed-step rules. Distant overlapping crowds use fewer redundant draw calls; every ant still has its own simulated state. The roster loads 100 ants at a time. Large colonies use chunked IndexedDB generations with a recoverable backup instead of exceeding localStorage capacity. Saving holds biology at a completed tick while the camera remains available. The 10,000 ceiling is experimental; it is not a promise of 128× or a fixed frame rate on an iPhone.

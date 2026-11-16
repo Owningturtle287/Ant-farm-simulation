@@ -2,10 +2,10 @@
 
 The primary delivery is the GitHub Pages app in `web/`, deployed by `.github/workflows/pages.yml` to the same bookmark address. Preserve existing progress and the deployment pipeline when updating it.
 
-## v0.6 web architecture and contracts
+## v0.7 web architecture and contracts
 
 - `fire-ant.mjs` owns the single-queen species profile, continuous worker size, contact-odor recognition, crop capacities and task response scores. `signals.mjs` handles local cue emission, sampling and decay. `resources.mjs` owns finite stock accounting and discrete visible resource portions. `architecture.mjs` generates founder connections and worker-proposed exits/mound passages.
-- `biology.mjs` owns seeded randomness, individual traits, age/stage helpers, defaults, and bounded growth controls. New colonies have 12 workers, one queen, and three brood; the default ceiling is 120, with experimental options up to 500.
+- `biology.mjs` owns seeded randomness, individual traits, age/stage helpers, defaults, and bounded growth controls. New colonies have 12 workers, one queen, and three brood; the default ceiling is 120, with experimental options up to 10,000.
 - `materials.mjs` generates layered substrate and local moisture/temperature estimates. All depths are equally diggable. Deposited spoil is a separate visual material and retains its origin. `ecology.mjs` owns seeded contours, grass harvest/regrowth, basin detection, rain scheduling, accumulation, and evaporation. Separate saved randomness keeps weather deterministic.
 - `sim.mjs` owns persistent colony/world state, local discovery and recruitment, bounded learning, demand-sensitive task decisions, nursing, construction, and mass accounting. No DOM or renderer state belongs in the model. All random simulation choices must use the saved seeded generator.
 - Terrain navigation knows open geometry; resource discovery does not know distant availability. Avoid granting ants omniscient source updates. Chamber planning is still a colony-level abstraction; see `REALISM.md`.
@@ -26,7 +26,7 @@ Browser checks cover Chromium and WebKit, phone layouts, settings persistence, 1
 
 Chromium checks reopening with network offline emulation. WebKit checks reopening after its actual origin server is stopped, requiring a service-worker response and failed uncached network probe. This avoids [Playwright's upstream offline-emulation bug](https://github.com/microsoft/playwright/issues/42775); it does not claim origin loss and airplane mode are identical disruptions.
 
-The `simulation-performance` Actions artifact samples CPU simulation ticks at 13, 60, 120, 250, and 500 adults with a fixed seed. It separates warm-up costs and records median/p95 timings. This short initial-nest benchmark omits rendering and long-session terrain growth. Compare runs on the same hardware; these measurements are not physical iPhone capacity results.
+The `simulation-performance` Actions artifact samples CPU simulation ticks at 13–10,000 adults with a fixed seed. It separates warm-up costs and records median/p95 timings. This short initial-nest benchmark omits rendering and long-session terrain growth. Compare runs on the same hardware; these measurements are not physical iPhone capacity results.
 
 For device tests: use More → Show performance and Export readings. Record the phone model/OS manually alongside JSON, requested speed, actual speed, FPS, frame cost, simulation/drawing cost, population, brood, and excavated space. Test growing colonies and long sessions in both orientations. Check thermals and battery before claiming a supported maximum population. No telemetry is uploaded by the game.
 
@@ -99,3 +99,14 @@ Microclimate samples use a saved two-second moisture-source snapshot. Numeric ca
 `World.geometryVersion` is independent of envelope/model version 4. On older malformed terrain, regrade the exact existing spoil inventory once, use some inventory to plug excess shallow breaches around protected mouth columns, and relocate affected occupants without loss. Stable old terrain is preserved. Keep the legacy-repair and modern deterministic-save tests.
 
 Contour masks include narrow capsules along valid diagonal graph edges, preserving solid centers and blocked corner pairs. Nest framing fits the modified terrain below the HUD when opening a mature save or pressing Nest.
+
+
+## v0.7 responsiveness contracts
+
+`terrain-raster.mjs` takes compact, isolated geometry snapshots and returns transferable RGBA buffers. `terrain-worker.mjs` owns expensive contour/texture loops. The renderer keeps one worker request active, reorders pending work for the current view, retains stale/alternate-LOD images during refresh, and never synchronously paints a detailed chunk while drawing. `render-cache.mjs` bounds retained image bytes to 24 MiB. Only a one-cell margin is requested. Source detail changes with displayed pixel density; returning to an area reuses its cache. Worker failures use `rasterRows` in budgeted batches, not one blocking raster call. Reset epochs reject replies from an old colony. Full-detail pixels have a fixed checksum regression.
+
+`SimulationRunner` schedules `Colony.tick()` generator batches within a per-frame CPU budget. `Colony.step()` exhausts the same generator for deterministic reference checks and server benchmarks. Ants, sensory updates, signals, physiology, brood and births still use fixed 0.1-second ticks. A started tick completes before saves, edits or exports; paused rendering can finish that pending tick. Derived brood indexes are excluded from saves. Local perception uses cell buckets, and known-brood membership uses a temporary set to avoid quadratic duplicate checks. All ants remain individually simulated. Crowded distant sprites and stacked brood limit redundant overlapping drawing; the selected ant and queen always render.
+
+Small saves keep the original localStorage format. At 600 adults or 1,000 brood, `large-saves.mjs` uses IndexedDB: metadata and groups of 96 individuals are written as separate transactions, then one transaction switches the primary/backup manifest. Incomplete generations never become primary. Recovery retains the known-good backup when the damaged primary is replaced. Biology is held at a completed tick for this asynchronous copy; the camera and terrain worker continue. Large autosaves run less often and defer during gestures. Page-hide saving is best effort; the last complete generation remains authoritative if the browser terminates an in-progress write.
+
+Browser checks attach camera timing reports, including a synthetic 10,000-adult/1,000-brood case, validate large-save reload and backup recovery, exercise the worker-off fallback, and cover offline worker/module loading. They are regression scenarios on Actions hosts, not a measured iPhone population capacity. The CPU benchmark reports whole-tick costs, including larger ticks that are split across browser frames. Keep actual-speed reporting honest under load.

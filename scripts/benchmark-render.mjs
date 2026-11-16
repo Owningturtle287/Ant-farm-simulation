@@ -1,0 +1,6 @@
+import {readFileSync,writeFileSync} from 'node:fs';
+import {Colony} from '../web/sim.mjs';
+import {snapshotTerrain,rasterTerrain} from '../web/terrain-raster.mjs';
+const c=Colony.fromJSON(JSON.parse(readFileSync(new URL('../tests-web/fixtures/v6-mature.json',import.meta.url),'utf8')).colony),results=[];
+for(const lod of [16,8]){const captures=[],rasters=[];for(let i=0;i<25;i++){const began=performance.now(),snapshot=snapshotTerrain(c.world,i%5-2,Math.floor(i/5)-1,lod),captured=performance.now();rasterTerrain(snapshot);captures.push(captured-began);rasters.push(performance.now()-captured);}captures.sort((a,b)=>a-b);rasters.sort((a,b)=>a-b);results.push({texturePixelsPerCell:lod,snapshotMedianMs:captures[12],snapshotP95Ms:captures[23],backgroundRasterMedianMs:rasters[12],backgroundRasterP95Ms:rasters[23]});}
+const report={version:'0.7',recordedAt:new Date().toISOString(),node:process.version,scope:'Node CPU microbenchmark. Snapshot capture remains on the UI thread; pixel painting runs in the browser terrain worker. Does not measure canvas upload, phone frame rate or worker transfer overhead.',results};console.table(results);if(process.argv[2])writeFileSync(process.argv[2],JSON.stringify(report,null,2));
