@@ -22,11 +22,11 @@ for(const b of document.querySelectorAll('[data-close]'))b.addEventListener('cli
 let saveTask=null,saving=false,lastCameraInput=0;
 async function settleForEdit(){if(saveTask)await saveTask;await runner.finish(colony);}
 function save(explicit=false){
-  if(saveTask)return saveTask;lastSave=performance.now();const target=colony;
-  saveTask=(async()=>{await runner.finish(target);if(target!==colony)return false;saving=true;$('save-status').textContent='SAVING COLONY…';
+  if(saveTask)return saveTask;lastSave=performance.now();const target=colony;saving=true;$('save-status').textContent='SAVING COLONY…';
+  saveTask=(async()=>{await runner.finish(target);if(target!==colony)return false;
     try{if(!store)throw Error('Local saving is unavailable. Export a colony backup.');if(await store.save(target,explicit)){$('save-status').textContent='COLONY SAVED';return true;}}
-    catch(error){$('save-status').textContent='SAVE NEEDS ATTENTION';if(explicit)toast(error.message);}finally{saving=false;}return false;
-  })().finally(()=>{saveTask=null;});return saveTask;
+    catch(error){$('save-status').textContent='SAVE NEEDS ATTENTION';if(explicit)toast(error.message);}return false;
+  })().finally(()=>{saving=false;saveTask=null;});return saveTask;
 }
 function selectedAnt(){return colony.ants.find(a=>a.id===state.selected);}
 function select(id,focus=false){state.selected=id;state.following=false;state.tool=null;updateTools();if(focus){const a=selectedAnt();if(a)Object.assign(renderer.camera,renderer.focus(a));}updateUI();}
@@ -149,7 +149,7 @@ function frame(now){
   if(state.following){const a=selectedAnt();if(a){const target=renderer.focus(a);renderer.camera.x+=(target.x-renderer.camera.x)*.1;renderer.camera.y+=(target.y-renderer.camera.y)*.1;}}
   const drawBegan=performance.now();renderer.draw(colony,{...state,paused},dt,now/1000);monitor.frame(now,stats,performance.now()-drawBegan);
   if(now-lastUI>250){updateUI();lastUI=now;}
-  if(now-lastSave>(colony.ants.length>=600?60000:20000)&&pointers.size===0&&now-lastCameraInput>800&&!runner.busy&&!saveTask)save();
+  if(now-lastSave>(colony.ants.length>=600?60000:20000)&&pointers.size===0&&now-lastCameraInput>800&&!saveTask)save();
   if($('game').dataset.ready!=='true')$('game').dataset.ready='true';const terrainReady=renderer.requests.size===0&&!renderer.active&&!renderer.fallback&&now>=(renderer.motionUntil??0);if(canvas.dataset.terrainReady!==String(terrainReady))canvas.dataset.terrainReady=String(terrainReady);requestAnimationFrame(frame);
 }
 function networkState(){const cached=$('offline-state').dataset.cached==='true' || !!navigator.serviceWorker?.controller;$('offline-state').textContent=!navigator.onLine?(cached?'Offline · your colony is ready to play.':'Offline · open once online to cache the game.'):(cached?'Ready for offline play · saves stay on this device.':'Preparing offline play…');}
