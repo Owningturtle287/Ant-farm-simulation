@@ -1,9 +1,8 @@
 // Local sensorimotor approximation, not a reconstruction of an ant nervous system.
 import {clamp} from './biology.mjs';
 import {densityAt} from './geometry.mjs';
-import {sampleField,resourceOdor} from './signals.mjs';
+import {sampleChemicals,resourceOdor} from './signals.mjs';
 export const wrapAngle=a=>Math.atan2(Math.sin(a),Math.cos(a));
-const kinds=['food','water','alarm','brood','queen','home'];
 function random(m){let n=m.rng;n^=n<<13;n^=n>>>17;n^=n<<5;m.rng=n>>>0;return m.rng/4294967296;}
 export function initializeMotion(a,seed){
   if(a.motion?.version===1)return a.motion;
@@ -23,7 +22,7 @@ export function antennaTips(a){
 export function senseAntennae(a,w,time,occupancy){
   const m=a.motion;if(time<m.nextSense)return;
   m.nextSense=time+.38+(a.id%5)*.025;
-  const tips=antennaTips(a),read=p=>{const out={};for(const kind of kinds)out[kind]=sampleField(w.signals[kind],p,w);const odor=resourceOdor(w,p);out.foodOdor=odor.food;out.moisture=odor.water;out.touch=w.solid(p.map(Math.round))?1:0;return out;};
+  const tips=antennaTips(a),read=p=>{const out=sampleChemicals(w,p);const odor=resourceOdor(w,p);out.foodOdor=odor.food;out.moisture=odor.water;out.touch=w.solid(p.map(Math.round))?1:0;return out;};
   const left=read(tips.left),right=read(tips.right),kind=a.foragingKind??'food',odor=kind==='food'?'foodOdor':'moisture';
   const l=left[kind]+left[odor]*.8,r=right[kind]+right[odor]*.8,sum=l+r,previous=a.brain.antennae?.strength??0;
   const tracking=['exploring','toFood','toWater'].includes(a.task),alarm=(left.alarm+right.alarm)*.5;
