@@ -414,7 +414,7 @@ test('new soil overlap triggers continuous escape without losing an existing tas
   assert.ok(densityAt(...a.pos,(x,y)=>w.solid([x,y]))<.49);assert.equal(a.motion.recovering,false);assert.deepEqual(a.route,route);assert.equal(a.carried,2);assert.equal(a.task,'returningWater');
 });
 test('active construction does not strand a body inside freshly deposited soil contours',()=>{
-  const c=new Colony(17),overlapTicks=new Map();let longest=0;
-  for(let i=0;i<2400;i++){c.step();for(const a of c.ants){const count=densityAt(...a.pos,(x,y)=>c.world.solid([x,y]))>=.5?(overlapTicks.get(a.id)??0)+1:0;overlapTicks.set(a.id,count);longest=Math.max(longest,count);}}
-  assert.ok(c.world.soilDeposited>0);assert.ok(longest<=8,`A body stayed inside solid soil for ${longest} ticks`);assert.equal(c.world.runtime.recoveries,0,'Routine contour contact must not wait for the stalled-route watchdog.');
+  for(const seed of [17,702]){const c=new Colony(seed),overlapTicks=new Map();let longest=0;
+  for(let i=0;i<3000;i++){c.step();for(const a of c.ants){const count=densityAt(...a.pos,(x,y)=>c.world.solid([x,y]))>=.5?(overlapTicks.get(a.id)??0)+1:0;overlapTicks.set(a.id,count);longest=Math.max(longest,count);}}
+  assert.ok(c.world.soilDeposited>0);assert.ok(longest<=8,`A body stayed inside solid soil for ${longest} ticks`);assert.equal(c.world.runtime.recoveries,0,'Routine contour contact must not wait for the stalled-route watchdog.');}
 });

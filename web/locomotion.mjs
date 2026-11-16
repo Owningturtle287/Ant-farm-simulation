@@ -49,11 +49,15 @@ export function clearSegment(w,from,to,escaping=false){
   let previous=escaping?densityAt(...from,(x,y)=>w.solid([x,y])):0;
   const length=Math.hypot(to[0]-from[0],to[1]-from[1]),steps=Math.max(1,Math.ceil(length/.16));
   for(let i=1;i<=steps;i++){const t=i/steps,x=from[0]+(to[0]-from[0])*t,y=from[1]+(to[1]-from[1])*t;const density=densityAt(x,y,(sx,sy)=>w.solid([sx,sy]));if(density>=.49&&(!escaping||previous<.49||density>previous+.001))return false;previous=density;
-    const rounded=[Math.round(x),Math.round(y)];if(!w.walkable(rounded)){let supported=false;const ix=Math.floor(x),iy=Math.floor(y);for(let dy=0;dy<=1;dy++)for(let dx=0;dx<=1;dx++)if(Math.hypot(x-ix-dx,y-iy-dy)<.81&&w.walkable([ix+dx,iy+dy]))supported=true;if(!supported)return false;}}return true;
+    const rounded=[Math.round(x),Math.round(y)];if(!escaping&&!w.walkable(rounded)){let supported=false;const ix=Math.floor(x),iy=Math.floor(y);for(let dy=0;dy<=1;dy++)for(let dx=0;dx<=1;dx++)if(Math.hypot(x-ix-dx,y-iy-dy)<.81&&w.walkable([ix+dx,iy+dy]))supported=true;if(!supported)return false;}}return true;
 }
 export function recoverBody(a,w,dt){
   const m=a.motion,density=densityAt(...a.pos,(x,y)=>w.solid([x,y]));
-  if(density<.49){m.recovering=false;return;}
+  if(density<.49){
+    m.recovering=false;
+    if(Math.hypot(a.pos[0]-a.cell[0],a.pos[1]-a.cell[1])>.9){let nearest=null,best=Infinity;const cx=Math.round(a.pos[0]),cy=Math.round(a.pos[1]);for(let y=cy-1;y<=cy+1;y++)for(let x=cx-1;x<=cx+1;x++){const d=Math.hypot(x-a.pos[0],y-a.pos[1]);if(d<best&&w.walkable([x,y])){nearest=[x,y];best=d;}}if(nearest){a.cell=nearest;const goal=a.route.at(-1)??a.destination;if(goal&&w.path)a.route=w.path(a.cell,goal)??[];}}
+    return;
+  }
   const dx=a.cell[0]-a.pos[0],dy=a.cell[1]-a.pos[1],length=Math.hypot(dx,dy),step=Math.min(length,1.6*dt),toward=[a.pos[0]+dx/Math.max(length,.0001)*step,a.pos[1]+dy/Math.max(length,.0001)*step];
   let next=clearSegment(w,a.pos,toward,true)?toward:null,best=density;
   if(!next)for(let i=0;i<8;i++){const angle=i*Math.PI/4,p=[a.pos[0]+Math.cos(angle)*step,a.pos[1]+Math.sin(angle)*step],value=densityAt(...p,(x,y)=>w.solid([x,y]));if(value<best&&clearSegment(w,a.pos,p,true)){best=value;next=p;}}
