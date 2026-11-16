@@ -40,15 +40,24 @@ export function senseAntennae(a,w,time,occupancy){
   }else m.mode=a.carried||a.carryingBrood?'carrying':a.task==='investigating'?'alert':a.route.length?'travelling':'resting';
 }
 export function updateMotion(a,w,time,dt,occupancy){
-  const m=a.motion;m.phase=wrapAngle(m.phase+dt*(m.mode==='sampling'?11:6.5)+(a.brain.arousal??0)*dt*2);
+  const m=a.motion;w.motionRevisions??=new Map();if(w.motionRevisions.get(a.id)!==w.revision){w.motionRevisions.set(a.id,w.revision);if(densityAt(...a.pos,(x,y)=>w.solid([x,y]))>=.49)m.recovering=true;}m.phase=wrapAngle(m.phase+dt*(m.mode==='sampling'?11:6.5)+(a.brain.arousal??0)*dt*2);
   if(time>=m.nextVariation){m.wander=m.wander*.6+(random(m)-.5)*.32;m.pace=.87+random(m)*.26;m.nextVariation=time+.45+random(m)*.7;}
   senseAntennae(a,w,time,occupancy);
   if(!a.route.length){m.speed*=Math.exp(-dt*12);if(m.speed<.01)m.speed=0;}
 }
-export function clearSegment(w,from,to){
+export function clearSegment(w,from,to,escaping=false){
+  let previous=escaping?densityAt(...from,(x,y)=>w.solid([x,y])):0;
   const length=Math.hypot(to[0]-from[0],to[1]-from[1]),steps=Math.max(1,Math.ceil(length/.16));
-  for(let i=1;i<=steps;i++){const t=i/steps,x=from[0]+(to[0]-from[0])*t,y=from[1]+(to[1]-from[1])*t;if(densityAt(x,y,(sx,sy)=>w.solid([sx,sy]))>=.49)return false;
+  for(let i=1;i<=steps;i++){const t=i/steps,x=from[0]+(to[0]-from[0])*t,y=from[1]+(to[1]-from[1])*t;const density=densityAt(x,y,(sx,sy)=>w.solid([sx,sy]));if(density>=.49&&(!escaping||previous<.49||density>previous+.001))return false;previous=density;
     const rounded=[Math.round(x),Math.round(y)];if(!w.walkable(rounded)){let supported=false;const ix=Math.floor(x),iy=Math.floor(y);for(let dy=0;dy<=1;dy++)for(let dx=0;dx<=1;dx++)if(Math.hypot(x-ix-dx,y-iy-dy)<.81&&w.walkable([ix+dx,iy+dy]))supported=true;if(!supported)return false;}}return true;
+}
+export function recoverBody(a,w,dt){
+  const m=a.motion,density=densityAt(...a.pos,(x,y)=>w.solid([x,y]));
+  if(density<.49){m.recovering=false;return;}
+  const dx=a.cell[0]-a.pos[0],dy=a.cell[1]-a.pos[1],length=Math.hypot(dx,dy),step=Math.min(length,1.6*dt),toward=[a.pos[0]+dx/Math.max(length,.0001)*step,a.pos[1]+dy/Math.max(length,.0001)*step];
+  let next=clearSegment(w,a.pos,toward,true)?toward:null,best=density;
+  if(!next)for(let i=0;i<8;i++){const angle=i*Math.PI/4,p=[a.pos[0]+Math.cos(angle)*step,a.pos[1]+Math.sin(angle)*step],value=densityAt(...p,(x,y)=>w.solid([x,y]));if(value<best&&clearSegment(w,a.pos,p,true)){best=value;next=p;}}
+  if(next){const travel=Math.hypot(next[0]-a.pos[0],next[1]-a.pos[1]);m.travel+=travel;m.speed=travel/dt;m.angle=wrapAngle(m.angle+clamp(wrapAngle(Math.atan2(next[1]-a.pos[1],next[0]-a.pos[0])-m.angle),-7.5*dt,7.5*dt));a.pos=next;m.mode='reorienting';}
 }
 export function moveAnt(a,w,time,dt,traffic=0){
   const m=a.motion,next=a.route[0];if(!next)return false;

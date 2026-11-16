@@ -4,7 +4,7 @@ import {terrainHeight,initHabitat,ensureHabitat,tickHabitat,harvest,restoreHabit
 import {NUTRITION,addStock,removeStock} from './resources.mjs';
 import {SPECIES,initializeBrain,lifespanFor,colonyOdor,contact,cropCapacity,developmentalRate,taskScores,rememberTask} from './fire-ant.mjs';
 import {founderNest,planPeripheralExit,planMoundPassage} from './architecture.mjs';
-import {moveAnt,updateMotion,wrapAngle} from './locomotion.mjs';
+import {moveAnt,updateMotion,wrapAngle,recoverBody} from './locomotion.mjs';
 import {chamberCells,curvedPassage} from './geometry.mjs';
 import {initSignals,emit,senseSignal,decaySignals,signalsJSON,sampleField,resourceOdor} from './signals.mjs';
 export {DAY,BROOD_DURATION,LIMIT,DEFAULT_SETTINGS,Random,createAnt,adultDays,broodStage};
@@ -228,7 +228,7 @@ export class Colony{
     if(this.broodSource!==this.brood||this.broodIDs?.size!==this.brood.length){this.broodIDs=new Set(this.brood.map(b=>b.id));this.broodSource=this.brood;}
     let updated=0;for(const a of this.ants){this.updateAnt(a,dt);this.auditProgress(a);if(this.world.onSurface(a.cell))ensureHabitat(this.world,a.cell[0]);if(++updated%24===0)yield;}
     for(const a of this.ants)if(!this.world.walkable(a.cell)){a.cell=this.world.escapeCell(a.cell);a.pos=[...a.cell];a.route=[];}
-    const lost=this.ants.filter(a=>a.health<=0);for(const a of lost){if(a.cargoKind==='soil')this.world.soilAbandoned+=a.carried;this.releaseBrood(a);}
+    const lost=this.ants.filter(a=>a.health<=0);for(const a of lost){this.world.motionRevisions?.delete(a.id);if(a.cargoKind==='soil')this.world.soilAbandoned+=a.carried;this.releaseBrood(a);}
     this.deaths+=lost.length;if(lost.some(a=>a.caste==='queen'))this.record('The queen has died. A new colony can begin when you are ready.');
     if(lost.length)this.ants=this.ants.filter(a=>a.health>0);yield* this.broodTick(dt);
   }
@@ -317,6 +317,7 @@ export class Colony{
     const lifespan=a.traits.lifeDays,aged=adultDays(a)>lifespan;
     a.health=clamp(a.health+(a.energy<.08||a.hydration<.1?-dt/DAY*.8:aged?-dt/DAY*.4:dt/DAY*.12));
     if(!this.world.walkable(a.cell)){a.cell=this.world.escapeCell(a.cell);a.pos=[...a.cell];a.route=[];}
+    if(a.motion.recovering){recoverBody(a,this.world,dt);if(a.carryingBrood){const b=this.broodItem(a.carryingBrood);if(b)b.pos=[...a.pos];}return;}
     if(a.caste!=='queen'){
       this.encounter(a);
       if(this.time>=(a.selfCheckAt??0)){

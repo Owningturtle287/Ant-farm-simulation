@@ -407,3 +407,14 @@ test('nearby bodies cause bounded passing and slowing rather than synchronized o
   const {updateMotion}=await import('../web/locomotion.mjs'),w=motionWorld(),a=initializeBrain(createAnt(4,'worker',[0,0],287),287),b=initializeBrain(createAnt(5,'worker',[0,0],287),287);a.task='toFood';a.route=[[1,0]];a.motion.angle=0;b.pos=[.6,0];
   updateMotion(a,w,1,.1,new Map([['0,0',[a,b]]]));assert.ok(a.motion.separation>0&&a.motion.separation<=.32);assert.ok(a.motion.yielding>=.7&&a.motion.yielding<1);
 });
+test('new soil overlap triggers continuous escape without losing an existing task or load',async()=>{
+  const {updateMotion,recoverBody}=await import('../web/locomotion.mjs'),w=motionWorld(),a=initializeBrain(createAnt(8,'worker',[0,0],17),17);a.pos=[.65,.1];a.task='returningWater';a.carried=2;a.route=[[0,1],[0,2]];const route=structuredClone(a.route);
+  w.solid=([x,y])=>x===1&&(y===0||y===1);w.revision++;
+  for(let i=0;i<12;i++){const before=[...a.pos];updateMotion(a,w,i*.1,.1);if(a.motion.recovering)recoverBody(a,w,.1);assert.ok(distanceForTest(before,a.pos)<=.161);}
+  assert.ok(densityAt(...a.pos,(x,y)=>w.solid([x,y]))<.49);assert.equal(a.motion.recovering,false);assert.deepEqual(a.route,route);assert.equal(a.carried,2);assert.equal(a.task,'returningWater');
+});
+test('active construction does not strand a body inside freshly deposited soil contours',()=>{
+  const c=new Colony(17),overlapTicks=new Map();let longest=0;
+  for(let i=0;i<2400;i++){c.step();for(const a of c.ants){const count=densityAt(...a.pos,(x,y)=>c.world.solid([x,y]))>=.5?(overlapTicks.get(a.id)??0)+1:0;overlapTicks.set(a.id,count);longest=Math.max(longest,count);}}
+  assert.ok(c.world.soilDeposited>0);assert.ok(longest<=8,`A body stayed inside solid soil for ${longest} ticks`);assert.equal(c.world.runtime.recoveries,0,'Routine contour contact must not wait for the stalled-route watchdog.');
+});
