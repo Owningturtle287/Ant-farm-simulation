@@ -111,5 +111,5 @@ test('fire-ant mound tunnels and chemical signals render together',async({page},
 test('a v0.4 colony upgrades without retaining its old patrol loop',async({page})=>{
   const data=JSON.parse(readFileSync(new URL('../fixtures/v4-colony.json',import.meta.url),'utf8'));data.colony.ants[1].task='patrolling';data.colony.ants[1].caste='major';
   await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),JSON.stringify(data));await page.reload();await expect(page.locator('#ants-count')).toHaveText(String(data.colony.ants.length));await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();
-  const patrols=await page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.ants.filter(a=>a.task==='patrolling').length);expect(patrols).toBe(0);
+  const patrols=await page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.ants.filter(a=>a.task==='patrolling').length);expect(patrols).toBe(0);await page.getByRole('button',{name:'Open colony roster'}).click();await expect(page.locator('#colony-summary > div').filter({hasText:'Workers'}).locator('strong')).toHaveText(String(data.colony.ants.filter(a=>a.caste!=='queen').length));
 });
