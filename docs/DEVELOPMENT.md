@@ -167,3 +167,5 @@ Resource return uses the same continuous arrival radius as locomotion. Terrain v
 Work claims are reconciled with living ants and their current jobs during demand refresh. A worker interrupted for refueling or reassigned after yielding cannot leave a grounded brood item permanently claimed against other nurses. Carried brood retains its claim through refueling.
 
 The accelerated generation test retains its adult and birth requirements, allowing at most three additional modeled days for physical traffic and emergence queues after its initial nine days. The 120-day default survival, replacement and conservation requirements remain unchanged.
+
+Continuous trail deposition distributes strength over non-solid integer grid points, matching the field sampled by antennae. Orientation hints in movement waypoints are never part of signal or occupancy keys. Integer deposits keep their existing location and fractional deposits remain readable by both antennae.

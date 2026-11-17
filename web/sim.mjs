@@ -353,12 +353,12 @@ export class Colony{
     if(a.route.length){
       const next=a.route[0];
       if(!terrainFree(this.world,next)){a.route=[];const goal=a.motion.yieldTarget??a.destination;if(goal){const stance=canOccupy(this.world,a,goal)?goal:nearestStance(this.world,a,goal);if(stance)a.route=routeAroundItems(this.world,a,stance)??[];}return;}
-      const traffic=Math.max(0,(this.occupancy.get(key(next))?.length??0)-1),arrived=moveAnt(a,this.world,this.time,dt,traffic);if(!arrived)unjam(this,a);
+      const waypointCell=next.slice(0,2).map(Math.round),traffic=Math.max(0,(this.occupancy.get(key(waypointCell))?.length??0)-1),arrived=moveAnt(a,this.world,this.time,dt,traffic);if(!arrived)unjam(this,a);
       const actual=a.pos.map(Math.round);if(distance(a.pos,a.cell)>.9){const anchors=[];for(let y=actual[1]-1;y<=actual[1]+1;y++)for(let x=actual[0]-1;x<=actual[0]+1;x++)if(this.world.walkable([x,y]))anchors.push([x,y]);anchors.sort((p,q)=>distance(p,a.pos)-distance(q,a.pos));if(anchors[0]&&!same(anchors[0],a.cell)){a.cell=anchors[0];const goal=a.motion.yieldTarget??a.destination;if(goal)a.route=routeAroundItems(this.world,a,goal)??[];}}
       if(a.task==='haulingSoil'&&!a.depositTarget&&!a.motion.yieldingRoute&&this.world.onSurface(actual)){a.cell=actual;a.route=[];}
       if(arrived&&a.task.startsWith('returning')){
         const kind=a.task==='returningWater'?'water':'food',trail=this.world.trails[kind],strength=(.12+.20*Math.exp(-(this.time-a.sourceAt)/50))*(a.deliveryAmount??a.carried)/2.5;
-        emit(this.world,kind,next,strength);this.world.pheromones.set(key(next),Math.max(trail.get(key(next))??0,this.world.pheromones.get(key(next))??0));
+        emit(this.world,kind,next,strength);const id=key(waypointCell);if(!this.world.solid(waypointCell))this.world.pheromones.set(id,Math.max(trail.get(id)??0,this.world.pheromones.get(id)??0));
       }
       if(a.carryingBrood){const b=this.broodItem(a.carryingBrood);if(b){b.cell=[...a.cell];b.pos=[...a.pos];}}
       if(a.task==='exploring'&&this.time>=a.perceptionAt){a.perceptionAt=this.time+.8;this.discover(a);}if(a.task==='exploring'&&!a.route.length)this.explore(a);return;

@@ -6,7 +6,11 @@ export function initSignals(w,data={}){
   w.signals={};for(const kind of Object.keys(HALF_LIFE))w.signals[kind]=new Map(data.signals?.[kind]??data.trails?.[kind]??(kind==='food'?data.pheromones??[]:[]));
   w.trails={food:w.signals.food,water:w.signals.water};w.pheromones=new Map(data.pheromones??[]);
 }
-export function emit(w,kind,c,strength){const id=key(c),map=w.signals[kind];if(map)map.set(id,Math.min(4,(map.get(id)??0)+strength));}
+export function emit(w,kind,[x,y],strength){
+  const map=w.signals[kind];if(!map)return;const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy,targets=[];let weight=0;
+  for(let dy=0;dy<=1;dy++)for(let dx=0;dx<=1;dx++){const n=(dx?fx:1-fx)*(dy?fy:1-fy),p=[ix+dx,iy+dy];if(n>0&&!w.solid(p)){targets.push([key(p),n]);weight+=n;}}
+  for(const [id,n] of targets)map.set(id,Math.min(4,(map.get(id)??0)+strength*n/weight));
+}
 export function senseSignal(w,kind,c){const map=w.signals[kind];let value=map?.get(key(c))??0;for(const n of w.neighbors(c))value=Math.max(value,(map?.get(key(n))??0)*.7);return value;}
 export function decaySignals(w,elapsed){
   for(const [kind,map] of Object.entries(w.signals)){

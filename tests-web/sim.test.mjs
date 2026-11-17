@@ -595,3 +595,10 @@ test('interrupted brood jobs release their work claims so another nurse can help
  const c=new Colony(),b=c.brood[1],hauler=c.ants[1],oldNurse=c.ants[2],helper=c.ants[3];primeCrop(c,c.ants[0],2,1,1);primeCrop(c,helper,.3,.5,.2);hauler.task='refueling';hauler.broodID=b.id;hauler.carryingBrood=null;oldNurse.task='exploring';oldNurse.broodID=b.id;c.broodClaims.add(b.id);c.careClaims=new Map([[b.id,oldNurse.id]]);b.nutrition=.2;b.needsTransport=false;b.lastMoved=c.time;helper.cell=[b.cell[0]+1,b.cell[1]];helper.pos=[...helper.cell];helper.knownBrood=[b.id];beginTraffic(c);
  c.updateDemand();assert.equal(c.broodClaims.has(b.id),false);assert.equal(c.careClaims.has(b.id),false);assert.equal(c.assignCare(helper),true);assert.equal(helper.task,'nursing');assert.equal(helper.broodID,b.id);
 });
+
+test('continuous movement deposits readable chemical trails without heading coordinates or buried signal cells',async()=>{
+ const {senseAntennae}=await import('../web/locomotion.mjs');const c=new Colony(),a=c.ants[1],w=c.world;c.ants=[a];c.brood=[];c.foodItems=[];w.patches=[];w.carve([0,20],4,4);a.pos=[0,20];a.cell=[0,20];a.task='exploring';a.foragingKind='food';a.motion.angle=0;a.motion.phase=0;a.motion.nextSense=0;beginTraffic(c);w.signals.food.clear();
+ emit(w,'food',[.75,20.8,Math.PI/2],2);assert.ok([...w.signals.food.keys()].every(id=>id.split(',').length===2&&id.split(',').every(n=>Number.isInteger(Number(n)))));assert.ok(Math.abs([...w.signals.food.values()].reduce((s,n)=>s+n,0)-2)<1e-9);
+ senseAntennae(a,w,0,new Map());assert.ok(a.brain.antennae.right.food>a.brain.antennae.left.food);assert.ok(a.motion.turn>0,'An antenna must be able to read and steer toward the actual deposited trail.');
+ w.excavated.delete(key([1,21]));w.changed([1,21]);w.signals.food.clear();emit(w,'food',[.75,20.8,Math.PI/2],2);assert.equal(w.signals.food.has('1,21'),false);assert.ok(Math.abs([...w.signals.food.values()].reduce((s,n)=>s+n,0)-2)<1e-9);
+});
