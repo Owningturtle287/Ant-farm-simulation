@@ -432,7 +432,7 @@ test('individual food and water crops scale with body size and self-feeding cons
   for(const kind of ['energy','protein','water'])assert.ok(Math.abs(supplyBalance(c,kind).error)<1e-8);
 });
 test('full ants physically place excess food into separate cache slots after personal needs are met',()=>{
-  const c=new Colony(287,{eggRate:0}),a=c.ants[1];primeCrop(c,a,socialCapacity(a)*.8,socialCapacity(a)*.2,0);a.energy=1;const free=[...c.world.excavated].map(k=>k.split(',').map(Number)).find(p=>canOccupy(c.world,a,p));assert.ok(free);a.cell=[...free];a.pos=[...a.cell];a.carried=2;a.cargoKind='food';a.cargoNutrition={energy:.8,protein:.2};accountIntake(c,'food',2,a.cargoNutrition);updateSupplyTotals(c);const before=c.foodItems.length;
+  const c=new Colony(287,{eggRate:0}),a=c.ants[1];for(const ant of c.ants){primeCrop(c,ant,socialCapacity(ant)*.8,socialCapacity(ant)*.2,waterCapacity(ant));ant.energy=1;ant.hydration=1;}const free=[...c.world.excavated].map(k=>k.split(',').map(Number)).find(p=>canOccupy(c.world,a,p));assert.ok(free);a.cell=[...free];a.pos=[...a.cell];a.carried=2;a.cargoKind='food';a.cargoNutrition={energy:.8,protein:.2};accountIntake(c,'food',2,a.cargoNutrition);updateSupplyTotals(c);const before=c.foodItems.length;
   c.assignFoodStorage(a);for(let i=0;i<500&&c.foodItems.length===before;i++)c.step();assert.ok(c.foodItems.length>before);assert.ok(c.foodItems.at(-1).energy>0);assert.ok(new Set(c.foodItems.map(p=>slotKey(p.pos))).size===c.foodItems.length);for(const kind of ['energy','protein','water'])assert.ok(Math.abs(supplyBalance(c,kind).error)<1e-7);
 });
 test('water pickup fills only the personal crop and never creates an indoor water cache',()=>{

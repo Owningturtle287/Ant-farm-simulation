@@ -630,6 +630,7 @@ export class Colony{
     a.task='queenRest';a.decision=this.canLay()?`Resting between eggs. Current laying target: ${(DAY/this.eggInterval).toFixed(1)} eggs per colony day.`:'Conserving resources; egg production waits for food, water, and available brood capacity.';
   }
   assignQueenCare(a){
+    if((a.brain?.senses?.alarm??0)>.2&&(a.brain?.arousal??0)>.6)return false;
     const queen=this.ants.find(b=>b.caste==='queen');if(!queen||a.id===queen.id)return false;
     const needFood=foodFill(queen)<socialCapacity(queen)*.8&&(queen.socialFood<.45||queen.socialProtein<.15||queen.energy<.65),needWater=queen.socialWater<.2||(queen.hydration<.65&&queen.socialWater<.1);
     if(!needFood&&!needWater||this.ants.some(b=>b.id!==a.id&&((b.task==='toCache'&&b.cachePurpose==='queen')||b.task==='feedingQueen')&&distance(b.pos,queen.pos)<Math.max(1.4,distance(a.pos,queen.pos))&&this.time-(b.lastProgressAt??0)<20))return false;
