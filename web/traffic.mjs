@@ -5,6 +5,7 @@ import {bodyRoute} from './body-routing.mjs';
 import {bodyDiscs,bodyPixel} from './body-pose.mjs';
 const key=p=>p.join(','),bin=p=>Math.floor(p[0])+','+Math.floor(p[1]);
 const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+export const CONTACT_SLACK=.002; // Subpixel outline contact; central body space stays protected.
 export const bodyShape=a=>({half:15*bodyPixel(a),radius:5.4*bodyPixel(a)});
 export const broodRadius=b=>broodStage(b)==='egg'?.16:broodStage(b)==='larva'?.27:.30;
 function axis(a,p=a.pos,angle=a.motion?.angle??0){const s=bodyShape(a),dx=Math.cos(angle)*s.half,dy=Math.sin(angle)*s.half;return [[p[0]-dx,p[1]-dy],[p[0]+dx,p[1]+dy]];}
@@ -30,7 +31,7 @@ export function canOccupy(w,a,p,angle=a.motion?.angle??0,ignoreBrood=null,ignore
   const t=w.traffic;if(!t)return true;
   const discs=bodyDiscs(a,p,angle,joints);
   for(const o of around(t.obstacles??t.items,p,1))if(o.kind!=='brood'&&o.kind!=='cache'&&discs.some(d=>Math.hypot(o.pos[0]-d.x,o.pos[1]-d.y)<d.radius+o.radius-.002))return false;
-  if(!ignoreAdults)for(const b of around(t.adults,p,a.caste==='queen'?2:1))if(b.id!==a.id&&dist(b.pos,p)<1.4&&bodyGap(a,b,p,angle,joints)<-.002)return false;
+  if(!ignoreAdults)for(const b of around(t.adults,p,a.caste==='queen'?2:1))if(b.id!==a.id&&dist(b.pos,p)<1.4&&bodyGap(a,b,p,angle,joints)<-CONTACT_SLACK)return false;
   return true;
 }
 export function sweptFree(w,a,from,to,angle,oldAngle=a.motion?.angle??angle,escaping=false,ignoreAdults=false){const n=Math.max(1,Math.ceil(dist(from,to)/.09),bodyShape(a).half?Math.ceil(Math.abs(Math.atan2(Math.sin(angle-oldAngle),Math.cos(angle-oldAngle)))/.15):1);for(let i=1;i<=n;i++){const t=i/n,delta=Math.atan2(Math.sin(angle-oldAngle),Math.cos(angle-oldAngle));if(!canOccupy(w,a,[from[0]+(to[0]-from[0])*t,from[1]+(to[1]-from[1])*t],oldAngle+delta*t,null,ignoreAdults,escaping))return false;}return true;}
@@ -73,7 +74,21 @@ function passingPlace(w,a,other){
   for(const p of candidates){if(!terrainFree(w,p)||dist(p,a.pos)<.07||!canOccupy(w,a,p,Math.atan2(p[1]-a.pos[1],p[0]-a.pos[0])))continue;const route=routeAroundItems(w,a,p,true);if(route?.length)return {point:p,route};}return null;
 }
 function backingPlace(w,a,time){if(time<(a.motion.lastBacking??-10)+3)return null;for(const distance of[.22,.15,.09,.05]){const p=[a.pos[0]-Math.cos(a.motion.angle)*distance,a.pos[1]-Math.sin(a.motion.angle)*distance];if(terrainFree(w,p)&&sweptFree(w,a,a.pos,p,a.motion.angle,a.motion.angle))return {point:p,route:[p],backing:true};}return null;}
+function clearancePlace(w,a,time){
+  if(time<(a.motion.lastClearance??-10)+1.5)return null;
+  const goal=a.route[0]??a.destination;if(!goal)return null;
+  const angle=a.motion.angle,desired=Math.atan2(goal[1]-a.pos[1],goal[0]-a.pos[0]),turn=angle+Math.max(-.25,Math.min(.25,Math.atan2(Math.sin(desired-angle),Math.cos(desired-angle))));
+  const near=nearbyAdults(w,a,.9),gap=p=>Math.min(.16,...near.map(b=>bodyGap(a,b,p,angle))),initial=gap(a.pos);let best=null,quality=-Infinity;
+  for(const distance of[.18,.12,.06])for(let i=0;i<12;i++){
+    const direction=angle+i*Math.PI/6,p=[a.pos[0]+Math.cos(direction)*distance,a.pos[1]+Math.sin(direction)*distance];
+    if(!terrainFree(w,p)||!sweptFree(w,a,a.pos,p,angle,angle))continue;
+    const opensTurn=sweptFree(w,a,p,p,turn,angle),clearance=gap(p)-initial;
+    const score=(opensTurn?1:0)+clearance*4+(dist(a.pos,goal)-dist(p,goal))*.15-distance*.05;
+    if(score>quality&&(opensTurn||clearance>.004)){quality=score;best={point:p,route:[p],clearance:true};}
+  }return best;
+}
 function yieldTo(c,a,winner,bay){const m=a.motion;m.resumeGoal=['resting','grooming','reserve'].includes(a.task)?null:a.destination?[...a.destination]:null;m.yieldingRoute=true;m.yieldTarget=bay.point;m.yieldFor=winner.id;m.yieldStarted=c.time;m.yieldEnd=c.time+.3;m.yieldDeadline=c.time+3;a.route=bay.route;m.trafficBlocked=0;winner.motion.waitUntil=c.time+.3;
+  if(bay.clearance){m.clearanceGoal=bay.point;m.clearanceLeft=.22;m.clearanceUntil=c.time+.9;m.lastClearance=c.time;winner.motion.waitUntil=c.time+.7;}
   if(bay.backing){m.backingGoal=bay.point;m.backingLeft=.22;m.backingUntil=c.time+.85;m.lastBacking=c.time;winner.motion.waitUntil=c.time+.65;}
 }
 export function unjam(c,a){
@@ -85,11 +100,11 @@ export function unjam(c,a){
     a.brain.traffic={partner:b.id,signal:winner===a?'Requesting passage':'Making room',at:c.time,until:c.time+3};b.brain.traffic={partner:a.id,signal:winner===b?'Requesting passage':'Making room',at:c.time,until:c.time+3};
     a.motion.examineAngle=Math.atan2(b.pos[1]-a.pos[1],b.pos[0]-a.pos[0]);a.motion.examineUntil=c.time+.6;b.motion.examineAngle=Math.atan2(a.pos[1]-b.pos[1],a.pos[0]-b.pos[0]);b.motion.examineUntil=c.time+.6;
     if(yielder.caste==='queen'||yielder.motion.yieldingRoute)continue;
-    const bay=passingPlace(w,yielder,winner)??backingPlace(w,yielder,c.time);if(!bay){yielder.motion.trafficBlocked=Math.max(.5,yielder.motion.trafficBlocked??0);continue;}
+    const bay=clearancePlace(w,yielder,c.time)??passingPlace(w,yielder,winner)??backingPlace(w,yielder,c.time);if(!bay){yielder.motion.trafficBlocked=Math.max(.5,yielder.motion.trafficBlocked??0);continue;}
     yieldTo(c,yielder,winner,bay);
     yielder.decision='Antennal contact: making room for a nearby nestmate, then resuming the same task.';winner.decision='A nearby nestmate is making room. Pausing briefly before continuing.';return;
   }
-  const retreat=near.length?backingPlace(w,a,c.time):null;if(retreat){yieldTo(c,a,near[0],retreat);a.brain.traffic={partner:near[0].id,signal:'Taking a short step clear to turn',at:c.time,until:c.time+1};return;}
+  const retreat=near.length?(clearancePlace(w,a,c.time)??backingPlace(w,a,c.time)):null;if(retreat){yieldTo(c,a,near[0],retreat);a.brain.traffic={partner:near[0].id,signal:'Taking a short step clear to turn',at:c.time,until:c.time+1};return;}
   const goal=m.yieldTarget??a.destination;if(goal){const stance=canOccupy(w,a,goal)?goal:nearestStance(w,a,goal),detour=stance?routeAroundItems(w,a,stance,true):null;if(detour?.length&&JSON.stringify(detour)!==JSON.stringify(a.route)){a.route=detour;m.trafficBlocked=0;return;}}
   if(c.time-(m.waitingSince??c.time)>6&&w.neighbors(a.cell).length<=3){c.congestionUntil=c.time+15;if(a.cell[1]>w.baseSurface(a.cell[0])+3)for(const dx of[-1,1]){const p=[a.cell[0]+dx,a.cell[1]];if(w.solid(p)&&!w.construction.some(q=>key(q)===key(p))){w.construction.push(p,[p[0],p[1]+1]);w.frontierVersion=-1;break;}}}
 }

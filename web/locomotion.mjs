@@ -12,7 +12,7 @@ export function initializeMotion(a,seed){
   return a.motion={version:2,angle,neck:0,waist:0,turnVelocity:0,speed:0,travel:0,phase:(a.id*2.399963)%6.283185,rng:((seed^Math.imul(a.id+31,1597334677))>>>0)||1,wander:0,pace:1,nextVariation:0,nextSense:0,pauseUntil:0,nextPause:4+(a.id%17),blocked:0,mode:'settling',turn:0};
 }
 export function antennaShape(phase,mode='searching',arousal=0){
-  const broad=mode==='sampling'||mode==='searching',spread=broad?.63:.38,sweep=Math.sin(phase)*(broad?.30:.16);
+  const broad=mode==='sampling'||mode==='searching'||mode==='resting',spread=broad?.63:.38,sweep=Math.sin(phase)*(broad?.30:.16);
   // Independent elbow flexion, with oppositely biased sweeps; both still point ahead.
   return {left:-spread+sweep,right:spread+sweep*.78,leftBend:-.24-Math.sin(phase*.83)*.13,rightBend:.24+Math.sin(phase*.83+.8)*.13,head:sweep*.22+arousal*.025};
 }
@@ -88,6 +88,12 @@ export function recoverBody(a,w,dt){
 }
 export function moveAnt(a,w,time,dt,traffic=0){
   const m=a.motion;let passed=false;
+  if(m.clearanceUntil){
+    const goal=m.clearanceGoal,remaining=goal?Math.hypot(goal[0]-a.pos[0],goal[1]-a.pos[1]):0;
+    if(time>=m.clearanceUntil||remaining<.015||(m.clearanceLeft??0)<.005){m.clearanceUntil=0;m.gaitDirection=1;m.speed=0;a.route=[];return true;}
+    const step=Math.min(.3*dt,m.clearanceLeft,remaining),dx=(goal[0]-a.pos[0])/remaining,dy=(goal[1]-a.pos[1])/remaining,q=[a.pos[0]+dx*step,a.pos[1]+dy*step];
+    if(clearSegment(w,a.pos,q)&&sweptFree(w,a,a.pos,q,m.angle,m.angle)){const old=[...a.pos];a.pos=q;m.clearanceLeft-=step;m.travel+=step;m.speed=step/dt;m.gaitDirection=dx*Math.cos(m.angle)+dy*Math.sin(m.angle)<-.3?-1:1;m.mode='stepping clear';reindexAdult(w,a,old);}else m.speed=0;return false;
+  }
   if(m.backingUntil){
     const goal=m.backingGoal,remaining=goal?Math.hypot(goal[0]-a.pos[0],goal[1]-a.pos[1]):0;
     if(time>=m.backingUntil||remaining<.04||(m.backingLeft??0)<.005){m.backingUntil=0;m.gaitDirection=1;m.speed=0;a.route=[];return true;}
@@ -106,18 +112,20 @@ export function moveAnt(a,w,time,dt,traffic=0){
   const sensory=length<.4?0:(urgent?0:(m.turn??0)*.35+(m.touchTurn??0)*.3)+(m.separation??0)*.35+(m.wander??0)*(searching?.25:.08);
   const desired=Math.atan2(aim[1]-a.pos[1],aim[0]-a.pos[0])+sensory,difference=wrapAngle(desired-m.angle),turnLimit=(a.caste==='queen'?2.8:5.5)*dt;
   let angle=wrapAngle(m.angle+clamp(difference,-turnLimit,turnLimit));
-  // A turn must fit too. Never rotate instantly into a neighbour and then slide away.
-  if(!sweptFree(w,a,a.pos,a.pos,angle,previousAngle)){let low=0,high=1;for(let i=0;i<5;i++){const t=(low+high)/2,v=wrapAngle(previousAngle+wrapAngle(angle-previousAngle)*t);if(sweptFree(w,a,a.pos,a.pos,v,previousAngle))low=t;else high=t;}angle=wrapAngle(previousAngle+wrapAngle(angle-previousAngle)*low);}
-  m.angle=angle;m.turnVelocity=wrapAngle(angle-previousAngle)/dt;
   const alignment=Math.max(0,Math.cos(wrapAngle(desired-angle))),base=(a.caste==='queen'?.85:a.caste==='major'?2.5:3)*(loaded?.72:1)*(.7+a.energy*.3)/(1+Math.min(traffic,5)*.08);
   const waiting=time<(m.waitUntil??0),sampling=time<m.pauseUntil&&!urgent,approach=Math.min(1,length/(following?.32:.5));
   const targetSpeed=waiting||sampling?0:base*(m.pace??1)*(m.yielding??1)*alignment*alignment*approach;
   let speed=m.speed+(targetSpeed-m.speed)*(1-Math.exp(-dt*(targetSpeed<m.speed?18:8)));
   // No forward creep during an about-turn, and no stored momentum at contact.
   if(alignment<.45||waiting||sampling)speed=0;
-  const step=Math.min(length,speed*dt),candidate=[a.pos[0]+Math.cos(angle)*step,a.pos[1]+Math.sin(angle)*step];let p=candidate;
-  const free=q=>clearSegment(w,a.pos,q)&&sweptFree(w,a,a.pos,q,angle,angle);
-  if(step>0&&!free(p)){let low=0,high=1;for(let i=0;i<7;i++){const t=(low+high)/2,q=[a.pos[0]+(candidate[0]-a.pos[0])*t,a.pos[1]+(candidate[1]-a.pos[1])*t];if(free(q))low=t;else high=t;}p=[a.pos[0]+(candidate[0]-a.pos[0])*low,a.pos[1]+(candidate[1]-a.pos[1])*low];}
+  const step=Math.min(length,speed*dt),delta=wrapAngle(angle-previousAngle),origin=[...a.pos];
+  const arc=(t,travel=step,turn=delta)=>Math.abs(turn)<1e-8?[origin[0]+Math.cos(previousAngle)*travel*t,origin[1]+Math.sin(previousAngle)*travel*t]:[origin[0]+travel/turn*(Math.sin(previousAngle+turn*t)-Math.sin(previousAngle)),origin[1]+travel/turn*(Math.cos(previousAngle)-Math.cos(previousAngle+turn*t))];
+  const free=(t,travel=step,turn=delta)=>{const count=Math.max(1,Math.ceil(Math.abs(turn*t)/.12),Math.ceil(travel*t/.10));let p=origin,prior=previousAngle;for(let i=1;i<=count;i++){const fraction=t*i/count,q=arc(fraction,travel,turn),heading=previousAngle+turn*fraction;if(!clearSegment(w,p,q)||!sweptFree(w,a,p,q,heading,prior))return false;p=q;prior=heading;}return true;};
+  let fraction=1,travelStep=step,turnStep=delta;
+  if(!free(1)){let low=0,high=1;for(let i=0;i<7;i++){const t=(low+high)/2;if(free(t))low=t;else high=t;}fraction=low;
+    if(fraction<.02){if(free(1,0,delta)){fraction=1;travelStep=0;}else if(step>0&&free(1,step,0)){fraction=1;turnStep=0;}}
+  }
+  const p=arc(fraction,travelStep,turnStep);m.angle=wrapAngle(previousAngle+turnStep*fraction);m.turnVelocity=wrapAngle(m.angle-previousAngle)/dt;
   const old=[...a.pos],travel=Math.hypot(p[0]-old[0],p[1]-old[1]);m.speed=travel/dt;m.travel+=travel;a.pos=p;reindexAdult(w,a,old);
   const remaining=Math.hypot(next[0]-p[0],next[1]-p[1]);
   if(travel<.005&&targetSpeed>.1){m.trafficBlocked=(m.trafficBlocked??0)+dt;m.waitingSince??=time;m.mode='yielding';}else if(travel>.025){m.trafficBlocked=0;m.waitingSince=null;m.mode=loaded?'carrying':'travelling';}

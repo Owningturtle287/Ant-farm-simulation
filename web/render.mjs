@@ -156,9 +156,10 @@ export class Renderer {
         const parts=this.bodyParts[ant.caste],px=width/SPRITE_W,draw=(source,sx=0,sy=0,pivot=26)=>c.drawImage(source,sx,sy,SPRITE_W,SPRITE_H,-pivot*px,-17*px,width,height);
         draw(parts.legs,frame*SPRITE_W);draw(parts.thorax);c.save();c.translate(-6*px,0);c.rotate(p.waist??0);draw(parts.abdomen,0,0,20);c.restore();c.save();c.translate(4*px,0);c.rotate(p.neck??0);draw(parts.head,scan*SPRITE_W,wide?SPRITE_H:0,30);c.restore();
       }else c.drawImage(this.sprites[ant.caste],frame*SPRITE_W,row*SPRITE_H,SPRITE_W,SPRITE_H,-width*26/SPRITE_W,-height/2,width,height);
-      if(carriedBrood.has(ant.id))paintBrood(c,carriedBrood.get(ant.id),width*.40,0,z,visualClock);
       if(ant.task==='laying'&&colony.time>ant.layUntil-2){c.fillStyle='#fff0cb';c.fillRect(-width*.55,-z,3*z,3*z);}
-      if(ant.carried){c.fillStyle=ant.cargoKind==='soil'?'#c29a61':ant.cargoKind==='water'?'#93ccda':ant.cargoNutrition?.protein>.5?'#ba755b':'#ecc56b';for(let unit=0;unit<Math.ceil(ant.carried/2);unit++)c.fillRect(width*.35+unit*3*z,-height*.3,3*z,3*z);}c.restore();
+      if(carriedBrood.has(ant.id)||ant.carried){c.save();c.translate(width*4/SPRITE_W,0);c.rotate(z>=.95||ant.id===options.selected||ant.caste==='queen'?p.neck??0:0);
+        if(carriedBrood.has(ant.id))paintBrood(c,carriedBrood.get(ant.id),width*.32,0,z,visualClock);
+        if(ant.carried){c.fillStyle=ant.cargoKind==='soil'?'#c29a61':ant.cargoKind==='water'?'#93ccda':ant.cargoNutrition?.protein>.5?'#ba755b':'#ecc56b';for(let unit=0;unit<Math.ceil(ant.carried/2);unit++)c.fillRect(width*.28+unit*3*z,-height*.3,3*z,3*z);}c.restore();}c.restore();
     }
     const broodIDs=new Set(colony.brood.map(b=>b.id));for(const id of this.broodPoses.keys())if(!broodIDs.has(id))this.broodPoses.delete(id);
     for(const id of this.positions.keys())if(!live.has(id))this.positions.delete(id);
