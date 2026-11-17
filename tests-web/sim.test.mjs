@@ -550,3 +550,18 @@ test('brood carriers leave the full growing bed clear before dropping an egg',()
  c.carryBrood(n);assert.equal(b.carriedBy,n.id,'A tiny egg must not be put inside the carrier body or its later growth space.');
  n.cell=[0,21];n.pos=[0,21];n.broodDestination=[0,20];beginTraffic(c);c.carryBrood(n);assert.equal(b.carriedBy,null);assert.ok(canOccupy(c.world,n,n.pos));
 });
+
+test('surface soil carriers keep a placement route instead of stopping at every step',()=>{
+ const c=new Colony(),a=c.ants[1];c.ants=[a];c.brood=[];c.foodItems=[];c.world.patches=[];beginTraffic(c);
+ const p=[20,c.world.surface(20)-1],n=c.world.neighbors(p).find(q=>c.world.onSurface(q));assert.ok(n);a.cell=p;a.pos=[...p];a.motion.angle=Math.atan2(n[1]-p[1],n[0]-p[0]);a.route=[n];a.destination=[...n];a.depositTarget=[n[0]+2,c.world.surface(n[0]+2)];a.task='haulingSoil';a.carried=1;a.cargoKind='soil';a.busyUntil=0;beginTraffic(c);
+ c.updateAnt(a,.1);assert.ok(a.route.length,'A placement route must remain active while walking outside.');assert.ok(distance(a.pos,p)>0);
+});
+test('a worker yielding beside brood completes its sidestep before contact work',()=>{
+ const c=new Colony(),a=c.ants[1],b=c.brood[0];c.ants=[a];c.brood=[b];c.foodItems=[];c.world.patches=[];c.world.carve([0,20],5,4);b.cell=[0,21];b.carriedBy=null;a.cell=[0,20];a.pos=[0,20];a.motion.angle=0;a.task='nursing';a.broodID=b.id;a.route=[[1,20],[2,20]];a.destination=[0,21];a.motion.yieldingRoute=true;a.motion.yieldTarget=[2,20];a.motion.resumeGoal=[0,21];a.motion.yieldEnd=c.time+10;a.busyUntil=0;beginTraffic(c);
+ c.updateAnt(a,.1);assert.ok(a.route.length);assert.ok(a.pos[0]>0,'Contact range must not cancel a physical yielding route.');assert.equal(a.motion.yieldingRoute,true);
+});
+
+test('brood pickup uses physical contact rather than the rounded navigation cell',()=>{
+ const c=new Colony(),a=c.ants[1],b=c.brood[0];for(const baby of c.brood)bedRelease(c,baby);c.ants=[a];c.brood=[b];c.foodItems=[];c.world.patches=[];c.world.carve([0,20],4,4);b.cell=[0,20];b.carriedBy=null;holdCell(c.world,b.cell,'b:'+b.id);a.pos=[.8,19.2];a.cell=[1,19];a.motion.angle=Math.PI/2;a.broodID=b.id;a.broodDestination=[0,23];beginTraffic(c);
+ assert.ok(distance(a.cell,b.cell)>1.1);assert.ok(distance(a.pos,b.cell)<1.25);c.collectBrood(a);assert.equal(b.carriedBy,a.id);assert.equal(a.carryingBrood,b.id);
+});

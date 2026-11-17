@@ -1,7 +1,7 @@
 // Default settings, fixed production ticks, no player-supplied food or water.
 import assert from 'node:assert/strict';
 import {writeFileSync} from 'node:fs';
-import {Colony,DAY} from '../web/sim.mjs';
+import {Colony,DAY,broodStage} from '../web/sim.mjs';
 import {supplyBalance} from '../web/provisions.mjs';
 import {resourceBalance} from '../web/resources.mjs';
 const seed=Number(process.argv[3]??287),c=new Colony(seed),began=performance.now(),checkpoints=[];
@@ -16,10 +16,12 @@ const inspect=()=>{
   for(const [x,y] of c.world.heights)assert.ok(Math.abs(y-c.world.surface(x-1))<=1&&Math.abs(y-c.world.surface(x+1))<=1,'Mature mounds must not form vertical exterior walls.');
   const covered=[...c.world.moundTunnels].filter(id=>c.world.coveredMound(id.split(',').map(Number))).length;assert.ok(covered<=c.world.deposits.size*.25+3,'Mound galleries must retain substantial solid soil.');
   const queen=c.ants.find(a=>a.caste==='queen');
-  checkpoints.push({crop:queen?{food:queen.socialFood,protein:queen.socialProtein,water:queen.socialWater}:null,storedFoodParcels:c.foodItems.length,freeBeds:c.freeBeds,seepSources:c.world.patches.filter(p=>p.origin==='seep').length,day:Math.round(c.time/DAY),adults:c.ants.length,brood:c.brood.length,births:c.births,deaths:c.deaths,moundPeak:Math.max(0,...[...c.world.heights].map(([x,y])=>c.world.baseSurface(x)-y)),coveredMoundCells:covered,moundCells:c.world.soilDeposited,moundTunnelCells:c.world.moundTunnels.size,food:c.food,protein:c.protein,water:c.water,alive:c.alive});
+  const tasks=Object.fromEntries([...new Set(c.ants.map(a=>a.task))].map(task=>[task,c.ants.filter(a=>a.task===task).length]));
+  const stages=Object.fromEntries(['egg','larva','pupa'].map(stage=>{const list=c.brood.filter(b=>broodStage(b)===stage);return [stage,{count:list.length,hungry:list.filter(b=>b.nutrition<.4).length,meanNutrition:list.length?list.reduce((n,b)=>n+b.nutrition,0)/list.length:null,oldestDays:Math.max(0,...list.map(b=>b.age/DAY)),meanCareAge:list.length?list.reduce((n,b)=>n+c.time-b.lastCare,0)/list.length:null}];}));
+  checkpoints.push({tasks,stages,crop:queen?{food:queen.socialFood,protein:queen.socialProtein,water:queen.socialWater}:null,storedFoodParcels:c.foodItems.length,freeBeds:c.freeBeds,seepSources:c.world.patches.filter(p=>p.origin==='seep').length,day:Math.round(c.time/DAY),adults:c.ants.length,brood:c.brood.length,births:c.births,deaths:c.deaths,moundPeak:Math.max(0,...[...c.world.heights].map(([x,y])=>c.world.baseSurface(x)-y)),coveredMoundCells:covered,moundCells:c.world.soilDeposited,moundTunnelCells:c.world.moundTunnels.size,food:c.food,protein:c.protein,water:c.water,alive:c.alive});
   console.log(JSON.stringify(checkpoints.at(-1)));
 };
 inspect();for(let i=0;i<120*DAY/.1;i++){c.step(.1);if((i+1)%(20*DAY/.1)===0)inspect();}
 assert.ok(c.alive,'The default colony must survive a long run.');assert.ok(c.births>=30,'Normal reproduction must replace the founder generation.');assert.ok(c.ants.length>=25,'The colony must grow beyond its founders.');
-const report={version:'0.9',seed,simulatedDays:120,tickSeconds:.1,settings:c.settings,wallSeconds:(performance.now()-began)/1000,checkpoints,balances:['food','water'].map(kind=>({kind,...resourceBalance(c.world,kind)})),scope:'One seeded CPU simulation; not a biological validation or a real-iPhone performance limit.'};
+const report={version:'0.10',seed,simulatedDays:120,tickSeconds:.1,settings:c.settings,wallSeconds:(performance.now()-began)/1000,checkpoints,balances:['food','water'].map(kind=>({kind,...resourceBalance(c.world,kind)})),scope:'One seeded CPU simulation; not a biological validation or a real-iPhone performance limit.'};
 if(process.argv[2])writeFileSync(process.argv[2],JSON.stringify(report,null,2));

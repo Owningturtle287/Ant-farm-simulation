@@ -341,7 +341,7 @@ export class Colony{
     }
     if(a.motion.yieldingRoute&&(a.motion.trafficBlocked??0)>5){a.motion.yieldingRoute=false;a.route=[];a.motion.resumeGoal=null;a.motion.yieldTarget=null;this.chooseJob(a);return;}
     if(a.motion.yieldingRoute&&!a.route.length){if(this.time<a.motion.yieldEnd)return;const goal=a.motion.resumeGoal;a.motion.yieldingRoute=false;a.motion.yieldTarget=null;a.motion.resumeGoal=null;if(goal)this.send(a,goal);return;}
-    if(a.route.length){
+    if(a.route.length&&!a.motion.yieldingRoute){
       const target=a.task==='toCache'?this.foodItems.find(p=>p.id===a.cacheID)?.pos:a.task==='storeFood'?a.cacheSlot:a.task==='toBrood'||a.task==='nursing'?this.broodItem(a.broodID)?.cell:a.task==='carryingBrood'?a.broodDestination:a.task==='feedingQueen'?this.ants.find(b=>b.caste==='queen')?.pos:null;
       if(target&&distance(a.pos,target)<=1.25){a.route=[];a.cell=a.pos.map(Math.round);}
       if(a.task.startsWith('returning')&&distance(a.pos,this.world.nest)<3){a.route=[];a.cell=a.pos.map(Math.round);}
@@ -352,7 +352,7 @@ export class Colony{
       if(!this.world.walkable(next.slice(0,2).map(Math.round))){a.route=[];const goal=a.destination;if(goal&&this.world.walkable(goal))a.route=this.world.path(a.cell,goal)??[];return;}
       const traffic=Math.max(0,(this.occupancy.get(key(next))?.length??0)-1),arrived=moveAnt(a,this.world,this.time,dt,traffic);if(!arrived)unjam(this,a);
       const actual=a.pos.map(Math.round);if(distance(a.pos,a.cell)>.9){const anchors=[];for(let y=actual[1]-1;y<=actual[1]+1;y++)for(let x=actual[0]-1;x<=actual[0]+1;x++)if(this.world.walkable([x,y]))anchors.push([x,y]);anchors.sort((p,q)=>distance(p,a.pos)-distance(q,a.pos));if(anchors[0]&&!same(anchors[0],a.cell)){a.cell=anchors[0];const goal=a.motion.yieldTarget??a.destination;if(goal)a.route=routeAroundItems(this.world,a,goal)??[];}}
-      if(a.task==='haulingSoil'&&this.world.onSurface(actual)){a.cell=actual;a.route=[];}
+      if(a.task==='haulingSoil'&&!a.depositTarget&&!a.motion.yieldingRoute&&this.world.onSurface(actual)){a.cell=actual;a.route=[];}
       if(arrived&&a.task.startsWith('returning')){
         const kind=a.task==='returningWater'?'water':'food',trail=this.world.trails[kind],strength=(.12+.20*Math.exp(-(this.time-a.sourceAt)/50))*(a.deliveryAmount??a.carried)/2.5;
         emit(this.world,kind,next,strength);this.world.pheromones.set(key(next),Math.max(trail.get(key(next))??0,this.world.pheromones.get(key(next))??0));
@@ -423,7 +423,7 @@ export class Colony{
       case 'nursing':{
         const baby=this.broodItem(a.broodID);
         if(!baby||baby.carriedBy!=null||(this.careClaims?.has(baby.id)&&this.careClaims.get(baby.id)!==a.id)){if(!this.assignCare(a))this.chooseJob(a);break;}
-        if(distance(a.cell,baby.cell)>1.5){this.send(a,baby.cell);break;}
+        if(distance(a.pos,baby.cell)>1.4){this.send(a,baby.cell);break;}
         baby.lastCare=this.time;
         if(broodStage(baby)==='larva'){const wanted=Math.min(.054,(1-baby.nutrition)*.12),held=consumeNutrient(this,a,'protein',wanted),protein=held+feedBroodCargo(this,a,wanted-held);baby.nutrition+=protein/.12;baby.fed=(baby.fed??0)+protein/.12;if(a.socialProtein<.015&&!(a.cargoKind==='broodMeal'&&a.carried)&&this.assignCache(a,'care',true))break;}
         a.skills.care=clamp(a.skills.care+.01);a.busyUntil=this.time+3;
@@ -659,7 +659,7 @@ export class Colony{
   collectBrood(a){
     const b=this.broodItem(a.broodID);
     if(!b||b.carriedBy!=null){this.releaseBrood(a);this.chooseJob(a);return;}
-    if(distance(a.cell,b.cell)>1.1){this.send(a,b.cell);return;}
+    if(distance(a.pos,b.cell)>1.25){this.send(a,b.cell);return;}
     bedRelease(this,b);b.carriedBy=a.id;refreshItems(this);a.carryingBrood=b.id;b.pos=[...a.pos];a.task='carryingBrood';this.carryBrood(a);
   }
   carryBrood(a){
