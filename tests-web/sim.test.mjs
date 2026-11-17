@@ -36,6 +36,11 @@ test('a trapped worker can lift a blocking food parcel and leave without losing 
  for(const y of[-.5,.5])for(let x=-2;x<=2;x++)c.foodItems.push({id:c.foodItems.length,pos:[x/3,20+y],energy:1.5,protein:.5});for(const x of[-2,2])c.foodItems.push({id:c.foodItems.length,pos:[x/3,20],energy:1.5,protein:.5});beginTraffic(c);assert.ok(canOccupy(c.world,a,a.pos));assert.equal(routeAroundItems(c.world,a,[0,18]),null);
  const item=c.foodItems.find(p=>p.pos[0]===0&&p.pos[1]<20),before=c.foodItems.reduce((n,p)=>n+p.energy+p.protein,0);assert.ok(liftCache(c,a,item));refreshItems(c);assert.equal(c.foodItems.reduce((n,p)=>n+p.energy+p.protein,0)+a.carried,before);assert.deepEqual(a.cargoNutrition,{energy:.75,protein:.25});a.route=routeAroundItems(c.world,a,[0,18]);assert.ok(a.route?.length);a.task='storeFood';for(let i=0;i<300&&a.route.length;i++){updateMotion(a,c.world,i*.1,.1,new Map());moveAnt(a,c.world,i*.1,.1);assert.ok(canOccupy(c.world,a,a.pos));}assert.ok(distance(a.pos,[0,18])<.08);
 });
+test('cancelled brood trips release their destination while completed beds remain occupied',()=>{
+ const c=new Colony(),a=c.ants[1],b=c.brood[0],pending=[16,20];c.world.carve(pending,3,3);assert.ok(holdCell(c.world,pending,'b:'+b.id));a.broodID=b.id;a.broodDestination=pending;a.task='toBrood';c.releaseBrood(a);assert.ok(freeCell(c.world,pending));assert.equal(freeCell(c.world,b.cell),false);
+ // A nurse loaded from an older save can still reference the bed it already filled.
+ a.broodID=b.id;a.broodDestination=[...b.cell];a.task='nursing';c.releaseBrood(a);assert.equal(freeCell(c.world,b.cell),false);
+});
 test('small seeded colonies forage, excavate, grow a mound, and develop brood',()=>{
   for(const seed of [17,287,914]){
     const c=new Colony(seed);c.food=2;c.water=1;for(let i=0;i<12000&&!(c.foodDelivered>0&&c.waterDelivered>0&&c.world.soilDeposited>0&&c.births>0);i++)c.step();

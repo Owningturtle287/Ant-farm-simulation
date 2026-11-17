@@ -283,7 +283,8 @@ export class Colony{
   }
   releaseBrood(a){
     if(a.broodID!=null)this.broodClaims.delete(a.broodID);
-    if(a.broodDestination)releaseCell(this.world,a.broodDestination,'b:'+(a.carryingBrood??a.broodID));
+    const reservedBrood=this.broodItem(a.carryingBrood??a.broodID);
+    if(a.broodDestination&&!(reservedBrood?.carriedBy==null&&reservedBrood&&same(reservedBrood.cell,a.broodDestination)))releaseCell(this.world,a.broodDestination,'b:'+(a.carryingBrood??a.broodID));
     const b=this.broodItem(a.carryingBrood);
     if(b){if(a.broodDestination)releaseCell(this.world,a.broodDestination,'b:'+b.id);const bed=bedAvailable(this,b,a.cell);b.carriedBy=null;if(bed)bedOccupy(this,b,bed);delete b.pos;b.needsTransport=true;}
     a.carryingBrood=null;a.broodID=null;a.broodDestination=null;
@@ -678,7 +679,7 @@ export class Colony{
     if(distance(a.pos,a.broodDestination)>1.4){this.send(a,a.broodDestination);return;}
     if(!spaceForItem(this.world,a.broodDestination,Math.max(.31,broodRadius(b)))){releaseCell(this.world,a.broodDestination,'b:'+b.id);a.broodDestination=null;a.busyUntil=this.time+.5;return;}
     if(!bedOccupy(this,b,a.broodDestination)){a.broodDestination=null;return;}delete b.pos;b.home=[...b.cell];b.carriedBy=null;refreshItems(this);b.needsTransport=false;b.lastMoved=this.time;b.lastCare=this.time;
-    a.carryingBrood=null;this.broodClaims.delete(b.id);a.task='nursing';a.busyUntil=this.time+2;this.broodMoved++;
+    a.carryingBrood=null;a.broodDestination=null;this.broodClaims.delete(b.id);a.task='nursing';a.busyUntil=this.time+2;this.broodMoved++;
     a.decision='Placed brood in the nursery. Now grooming and tending it.';
   }
 
