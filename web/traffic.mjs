@@ -38,7 +38,9 @@ export function canOccupy(w,a,p,angle=a.motion?.angle??0,ignoreBrood=null,ignore
   p=[p[0],p[1]];if(!escaping&&!terrainFree(w,p))return false;
   const t=w.traffic;if(!t)return true;
   const discs=bodyDiscs(a,p,angle,joints);
-  for(const o of around(t.obstacles??t.items,p,1))if(o.kind!=='brood'&&o.kind!=='cache'&&discs.some(d=>Math.hypot(o.pos[0]-d.x,o.pos[1]-d.y)<d.radius+o.radius-.002))return false;
+  // Small surface portions constrain the thorax; head and gaster may reach over them.
+  // Nestmate contact below still protects every connected body segment.
+  for(const o of around(t.obstacles??t.items,p,1))if(o.kind!=='brood'&&o.kind!=='cache'&&Math.hypot(o.pos[0]-discs[0].x,o.pos[1]-discs[0].y)<discs[0].radius+o.radius-.002)return false;
   if(!ignoreAdults)for(const b of around(t.adults,p,a.caste==='queen'?2:1))if(b.id!==a.id&&dist(b.pos,p)<1.4&&bodyGap(a,b,p,angle,joints)<-CONTACT_SLACK)return false;
   return true;
 }
