@@ -496,3 +496,25 @@ test('nursery searches reuse geometry while observing new reservations, releases
   const c=new Colony(),w=c.world,near=w.nest,first=findBed(w,near);assert.ok(first);assert.ok(holdCell(w,first,'test-bed'));const other=findBed(w,near);assert.ok(other);assert.notDeepEqual(other,first);releaseCell(w,first,'test-bed');assert.deepEqual(findBed(w,near),first);
   const far=[100,12];findBed(w,far);w.carve(far,1,1);assert.deepEqual(findBed(w,far),far);assert.ok(w.bedPools.size<=16);
 });
+
+test('adult bodies cannot pass through one another or grounded brood and cache parcels',async()=>{
+ const {beginTraffic,bodyGap,canOccupy,sweptFree}=await import('../web/traffic.mjs');
+ const c=new Colony(287),w=c.world;c.ants=c.ants.slice(0,2);c.brood=[];c.foodItems=[];w.patches=[];w.carve([0,20],8,3);
+ for(const [i,a] of c.ants.entries()){a.cell=[i*3,20];a.pos=[...a.cell];a.motion.angle=0;}beginTraffic(c);
+ assert.ok(bodyGap(c.ants[0],c.ants[1])>0);assert.equal(sweptFree(w,c.ants[0],[0,20],[6,20],0),false,'A large time step must not tunnel through another adult.');
+ c.brood=[{id:990,cell:[1,20],age:DAY*9,carriedBy:null}];beginTraffic(c);assert.equal(canOccupy(w,c.ants[0],[1,20]),false);
+ c.brood=[];c.foodItems=[{id:991,pos:[1,20],energy:1,protein:0}];beginTraffic(c);assert.equal(canOccupy(w,c.ants[0],[1,20]),false);
+});
+test('roofed untagged air gaps remain connected across the mound and original soil seam',()=>{
+ const w=new World(287),x=0,y=w.baseSurface(x)-1;
+ for(let xx=-2;xx<=2;xx++){w.deposits.add(key([xx,y-3]));w.heights.set(xx,y-3);for(let yy=y;yy<=y+2;yy++)w.excavated.add(key([xx,yy]));}
+ w.changed([x,y]);assert.equal(w.moundTunnels.has(key([x,y])),false);assert.equal(w.coveredMound([x,y]),true);assert.equal(w.walkable([x,y]),true);assert.ok(w.path([x,y-1],[x,y+2]));
+});
+test('new eggs leave the queen body clear and nurses use adjacent contact positions',async()=>{
+ const {beginTraffic,canOccupy}=await import('../web/traffic.mjs');const c=new Colony(287),q=c.ants[0];primeCrop(c,q,2,1,1);c.ants=[q];beginTraffic(c);
+ assert.equal(c.layEgg(q),true);const b=c.brood.at(-1);assert.notDeepEqual(b.cell,q.cell);assert.ok(canOccupy(c.world,q,q.pos));assert.equal(b.carriedBy,null);
+});
+test('compressed older adult positions are separated without deleting ants or supplies',async()=>{
+ const {bodyGap}=await import('../web/traffic.mjs');const old=new Colony(287).toJSON();for(const a of old.ants){a.cell=[0,11];a.pos=[0,11];}delete old.trafficVersion;const c=Colony.fromJSON(old);assert.equal(c.ants.length,old.ants.length);assert.equal(c.food,old.food);
+ for(let i=0;i<c.ants.length;i++)for(let j=i+1;j<c.ants.length;j++)assert.ok(bodyGap(c.ants[i],c.ants[j])>=-.002);
+});

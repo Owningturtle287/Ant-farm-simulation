@@ -1,3 +1,4 @@
+import {sweptFree,reindexAdult} from './traffic.mjs';
 // Local sensorimotor approximation, not a reconstruction of an ant nervous system.
 import {clamp} from './biology.mjs';
 import {densityAt} from './geometry.mjs';
@@ -64,7 +65,7 @@ export function recoverBody(a,w,dt){
   if(next){const travel=Math.hypot(next[0]-a.pos[0],next[1]-a.pos[1]);m.travel+=travel;m.speed=travel/dt;m.angle=wrapAngle(m.angle+clamp(wrapAngle(Math.atan2(next[1]-a.pos[1],next[0]-a.pos[0])-m.angle),-7.5*dt,7.5*dt));a.pos=next;m.mode='reorienting';}
 }
 export function moveAnt(a,w,time,dt,traffic=0){
-  const m=a.motion,next=a.route[0];if(!next)return false;
+  const m=a.motion,next=a.route[0];if(!next)return false;const previousAngle=m.angle;
   const dx=next[0]-a.pos[0],dy=next[1]-a.pos[1],length=Math.hypot(dx,dy),following=a.route[1];
   // Look around a corner only inside the same traversable corridor.
   let aim=next;
@@ -88,7 +89,17 @@ export function moveAnt(a,w,time,dt,traffic=0){
       if(clearSegment(w,a.pos,correction))p=correction;else return false;
     }
   }else m.blocked=0;
-  const travel=Math.hypot(p[0]-a.pos[0],p[1]-a.pos[1]);m.travel+=travel;a.pos=p;
+  if(!sweptFree(w,a,a.pos,p,m.angle,previousAngle)){
+    let candidate=null;const desired=Math.atan2(dy,dx),side=(a.id%2?1:-1);
+    for(const offset of [side*.65,-side*.65,side*1.15,-side*1.15,Math.PI]){
+      const angle=desired+offset,q=[a.pos[0]+Math.cos(angle)*step*.65,a.pos[1]+Math.sin(angle)*step*.65];
+      if(clearSegment(w,a.pos,q)&&sweptFree(w,a,a.pos,q,angle,previousAngle)){candidate={p:q,angle};break;}
+    }
+    if(!candidate)for(const offset of [Math.PI/2,-Math.PI/2,Math.PI,0]){const q=[a.pos[0]+Math.cos(previousAngle+offset)*step*.45,a.pos[1]+Math.sin(previousAngle+offset)*step*.45];if(clearSegment(w,a.pos,q)&&sweptFree(w,a,a.pos,q,previousAngle,previousAngle)){candidate={p:q,angle:previousAngle};break;}}
+    if(!candidate){m.angle=previousAngle;m.speed=0;m.trafficBlocked=(m.trafficBlocked??0)+dt;m.mode='yielding';return false;}p=candidate.p;m.angle=candidate.angle;
+  }else m.trafficBlocked=0;
+  if(Math.hypot(p[0]-next[0],p[1]-next[1])>length-.005)m.trafficBlocked=(m.trafficBlocked??0)+dt;
+  const old=[...a.pos],travel=Math.hypot(p[0]-a.pos[0],p[1]-a.pos[1]);m.travel+=travel;a.pos=p;reindexAdult(w,a,old);
   // Intermediate waypoints are passed without snapping the continuous body position.
   const remaining=Math.hypot(next[0]-p[0],next[1]-p[1]),arrived=remaining<(following?.28:.075);
   if(arrived){a.cell=[...next];a.route.shift();}return arrived;

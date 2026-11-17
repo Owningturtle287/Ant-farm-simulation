@@ -146,3 +146,14 @@ Regression coverage includes shared item-space uniqueness, local crop transfers 
 Groundwater sampling retains route and neighbor caches while traversability is unchanged. Crossing a flooded-cell boundary invalidates them; depth changes also refresh dry item-space candidates. This avoids making every ant repeat its route search on the two-second water sampling interval.
 
 Nursery bed queries cache a bounded (16-anchor) nearest-cell ordering, then check live item reservations. Geometry/depth candidate changes discard the ordering. This removes repeated all-cell vacancy scans for every brood-care decision without caching a stale free bed. A 1,000-tick crowded-nursery profile produced the same serialized-state SHA-256 before and after the change while reducing measured wall time from 2.31 s to 1.42 s on one local runner; this is not an iPhone capacity claim.
+
+
+## v0.10: occupied space and traffic
+
+Adult body capsules now collide with other adults and grounded resource/brood footprints through a spatial hash and swept motion checks. Antennae/feet can make contact; bodies cannot pass through one another. Sampling, yielding, backward/side steps and passing alcoves resolve conflicting traffic. Terrain remains a contour-based cutaway rather than granular body/soil physics.
+
+Workers approach supplies, brood and the queen from separate contact positions rather than sharing their target's coordinate. Idle positions are spread through available chamber space. Permanent cache/brood placements leave connected room-access lanes and avoid one-cell shafts. The queen seeks nearby clear laying positions when eggs crowd her chamber. Carriers drop brood alongside their bodies, not beneath themselves. Adult emergence waits for room.
+
+Old compressed adult saves are unpacked once. If existing dry space cannot hold those adults, a connected shallow holding annex supplies individual space; its removed earth is recorded as abandoned spoil. No adults or nutrition are deleted. Normal play does not create instant annexes. The 10,000 cap remains experimental and physical density can demand substantial excavation.
+
+Enclosed, roofed voids beneath a mound surface are recognized as inside the nest even when they were not originally excavated from a mound pellet. This fixes the unsupported-air classification at natural-ground/mound seams. Rendering uses distinct egg, curled segmented larva and folded ant-shaped pupa sprites with wall-clock molt transitions and a pale emergence effect.

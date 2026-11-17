@@ -1,3 +1,4 @@
+import {spaceForItem} from './traffic.mjs';
 // A shared third-cell lattice prevents ground items and brood beds from overlapping.
 import {densityAt} from './geometry.mjs';
 export const ITEM_UNIT=2,SUB=3;
@@ -24,7 +25,7 @@ export function allocatePieces(w,p,amount){
   // A partially consumed item can refill, but never exceeds its own finite unit.
   for(const item of p.pieces){const n=Math.min(amount-placed,ITEM_UNIT-item.amount);if(n>0){item.amount+=n;placed+=n;}if(placed>=amount-1e-9)return placed;}
   for(const pos of resourcePositions(w,p)){
-    if(placed>=amount-1e-9)break;if(w.itemSlots.has(slotKey(pos)))continue;
+    if(placed>=amount-1e-9)break;if(w.itemSlots.has(slotKey(pos))||!spaceForItem(w,pos,.10))continue;
     if(densityAt(...pos,(x,y)=>w.solid([x,y]))>=.49)continue;
     const n=Math.min(ITEM_UNIT,amount-placed),item={id:p.nextPieceID++,pos,amount:n};p.pieces.push(item);reserveSlot(w,pos,owner(p));placed+=n;
   }return placed;
@@ -38,15 +39,16 @@ export function consumePieces(w,p,amount,preferred=null){
 export function restorePieces(w){
   for(const p of w.patches){const amount=p.amount;p.pieces??=[];for(const item of p.pieces)if(item.amount>0&&(w.itemSlots.has(slotKey(item.pos))||!reserveSlot(w,item.pos,owner(p))))throw Error('Overlapping resource items in saved ground');if(!p.pieces.length&&amount>0){const placed=allocatePieces(w,p,amount);if(placed<amount-1e-7){p.amount=placed;if(w.resourceLedger)w.resourceLedger[p.kind].buried+=amount-placed;}}}
 }
-export function openNestCells(w){if(w.itemCellsRevision!==w.revision){w.itemCellsRevision=w.revision;w.itemCells=[...w.excavated,...w.moundTunnels].map(k=>k.split(',').map(Number)).filter(c=>w.walkable(c)&&!w.onSurface(c)&&w.conditions(c).humidity<.88);const seen=new Set();w.itemCells=w.itemCells.filter(c=>{const k=cellKey(c);if(seen.has(k))return false;seen.add(k);return true;});}return w.itemCells;}
+export function travelLanes(w){if(w.laneRevision!==w.revision){w.laneRevision=w.revision;w.lanes=new Set([w.nest.join(',')]);for(const r of w.rooms){const route=w.path(w.nest,r.center);if(route)for(const p of route)w.lanes.add(p.join(','));}}return w.lanes;}
+export function openNestCells(w){if(w.itemCellsRevision!==w.revision){w.itemCellsRevision=w.revision;w.itemCells=[...w.excavated,...w.moundTunnels].map(k=>k.split(',').map(Number)).filter(c=>w.walkable(c)&&!w.onSurface(c)&&w.conditions(c).humidity<.88&&!travelLanes(w).has(c.join(','))&&[[1,0],[-1,0],[0,1],[0,-1]].filter(d=>w.walkable([c[0]+d[0],c[1]+d[1]])).length>=3);const seen=new Set();w.itemCells=w.itemCells.filter(c=>{const k=cellKey(c);if(seen.has(k))return false;seen.add(k);return true;});}return w.itemCells;}
 export function findBed(w,near,id=null){
   const cells=openNestCells(w);if(w.bedPoolCells!==cells){w.bedPoolCells=cells;w.bedPools=new Map();}
   const key=cellKey(near);let ordered=w.bedPools.get(key);if(!ordered){ordered=cells.map(c=>({c,d:Math.hypot(c[0]-near[0],c[1]-near[1])})).sort((a,b)=>a.d-b.d).map(v=>v.c);if(w.bedPools.size>=16)w.bedPools.delete(w.bedPools.keys().next().value);w.bedPools.set(key,ordered);}
   // Geometry order is cached; actual reservations are always checked at pickup time.
-  const best=ordered.find(c=>freeCell(w,c,id));return best?[...best]:null;
+  const best=ordered.find(c=>freeCell(w,c,id)&&spaceForItem(w,c,.31));return best?[...best]:null;
 }
 export function cachePositions(w,near){const cells=openNestCells(w);return [...cells].sort((a,b)=>Math.hypot(a[0]-near[0],a[1]-near[1])-Math.hypot(b[0]-near[0],b[1]-near[1])).flatMap(c=>{const out=[];for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++)out.push([c[0]+x/SUB,c[1]+y/SUB]);return out;});}
 export function findCacheSlot(w,near){
   const anchor=cellKey(near);if(w.cachePoolRevision!==w.revision||w.cachePoolAnchor!==anchor){w.cachePoolRevision=w.revision;w.cachePoolAnchor=anchor;w.cachePool=cachePositions(w,near);w.cacheCursor=0;}
-  for(let i=0;i<w.cachePool.length;i++){const p=w.cachePool[w.cacheCursor++%w.cachePool.length];if(!w.itemSlots.has(slotKey(p))&&w.walkable(p.map(Math.round))&&w.conditions(p.map(Math.round)).humidity<.88&&densityAt(...p,(x,y)=>w.solid([x,y]))<.42)return [...p];}return null;
+  for(let i=0;i<w.cachePool.length;i++){const p=w.cachePool[w.cacheCursor++%w.cachePool.length];if(!w.itemSlots.has(slotKey(p))&&w.walkable(p.map(Math.round))&&w.conditions(p.map(Math.round)).humidity<.88&&spaceForItem(w,p,.115)&&densityAt(...p,(x,y)=>w.solid([x,y]))<.42)return [...p];}return null;
 }
