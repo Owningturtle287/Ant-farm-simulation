@@ -1,4 +1,4 @@
-import {sweptFree,reindexAdult,canOccupy,terrainFree,nearbyAdults} from './traffic.mjs';
+import {sweptFree,reindexAdult,canOccupy,terrainFree,nearbyAdults,bodyGap} from './traffic.mjs';
 // Local sensorimotor approximation, not a reconstruction of an ant nervous system.
 import {clamp} from './biology.mjs';
 import {densityAt} from './geometry.mjs';
@@ -58,8 +58,14 @@ export function updateArticulation(a,w,time,dt){
   const examining=time<(m.examineUntil??0)?wrapAngle((m.examineAngle??m.angle)-m.angle):0,scan=['sampling','resting','searching'].includes(m.mode)?Math.sin(m.phase*.75)*.12:0;
   const squeezing=(m.trafficBlocked??0)>.2;const neckTarget=squeezing?0:clamp(examining||wrapAngle(direction-m.angle)*.65+(m.turn??0)*.3+scan,-NECK_LIMIT,NECK_LIMIT),waistTarget=squeezing?0:clamp(-(m.turnVelocity??0)*.075,-WAIST_LIMIT,WAIST_LIMIT),blend=1-Math.exp(-dt*8),old={neck:m.neck??0,waist:m.waist??0};
   const pose={neck:old.neck+(neckTarget-old.neck)*blend,waist:old.waist+(waistTarget-old.waist)*blend};
-  for(const t of [.5,1])if(!canOccupy(w,a,a.pos,m.angle,null,false,!!m.recovering,{neck:old.neck+(pose.neck-old.neck)*t,waist:old.waist+(pose.waist-old.waist)*t}))return;
-  m.neck=pose.neck;m.waist=pose.waist;
+  let clear=true;for(const t of [.5,1])if(!canOccupy(w,a,a.pos,m.angle,null,false,!!m.recovering,{neck:old.neck+(pose.neck-old.neck)*t,waist:old.waist+(pose.waist-old.waist)*t}))clear=false;
+  if(clear){m.neck=pose.neck;m.waist=pose.waist;}
+  if((m.trafficBlocked??0)>.5&&time>=(m.nextJointChoice??0)){
+    m.nextJointChoice=time+.3;const turn=m.angle+clamp(wrapAngle(direction-m.angle),-.22,.22),near=nearbyAdults(w,a,.85).slice(0,5),score=pose=>(canOccupy(w,a,a.pos,turn,null,false,false,pose)?2:0)+Math.min(.2,...near.map(b=>bodyGap(a,b,a.pos,m.angle,pose)))*2;
+    let best={neck:m.neck??0,waist:m.waist??0},quality=score(best);
+    for(const dn of[-.1,0,.1])for(const dw of[-.08,0,.08]){const p={neck:clamp((m.neck??0)+dn,-NECK_LIMIT,NECK_LIMIT),waist:clamp((m.waist??0)+dw,-WAIST_LIMIT,WAIST_LIMIT)},mid={neck:((m.neck??0)+p.neck)/2,waist:((m.waist??0)+p.waist)/2};if(!canOccupy(w,a,a.pos,m.angle,null,false,false,p)||!canOccupy(w,a,a.pos,m.angle,null,false,false,mid))continue;const q=score(p);if(q>quality+.001){quality=q;best=p;}}
+    m.neck=best.neck;m.waist=best.waist;
+  }
 }
 export function clearSegment(w,from,to,escaping=false){
   let previous=escaping?densityAt(...from,(x,y)=>w.solid([x,y])):0;
@@ -82,13 +88,20 @@ export function recoverBody(a,w,dt){
 }
 export function moveAnt(a,w,time,dt,traffic=0){
   const m=a.motion;let passed=false;
+  if(m.backingUntil){
+    const goal=m.backingGoal,remaining=goal?Math.hypot(goal[0]-a.pos[0],goal[1]-a.pos[1]):0;
+    if(time>=m.backingUntil||remaining<.04||(m.backingLeft??0)<.005){m.backingUntil=0;m.gaitDirection=1;m.speed=0;a.route=[];return true;}
+    const step=Math.min(.35*dt,m.backingLeft,remaining),q=[a.pos[0]-Math.cos(m.angle)*step,a.pos[1]-Math.sin(m.angle)*step];
+    if(clearSegment(w,a.pos,q)&&sweptFree(w,a,a.pos,q,m.angle,m.angle)){const old=[...a.pos];a.pos=q;m.backingLeft-=step;m.travel+=step;m.speed=step/dt;m.gaitDirection=-1;m.mode='carefully backing';reindexAdult(w,a,old);}else m.speed=0;return false;
+  }
+  m.gaitDirection=1;
   // Discard the rotation-only markers used by older saves. Headings never drive translation.
   while(a.route.length&&Math.hypot(a.route[0][0]-a.pos[0],a.route[0][1]-a.pos[1])<.065){a.cell=a.route.shift().slice(0,2).map(n=>Math.round(n)||0);passed=true;}
   const next=a.route[0];if(!next){m.speed=0;return passed;}
   const previousAngle=m.angle,dx=next[0]-a.pos[0],dy=next[1]-a.pos[1],length=Math.hypot(dx,dy),following=a.route[1];let aim=next;
   if(next[3]==null&&following&&length<.65){const fx=following[0]-next[0],fy=following[1]-next[1],fl=Math.hypot(fx,fy),look=Math.min(.16,fl*(1-length/.65)*.35),q=[next[0]+fx/Math.max(fl,.001)*look,next[1]+fy/Math.max(fl,.001)*look];if(clearSegment(w,a.pos,q))aim=q;}
   const laneTarget=time<(m.passUntil??0)?.20:0;m.lane=(m.lane??0)+(laneTarget-(m.lane??0))*(1-Math.exp(-dt*6));
-  if(m.lane>.005&&length>.25){const angle=m.passAngle??Math.atan2(dy,dx);aim=[aim[0]-Math.sin(angle)*m.lane,aim[1]+Math.cos(angle)*m.lane];}
+  if(m.lane>.005&&length>.25){const angle=m.passAngle??Math.atan2(dy,dx);const lead=Math.min(.65,length);aim=[a.pos[0]+dx/length*lead-Math.sin(angle)*m.lane,a.pos[1]+dy/length*lead+Math.cos(angle)*m.lane];}
   const loaded=!!(a.carried||a.carryingBrood),urgent=loaded||['refueling','queenMoving','toBrood','feedingQueen'].includes(a.task),searching=a.task==='exploring';
   const sensory=length<.4?0:(urgent?0:(m.turn??0)*.35+(m.touchTurn??0)*.3)+(m.separation??0)*.35+(m.wander??0)*(searching?.25:.08);
   const desired=Math.atan2(aim[1]-a.pos[1],aim[0]-a.pos[0])+sensory,difference=wrapAngle(desired-m.angle),turnLimit=(a.caste==='queen'?2.8:5.5)*dt;

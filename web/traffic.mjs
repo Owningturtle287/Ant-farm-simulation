@@ -68,8 +68,13 @@ function passingPlace(w,a,other){
   const angle=a.motion.angle,co=Math.cos(angle),si=Math.sin(angle),candidates=[];
   // These are walking destinations, never lateral position corrections.
   for(const side of[1,-1])for(const [forward,lateral] of[[.45,.28],[.2,.38],[.7,.35],[0,.5]])candidates.push([a.pos[0]+co*forward-si*lateral*side,a.pos[1]+si*forward+co*lateral*side]);
+  for(const step of[.24,.12])candidates.push([a.pos[0]+co*step,a.pos[1]+si*step]);
   for(const n of w.neighbors(a.cell))if(dist(n,other.pos)>.7)candidates.push(n);
-  for(const p of candidates){if(!terrainFree(w,p)||dist(p,a.pos)<.15||!canOccupy(w,a,p,Math.atan2(p[1]-a.pos[1],p[0]-a.pos[0])))continue;const route=routeAroundItems(w,a,p,true);if(route?.length)return {point:p,route};}return null;
+  for(const p of candidates){if(!terrainFree(w,p)||dist(p,a.pos)<.07||!canOccupy(w,a,p,Math.atan2(p[1]-a.pos[1],p[0]-a.pos[0])))continue;const route=routeAroundItems(w,a,p,true);if(route?.length)return {point:p,route};}return null;
+}
+function backingPlace(w,a,time){if(time<(a.motion.lastBacking??-10)+3)return null;for(const distance of[.22,.15,.09,.05]){const p=[a.pos[0]-Math.cos(a.motion.angle)*distance,a.pos[1]-Math.sin(a.motion.angle)*distance];if(terrainFree(w,p)&&sweptFree(w,a,a.pos,p,a.motion.angle,a.motion.angle))return {point:p,route:[p],backing:true};}return null;}
+function yieldTo(c,a,winner,bay){const m=a.motion;m.resumeGoal=['resting','grooming','reserve'].includes(a.task)?null:a.destination?[...a.destination]:null;m.yieldingRoute=true;m.yieldTarget=bay.point;m.yieldFor=winner.id;m.yieldStarted=c.time;m.yieldEnd=c.time+.3;m.yieldDeadline=c.time+3;a.route=bay.route;m.trafficBlocked=0;winner.motion.waitUntil=c.time+.3;
+  if(bay.backing){m.backingGoal=bay.point;m.backingLeft=.22;m.backingUntil=c.time+.85;m.lastBacking=c.time;winner.motion.waitUntil=c.time+.65;}
 }
 export function unjam(c,a){
   const w=c.world,m=a.motion;if((m.trafficBlocked??0)<.45||m.yieldingRoute||c.time<(m.nextTrafficPlanAt??0))return;m.nextTrafficPlanAt=c.time+.65;m.waitingSince??=c.time;
@@ -80,10 +85,11 @@ export function unjam(c,a){
     a.brain.traffic={partner:b.id,signal:winner===a?'Requesting passage':'Making room',at:c.time,until:c.time+3};b.brain.traffic={partner:a.id,signal:winner===b?'Requesting passage':'Making room',at:c.time,until:c.time+3};
     a.motion.examineAngle=Math.atan2(b.pos[1]-a.pos[1],b.pos[0]-a.pos[0]);a.motion.examineUntil=c.time+.6;b.motion.examineAngle=Math.atan2(a.pos[1]-b.pos[1],a.pos[0]-b.pos[0]);b.motion.examineUntil=c.time+.6;
     if(yielder.caste==='queen'||yielder.motion.yieldingRoute)continue;
-    const bay=passingPlace(w,yielder,winner);if(!bay)continue;
-    const ym=yielder.motion;ym.resumeGoal=yielder.destination?[...yielder.destination]:null;ym.yieldingRoute=true;ym.yieldTarget=bay.point;ym.yieldFor=winner.id;ym.yieldStarted=c.time;ym.yieldEnd=c.time+.25;ym.yieldDeadline=c.time+3;yielder.route=bay.route;ym.trafficBlocked=0;winner.motion.waitUntil=c.time+.3;
+    const bay=passingPlace(w,yielder,winner)??backingPlace(w,yielder,c.time);if(!bay){yielder.motion.trafficBlocked=Math.max(.5,yielder.motion.trafficBlocked??0);continue;}
+    yieldTo(c,yielder,winner,bay);
     yielder.decision='Antennal contact: making room for a nearby nestmate, then resuming the same task.';winner.decision='A nearby nestmate is making room. Pausing briefly before continuing.';return;
   }
+  const retreat=near.length?backingPlace(w,a,c.time):null;if(retreat){yieldTo(c,a,near[0],retreat);a.brain.traffic={partner:near[0].id,signal:'Taking a short step clear to turn',at:c.time,until:c.time+1};return;}
   const goal=m.yieldTarget??a.destination;if(goal){const stance=canOccupy(w,a,goal)?goal:nearestStance(w,a,goal),detour=stance?routeAroundItems(w,a,stance,true):null;if(detour?.length&&JSON.stringify(detour)!==JSON.stringify(a.route)){a.route=detour;m.trafficBlocked=0;return;}}
   if(c.time-(m.waitingSince??c.time)>6&&w.neighbors(a.cell).length<=3){c.congestionUntil=c.time+15;if(a.cell[1]>w.baseSurface(a.cell[0])+3)for(const dx of[-1,1]){const p=[a.cell[0]+dx,a.cell[1]];if(w.solid(p)&&!w.construction.some(q=>key(q)===key(p))){w.construction.push(p,[p[0],p[1]+1]);w.frontierVersion=-1;break;}}}
 }
