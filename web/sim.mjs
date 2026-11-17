@@ -329,7 +329,7 @@ export class Colony{
     const lifespan=a.traits.lifeDays,aged=adultDays(a)>lifespan;
     a.health=clamp(a.health+(a.energy<.08||a.hydration<.1?-dt/DAY*.8:aged?-dt/DAY*.4:dt/DAY*.12));
     if(!this.world.walkable(a.cell)){const actual=a.pos.map(Math.round);a.cell=this.world.walkable(actual)?actual:this.world.escapeCell(actual);a.route=[];}
-    if(a.motion.recovering){recoverBody(a,this.world,dt);if(a.carryingBrood){const b=this.broodItem(a.carryingBrood);if(b)b.pos=[...a.pos];}return;}
+    if(a.motion.recovering){recoverBody(a,this.world,dt);if(a.carryingBrood){const b=this.broodItem(a.carryingBrood);if(b)b.pos=[...a.pos];}if(a.motion.recovering)return;}
     if(a.caste!=='queen'){
       this.encounter(a);
       if(this.time>=(a.selfCheckAt??0)){
@@ -595,9 +595,9 @@ export class Colony{
       if((stage==='larva'&&b.nutrition<.05)||moisture<.2)b.vitality=clamp(b.vitality-dt/DAY*.5);if(++updated%64===0)yield;
     }
     const bornIDs=new Set();let emerged=0;
-    for(const b of this.brood.filter(b=>b.age>=BROOD_DURATION&&b.vitality>0))if(this.ants.length<this.settings.populationCap&&b.carriedBy==null&&spaceForItem(this.world,b.cell,.48)){
+    for(const b of this.brood.filter(b=>b.age>=BROOD_DURATION&&b.vitality>0))if(this.ants.length<this.settings.populationCap&&b.carriedBy==null){
       const a=initializeBrain(createAnt(b.id,'worker',b.cell,this.world.seed),this.world.seed);
-      const quality=clamp((b.fed??2)/3,.35,1);a.bodySize=clamp(a.bodySize*quality,.18,.95);a.caste=a.bodySize>.78?'major':'worker';a.traits.lifeDays=lifespanFor(a,this.world.seed);a.bornAt=this.time;this.ants.push(a);reindexAdult(this.world,a,a.pos);bedRelease(this,b);bornIDs.add(b.id);this.births++;this.record(antName(a)+' emerged as a '+casteLabel(a).toLowerCase()+'.');if(++emerged%24===0)yield;
+      const quality=clamp((b.fed??2)/3,.35,1);a.bodySize=clamp(a.bodySize*quality,.18,.95);a.caste=a.bodySize>.78?'major':'worker';a.traits.lifeDays=lifespanFor(a,this.world.seed);a.bornAt=this.time;if(!canOccupy(this.world,a,b.cell,a.motion.angle,b.id)){if(canOccupy(this.world,a,b.cell,Math.PI/2,b.id))a.motion.angle=Math.PI/2;else continue;}this.ants.push(a);reindexAdult(this.world,a,a.pos);bedRelease(this,b);bornIDs.add(b.id);this.births++;this.record(antName(a)+' emerged as a '+casteLabel(a).toLowerCase()+'.');if(++emerged%24===0)yield;
     }
     for(const b of this.brood)if(b.vitality<=0)bedRelease(this,b);const lostBrood=this.brood.filter(b=>b.vitality<=0).length;this.broodLost+=lostBrood;
     if(bornIDs.size||lostBrood){this.brood=this.brood.filter(b=>!bornIDs.has(b.id)&&b.vitality>0);refreshItems(this);}

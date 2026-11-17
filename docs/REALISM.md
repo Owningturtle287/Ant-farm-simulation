@@ -121,3 +121,12 @@ Research supporting the direction of this update:
 - [Modeling temperature-mediated fluctuation in colony size in the fire ant, 2012](https://www.sciencedirect.com/science/article/abs/pii/S0022519312001282) describes drought survival through tunnels/chambers extending toward the water table. It does not validate the game's exact search rule or depth.
 - [Monaenkova et al., 2015, Behavioral and mechanical determinants of collective subsurface nest excavation](https://pubmed.ncbi.nlm.nih.gov/25954041/) reports deepest construction at intermediate moisture and poor excavation at the dry/saturated extremes.
 - [Internal distribution of liquid foods in isolated fire-ant workers, 1981](https://www.sciencedirect.com/science/article/pii/0022191081900342) studies worker size and crop retention. The two capacity formulas and displayed bars remain game tuning.
+
+
+## v0.10: physical cutaway space
+
+Adult body footprints exclude other adult bodies and grounded food, water and brood. Antennae and feet can make contact. Workers approach from free adjacent positions, may yield or backtrack, and can initiate passing space in an underground bottleneck. Food can provide a footing to climb around a pile; ants do not gain footing on other adults. This remains a simplified two-dimensional cutaway, not full three-dimensional insect biomechanics.
+
+Nursery/cache placement leaves room-access lanes and avoids narrow shafts. Egg laying requires a clear bed beside the queen; when nearby beds fill she seeks another local position. Efficient egg removal lets her remain settled longer. A pupa emerges only if the actual new adult body fits beside attending workers. Brood silhouettes, brief molt crossfades and pale emergence effects are visual explanations of stage transitions, not a microscopic metamorphosis model.
+
+Older compressed saves need a one-time spacing conversion. Adults and supplies are retained; if the existing dry terrain cannot hold those adults, a connected holding annex is added and its removed soil is explicitly recorded. Routine walking repairs route references rather than snapping bodies to a grid cell.
