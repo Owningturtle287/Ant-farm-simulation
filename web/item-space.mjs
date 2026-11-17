@@ -27,14 +27,14 @@ export function allocatePieces(w,p,amount){
   for(const pos of resourcePositions(w,p)){
     if(placed>=amount-1e-9)break;if(w.itemSlots.has(slotKey(pos))||!spaceForItem(w,pos,.10))continue;
     if(densityAt(...pos,(x,y)=>w.solid([x,y]))>=.49)continue;
-    const n=Math.min(ITEM_UNIT,amount-placed),item={id:p.nextPieceID++,pos,amount:n};p.pieces.push(item);reserveSlot(w,pos,owner(p));placed+=n;
+    const n=Math.min(ITEM_UNIT,amount-placed),item={id:p.nextPieceID++,pos,amount:n};p.pieces.push(item);if(w.traffic)w.traffic.itemDirty=true;reserveSlot(w,pos,owner(p));placed+=n;
   }return placed;
 }
 export function consumePieces(w,p,amount,preferred=null){
   if(!p.pieces)return;let remaining=amount;
   const ordered=preferred==null?p.pieces:[...p.pieces.filter(i=>i.id===preferred),...p.pieces.filter(i=>i.id!==preferred)];
   for(const item of ordered){const n=Math.min(remaining,item.amount);item.amount-=n;remaining-=n;if(item.amount<=1e-9)releaseSlot(w,item.pos,owner(p));if(remaining<=1e-9)break;}
-  p.pieces=p.pieces.filter(i=>i.amount>1e-9);
+  const count=p.pieces.length;p.pieces=p.pieces.filter(i=>i.amount>1e-9);if(w.traffic&&p.pieces.length!==count)w.traffic.itemDirty=true;
 }
 export function restorePieces(w){
   for(const p of w.patches){const amount=p.amount;p.pieces??=[];for(const item of p.pieces)if(item.amount>0&&(w.itemSlots.has(slotKey(item.pos))||!reserveSlot(w,item.pos,owner(p))))throw Error('Overlapping resource items in saved ground');if(!p.pieces.length&&amount>0){const placed=allocatePieces(w,p,amount);if(placed<amount-1e-7){p.amount=placed;if(w.resourceLedger)w.resourceLedger[p.kind].buried+=amount-placed;}}}

@@ -1,4 +1,4 @@
-import {sweptFree,reindexAdult} from './traffic.mjs';
+import {sweptFree,reindexAdult,canOccupy} from './traffic.mjs';
 // Local sensorimotor approximation, not a reconstruction of an ant nervous system.
 import {clamp} from './biology.mjs';
 import {densityAt} from './geometry.mjs';
@@ -62,7 +62,8 @@ export function recoverBody(a,w,dt){
   const dx=a.cell[0]-a.pos[0],dy=a.cell[1]-a.pos[1],length=Math.hypot(dx,dy),step=Math.min(length,1.6*dt),toward=[a.pos[0]+dx/Math.max(length,.0001)*step,a.pos[1]+dy/Math.max(length,.0001)*step];
   let next=clearSegment(w,a.pos,toward,true)?toward:null,best=density;
   if(!next)for(let i=0;i<8;i++){const angle=i*Math.PI/4,p=[a.pos[0]+Math.cos(angle)*step,a.pos[1]+Math.sin(angle)*step],value=densityAt(...p,(x,y)=>w.solid([x,y]));if(value<best&&clearSegment(w,a.pos,p,true)){best=value;next=p;}}
-  if(next){const travel=Math.hypot(next[0]-a.pos[0],next[1]-a.pos[1]);m.travel+=travel;m.speed=travel/dt;m.angle=wrapAngle(m.angle+clamp(wrapAngle(Math.atan2(next[1]-a.pos[1],next[0]-a.pos[0])-m.angle),-7.5*dt,7.5*dt));a.pos=next;m.mode='reorienting';}
+  if(next&&!canOccupy(w,a,next,m.angle,null,false,true))next=null;
+  if(next){const old=[...a.pos],travel=Math.hypot(next[0]-a.pos[0],next[1]-a.pos[1]);m.travel+=travel;m.speed=travel/dt;m.angle=wrapAngle(m.angle+clamp(wrapAngle(Math.atan2(next[1]-a.pos[1],next[0]-a.pos[0])-m.angle),-7.5*dt,7.5*dt));a.pos=next;reindexAdult(w,a,old);m.mode='reorienting';}
 }
 export function moveAnt(a,w,time,dt,traffic=0){
   const m=a.motion,next=a.route[0];if(!next)return false;const previousAngle=m.angle;
@@ -72,21 +73,22 @@ export function moveAnt(a,w,time,dt,traffic=0){
   if(following&&length<.8){const t=(1-length/.8)*.48,p=[next[0]+(following[0]-next[0])*t,next[1]+(following[1]-next[1])*t];if(clearSegment(w,a.pos,p))aim=p;}
   const searching=a.task==='exploring',loaded=!!(a.carried||a.carryingBrood),urgent=loaded||['refueling','queenMoving','toBrood','feedingQueen'].includes(a.task);
   const offset=urgent?m.wander*.12:m.wander*(searching?1:.35),sensory=(urgent?0:m.turn+(m.touchTurn??0))+(m.separation??0)*(urgent?.45:1);
-  const desired=Math.atan2(aim[1]-a.pos[1],aim[0]-a.pos[0])+(length<.3?0:offset+sensory);
+  const desired=next[2]!=null&&length<1.2?next[2]:Math.atan2(aim[1]-a.pos[1],aim[0]-a.pos[0])+(length<.3?0:offset+sensory);
   const difference=wrapAngle(desired-m.angle),turnLimit=(a.caste==='queen'?4.2:7.5)*dt;
   m.angle=wrapAngle(m.angle+clamp(difference,-turnLimit,turnLimit));
   const base=(a.caste==='queen'?.85:a.caste==='major'?2.5:3)*(loaded?.72:1)*(.7+a.energy*.3)/(1+Math.min(traffic,7)*.18);
-  const targetSpeed=(time<m.pauseUntil&&!urgent?0:base*m.pace*(m.yielding??1))*(.25+.75*Math.max(0,Math.cos(difference*.6)));
+  const approach=following?1:Math.min(1,length/.65);
+  const targetSpeed=approach*(time<m.pauseUntil&&!urgent?0:base*m.pace*(m.yielding??1))*(.25+.75*Math.max(0,Math.cos(difference*.6)));
   m.speed+=(targetSpeed-m.speed)*(1-Math.exp(-dt*(targetSpeed<m.speed?14:8)));
   if(time<m.pauseUntil&&!urgent)m.mode='sampling';else if(m.mode==='sampling')m.mode=searching?'searching':'travelling';
-  const step=Math.min(length,m.speed*dt);let p=[a.pos[0]+Math.cos(m.angle)*step,a.pos[1]+Math.sin(m.angle)*step];
-  if(length<=step+.015&&!following)p=[...next];
+  const step=Math.min(length,m.speed*dt);let p=next[2]!=null?[a.pos[0]+dx/Math.max(length,.0001)*step,a.pos[1]+dy/Math.max(length,.0001)*step]:[a.pos[0]+Math.cos(m.angle)*step,a.pos[1]+Math.sin(m.angle)*step];
+  if(length<=step+.015&&!following)p=next.slice(0,2);
   if(!clearSegment(w,a.pos,p)){
     // Wall contact redirects locomotion, without indefinitely waiting or abandoning a load.
     m.blocked+=dt;const direct=[a.pos[0]+dx/Math.max(length,.0001)*step,a.pos[1]+dy/Math.max(length,.0001)*step];
     if(clearSegment(w,a.pos,direct)){p=direct;m.angle=wrapAngle(m.angle+clamp(wrapAngle(Math.atan2(dy,dx)-m.angle),-turnLimit,turnLimit));}else{
       const sx=next[0]-a.cell[0],sy=next[1]-a.cell[1],den=sx*sx+sy*sy,t=den?clamp(((a.pos[0]-a.cell[0])*sx+(a.pos[1]-a.cell[1])*sy)/den):0,guide=[a.cell[0]+sx*t,a.cell[1]+sy*t],gx=guide[0]-a.pos[0],gy=guide[1]-a.pos[1],gl=Math.hypot(gx,gy),correction=[a.pos[0]+gx/Math.max(gl,.0001)*Math.min(step,gl),a.pos[1]+gy/Math.max(gl,.0001)*Math.min(step,gl)];
-      if(clearSegment(w,a.pos,correction))p=correction;else return false;
+      if(clearSegment(w,a.pos,correction))p=correction;else{m.angle=previousAngle;m.trafficBlocked=(m.trafficBlocked??0)+dt;return false;}
     }
   }else m.blocked=0;
   if(!sweptFree(w,a,a.pos,p,m.angle,previousAngle)){
@@ -99,8 +101,9 @@ export function moveAnt(a,w,time,dt,traffic=0){
     if(!candidate){m.angle=previousAngle;m.speed=0;m.trafficBlocked=(m.trafficBlocked??0)+dt;m.mode='yielding';return false;}p=candidate.p;m.angle=candidate.angle;
   }else m.trafficBlocked=0;
   if(Math.hypot(p[0]-next[0],p[1]-next[1])>length-.005)m.trafficBlocked=(m.trafficBlocked??0)+dt;
+  const targetKey=next.join(',');if(m.progressTarget!==targetKey){m.progressTarget=targetKey;m.bestDistance=length;m.progressAt=time;}const newDistance=Math.hypot(p[0]-next[0],p[1]-next[1]);if(newDistance<m.bestDistance-.02){m.bestDistance=newDistance;m.progressAt=time;}else if(time-(m.progressAt??time)>1.5)m.trafficBlocked=2;
   const old=[...a.pos],travel=Math.hypot(p[0]-a.pos[0],p[1]-a.pos[1]);m.travel+=travel;a.pos=p;reindexAdult(w,a,old);
   // Intermediate waypoints are passed without snapping the continuous body position.
-  const remaining=Math.hypot(next[0]-p[0],next[1]-p[1]),arrived=remaining<(following?.28:.075);
-  if(arrived){a.cell=[...next];a.route.shift();}return arrived;
+  const remaining=Math.hypot(next[0]-p[0],next[1]-p[1]),arrived=remaining<(following?.42:.075);
+  if(arrived){a.cell=next.slice(0,2).map(Math.round);a.route.shift();}return arrived;
 }

@@ -150,10 +150,12 @@ Nursery bed queries cache a bounded (16-anchor) nearest-cell ordering, then chec
 
 ## v0.10: occupied space and traffic
 
-Adult body capsules now collide with other adults and grounded resource/brood footprints through a spatial hash and swept motion checks. Antennae/feet can make contact; bodies cannot pass through one another. Sampling, yielding, backward/side steps and passing alcoves resolve conflicting traffic. Terrain remains a contour-based cutaway rather than granular body/soil physics.
+Conservative adult body footprints now collide with other adults and grounded resource/brood footprints through a spatial hash and swept motion checks. Antennae/feet can make contact; bodies cannot pass through one another. Sampling, yielding, backward/side steps and passing alcoves resolve conflicting traffic. Terrain remains a contour-based cutaway rather than granular body/soil physics.
 
 Workers approach supplies, brood and the queen from separate contact positions rather than sharing their target's coordinate. Idle positions are spread through available chamber space. Permanent cache/brood placements leave connected room-access lanes and avoid one-cell shafts. The queen seeks nearby clear laying positions when eggs crowd her chamber. Carriers drop brood alongside their bodies, not beneath themselves. Adult emergence waits for room.
 
 Old compressed adult saves are unpacked once. If existing dry space cannot hold those adults, a connected shallow holding annex supplies individual space; its removed earth is recorded as abandoned spoil. No adults or nutrition are deleted. Normal play does not create instant annexes. The 10,000 cap remains experimental and physical density can demand substantial excavation.
 
 Enclosed, roofed voids beneath a mound surface are recognized as inside the nest even when they were not originally excavated from a mound pellet. This fixes the unsupported-air classification at natural-ground/mound seams. Rendering uses distinct egg, curled segmented larva and folded ant-shaped pupa sprites with wall-clock molt transitions and a pale emergence effect.
+
+Interaction pathfinding uses stance and orientation hints at tight clearances. Locomotion reanchors its logical cell to the nearest valid terrain node if a contour turn carries it away from the previous grid center; bodies are never snapped to repair that route reference. Survival-related cache/source trips cannot be repeatedly cancelled by the periodic refueling check. Returning resource loads complete their sharing/delivery phase before excess food storage even after a traffic replan.

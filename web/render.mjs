@@ -151,7 +151,7 @@ export class Renderer {
       if(this.renderStats.drawnAnts>richBudget&&ant.id!==options.selected&&ant.caste!=='queen'){c.fillStyle='#b45a32';c.fillRect(Math.round(x),Math.round(y),Math.max(1,2*z),Math.max(1,z));this.renderStats.simpleSprites++;continue;}
       const moving=(motion?.speed??0)>.06&&(ant.route.length||motion?.recovering),working=['digging','harvesting','grooming','nursing'].includes(ant.task),frame=moving?Math.floor(p.gait):working?Math.floor(visualClock*3+ant.id)%GAIT_FRAMES:GAIT_FRAMES;
       const scan=Math.floor(((p.scan/(Math.PI*2)+1)%1)*SCAN_FRAMES)%SCAN_FRAMES,wide=['searching','sampling','resting'].includes(motion?.mode),row=scan+(wide?SCAN_FRAMES:0);
-      const width=(ant.caste==='queen'?27:13+ant.bodySize*9)*z,height=width*SPRITE_H/SPRITE_W;
+      const width=(ant.caste==='queen'?18:9.5+ant.bodySize*4.5)*z,height=width*SPRITE_H/SPRITE_W;
       c.save();c.translate(x,y);c.rotate(p.angle);if(p.hatchAt!=null&&clock-p.hatchAt<1.3){c.filter='brightness(1.45) saturate(.55)';c.fillStyle='#e8d6ad';c.fillRect(-8*z,3*z,2*z,z);c.fillRect(-5*z,4*z,2*z,z);}if(ant.task==='laying')c.scale(1+Math.sin(visualClock*7)*.045,1);c.drawImage(this.sprites[ant.caste],frame*SPRITE_W,row*SPRITE_H,SPRITE_W,SPRITE_H,-width*24/SPRITE_W,-height/2,width,height);
       if(carriedBrood.has(ant.id))paintBrood(c,carriedBrood.get(ant.id),width*.40,0,z,visualClock);
       if(ant.task==='laying'&&colony.time>ant.layUntil-2){c.fillStyle='#fff0cb';c.fillRect(-width*.55,-z,3*z,3*z);}

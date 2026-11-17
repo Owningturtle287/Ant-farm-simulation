@@ -47,7 +47,7 @@ export function setReserve(c,kind,value){
     if(delta<0){let left=-delta;for(const a of c.ants){const n=Math.min(left,a[field]??0);a[field]-=n;left-=n;}for(const p of c.foodItems){const n=Math.min(left,p[kind]);p[kind]-=n;left-=n;}cleanCache(c);}else if(delta>0)addReserve(c,kind,delta,true);
   }updateSupplyTotals(c);if(c.supplyLedger)c.supplyLedger[kind].introduced+=c.nutrition[kind]-before;
 }
-export function cleanCache(c){c.foodItems=c.foodItems.filter(p=>{if(p.energy+p.protein>1e-9)return true;releaseSlot(c.world,p.pos,'f:'+p.id);return false;});}
+export function cleanCache(c){const count=c.foodItems.length;c.foodItems=c.foodItems.filter(p=>{if(p.energy+p.protein>1e-9)return true;releaseSlot(c.world,p.pos,'f:'+p.id);return false;});if(c.world.traffic&&c.foodItems.length!==count)c.world.traffic.itemDirty=true;}
 export function consumeSelf(c,a,dt){
   initCrop(a);const food=Math.min(a.socialFood,(1-a.energy)*.4,dt*.05),water=Math.min(a.socialWater,(1-a.hydration)*.15,dt*.018);
   const protein=a.socialFood<.001?Math.min(a.socialProtein,(1-a.energy)*.6,dt*.02):0;a.socialProtein-=protein;a.energy=clamp(a.energy+protein/.6);if(protein){c.nutrition.protein-=protein;if(c.supplyLedger)c.supplyLedger.protein.consumed+=protein;}
