@@ -1,6 +1,6 @@
 import {foodSupport,beginTraffic,refreshItems,settleAdults,canOccupy,terrainFree,nearestStance,routeAroundItems,idlePlace,spaceForItem,broodRadius,unjam,reindexAdult} from './traffic.mjs';
 import {initGroundwater,tableLevel,flooded,tickGroundwater,groundwaterJSON} from './hydrology.mjs';
-import {initializeSupplies,setReserve,updateSupplyTotals,cropCapacity as socialCapacity,waterCapacity,foodFill,consumeSelf,fillFromCargo,shareCrops,takeCache,nearestCache,cacheSlotFor,storeCargo,consumeNutrient,bedAvailable,bedOccupy,bedRelease,freeBedCount,initCrop,accountIntake,accountDeath,rebuildReservations,feedBroodCargo} from './provisions.mjs';
+import {initializeSupplies,setReserve,updateSupplyTotals,cropCapacity as socialCapacity,waterCapacity,foodFill,consumeSelf,fillFromCargo,shareCrops,takeCache,liftCache,nearestCache,cacheSlotFor,storeCargo,consumeNutrient,bedAvailable,bedOccupy,bedRelease,freeBedCount,initCrop,accountIntake,accountDeath,rebuildReservations,feedBroodCargo} from './provisions.mjs';
 import {findBed,holdCell,releaseCell,freeCell,releaseSlot,initItemSpace,restorePieces} from './item-space.mjs';
 import {DAY,BROOD_DURATION,LIMIT,DEFAULT_SETTINGS,Random,clamp,settingsFrom,createAnt,normalizeAnt,adultDays,broodStage} from './biology.mjs';
 import {MATERIALS,materialAt,conditionsAt,digDuration,hashCell} from './materials.mjs';
@@ -271,20 +271,22 @@ export class Colony{
     const waypointStalled=a.route.length&&this.time-(a.motion.progressAt??this.time)>12;
     if(!working||this.time<a.busyUntil||!waypointStalled&&this.time-(a.lastProgressAt??0)<18)return;
     this.world.runtime.recoveries++;a.lastProgressAt=this.time;this.world.pathCache.clear();a.route=[];
+    if(a.caste!=='queen'&&!a.carried&&!a.carryingBrood){const item=this.foodItems.filter(p=>distance(p.pos,a.pos)<.8).sort((p,q)=>distance(p.pos,a.pos)-distance(q.pos,a.pos))[0];if(liftCache(this,a,item)){if(this.careClaims?.get(a.broodID)===a.id)this.careClaims.delete(a.broodID);a.broodID=null;refreshItems(this);this.assignFoodStorage(a);return;}}
     if(a.task==='refueling'){this.send(a,this.world.nest);return;}
     if(a.caste==='queen'){a.task='queenRest';a.destination=null;a.queenCheckAt=0;return;}
     if(a.task==='toBrood'){this.releaseBrood(a);this.chooseJob(a);return;}
     if(a.task==='nursing'){if(a.broodID!=null){a.careAvoid={id:a.broodID,until:this.time+30};if(this.careClaims?.get(a.broodID)===a.id)this.careClaims.delete(a.broodID);}a.broodID=null;this.chooseJob(a);return;}
-    if(a.task==='carryingBrood'){a.broodDestination=null;this.carryBrood(a);return;}
+    if(a.task==='carryingBrood'){if(a.broodDestination)releaseCell(this.world,a.broodDestination,'b:'+a.carryingBrood);a.broodDestination=null;this.carryBrood(a);return;}
     if(a.cargoKind==='queenMeal'){this.feedQueen(a);return;}
     if(a.carried){if(a.cargoKind==='soil'){this.headOut(a);}else{a.task=a.cargoKind==='water'?'returningWater':'returningFood';this.send(a,this.world.nest);}return;}
     a.decision='Replanning after a blocked or unproductive route.';this.chooseJob(a);
   }
   releaseBrood(a){
     if(a.broodID!=null)this.broodClaims.delete(a.broodID);
+    if(a.broodDestination)releaseCell(this.world,a.broodDestination,'b:'+(a.carryingBrood??a.broodID));
     const b=this.broodItem(a.carryingBrood);
     if(b){if(a.broodDestination)releaseCell(this.world,a.broodDestination,'b:'+b.id);const bed=bedAvailable(this,b,a.cell);b.carriedBy=null;if(bed)bedOccupy(this,b,bed);delete b.pos;b.needsTransport=true;}
-    a.carryingBrood=null;a.broodID=null;
+    a.carryingBrood=null;a.broodID=null;a.broodDestination=null;
   }
 
   learn(a,source,kind,confidence=.85){
@@ -478,6 +480,8 @@ export class Colony{
     else{a.busyUntil=this.time+2;this.storageBlocked=true;this.proposeConstruction(a,{...this.needsFor(a),dig:1});a.decision='Holding excess food while workers make more storage space.';}return true;
   }
   chooseJob(a){
+    if(a.task==='toBrood'&&!a.carryingBrood)this.releaseBrood(a);
+    if(a.cacheSlot){releaseSlot(this.world,a.cacheSlot,'a:'+a.id);a.cacheSlot=null;}
     if(a.motion){a.motion.yieldingRoute=false;a.motion.resumeGoal=null;a.motion.yieldTarget=null;}
     if(this.careClaims?.get(a.broodID)===a.id)this.careClaims.delete(a.broodID);
     a.lastProgressAt=this.time;a.lastProgressPos=[...a.pos];a.target=null;a.route=[];
@@ -541,7 +545,7 @@ export class Colony{
     if(!meal&&this.assignQueenCare(a))return true;
     if(!meal&&this.assignBroodTransport(a))return true;
     const targets=this.careCandidates(a).filter(b=>b.carriedBy==null&&!this.broodClaims.has(b.id)&&!this.careClaims.has(b.id)&&!(a.careAvoid?.id===b.id&&this.time<a.careAvoid.until)&&(!meal||broodStage(b)==='larva'&&b.nutrition<.95)&&(a.knownBrood.includes(b.id)||distance(a.cell,b.cell)<3.1)).map(b=>({b,priority:distance(a.cell,b.cell)*2-Math.min(20,Math.max(0,this.time-b.lastCare)*.05)-(broodStage(b)==='larva'?(1-b.nutrition)*40:0)})).sort((x,y)=>x.priority-y.priority).map(item=>item.b);
-    for(const b of targets){const stance=nearestStance(this.world,a,b.cell);const route=stance?routeAroundItems(this.world,a,stance):null;if(route){if(a.lastJob!=='care')a.jobSince=this.time;a.task='nursing';a.route=route;a.target=[...b.cell];a.destination=[...b.cell];a.broodID=b.id;this.careClaims.set(b.id,a.id);a.lastJob='care';return true;}}
+    for(const b of targets.slice(0,6)){const stance=nearestStance(this.world,a,b.cell);const route=stance?routeAroundItems(this.world,a,stance):null;if(route){if(a.lastJob!=='care')a.jobSince=this.time;a.task='nursing';a.route=route;a.target=[...b.cell];a.destination=[...b.cell];a.broodID=b.id;this.careClaims.set(b.id,a.id);a.lastJob='care';return true;}}
     if(meal)return false;
     const gradient=this.world.neighbors(a.cell).filter(c=>!this.world.onSurface(c)).sort((x,y)=>senseSignal(this.world,'brood',y)-senseSignal(this.world,'brood',x));
     if(gradient[0]&&senseSignal(this.world,'brood',gradient[0])>.04){a.task='nursing';a.broodID=null;this.send(a,gradient[0]);return true;}return false;
@@ -670,9 +674,9 @@ export class Colony{
   carryBrood(a){
     const b=this.broodItem(a.carryingBrood);
     if(!b){this.releaseBrood(a);this.chooseJob(a);return;}
-    if(!a.broodDestination||!this.world.walkable(a.broodDestination)||!freeCell(this.world,a.broodDestination,'b:'+b.id))a.broodDestination=this.broodSite(b);if(!a.broodDestination){a.busyUntil=this.time+1;this.proposeConstruction(a,{...this.needsFor(a),dig:1});return;}
+    if(!a.broodDestination||!this.world.walkable(a.broodDestination)||!freeCell(this.world,a.broodDestination,'b:'+b.id)){if(a.broodDestination)releaseCell(this.world,a.broodDestination,'b:'+b.id);a.broodDestination=this.broodSite(b);if(a.broodDestination&&!holdCell(this.world,a.broodDestination,'b:'+b.id))a.broodDestination=null;}if(!a.broodDestination){a.busyUntil=this.time+1;this.proposeConstruction(a,{...this.needsFor(a),dig:1});return;}
     if(distance(a.pos,a.broodDestination)>1.4){this.send(a,a.broodDestination);return;}
-    if(!spaceForItem(this.world,a.broodDestination,Math.max(.31,broodRadius(b)))){a.broodDestination=null;a.busyUntil=this.time+.5;return;}
+    if(!spaceForItem(this.world,a.broodDestination,Math.max(.31,broodRadius(b)))){releaseCell(this.world,a.broodDestination,'b:'+b.id);a.broodDestination=null;a.busyUntil=this.time+.5;return;}
     if(!bedOccupy(this,b,a.broodDestination)){a.broodDestination=null;return;}delete b.pos;b.home=[...b.cell];b.carriedBy=null;refreshItems(this);b.needsTransport=false;b.lastMoved=this.time;b.lastCare=this.time;
     a.carryingBrood=null;this.broodClaims.delete(b.id);a.task='nursing';a.busyUntil=this.time+2;this.broodMoved++;
     a.decision='Placed brood in the nursery. Now grooming and tending it.';

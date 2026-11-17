@@ -31,6 +31,11 @@ test('opposing workers pass through a narrow tunnel without overlapping or aband
  for(const [i,n] of c.ants.entries()){n.pos=[i*8,20];n.cell=[...n.pos];n.motion.angle=i?Math.PI:0;n.task='routeTest';n.destination=[i?0:8,20];n.busyUntil=0;}beginTraffic(c);for(const n of c.ants)n.route=routeAroundItems(w,n,n.destination);assert.ok(a.route&&b.route);
  for(let i=0;i<600&&(a.pos[0]<7.8||b.pos[0]>.2);i++){c.time+=.1;beginTraffic(c);for(const n of c.ants)c.updateAnt(n,.1);assert.ok(canOccupy(w,a,a.pos));assert.ok(canOccupy(w,b,b.pos));}assert.ok(a.pos[0]>7.8&&b.pos[0]<.2,'Both workers must complete the crossing.');
 });
+test('a trapped worker can lift a blocking food parcel and leave without losing its nutrients',async()=>{
+ const {liftCache}=await import('../web/provisions.mjs'),{refreshItems}=await import('../web/traffic.mjs'),{moveAnt,updateMotion}=await import('../web/locomotion.mjs');const c=new Colony(),a=c.ants[1];c.ants=[a];c.brood=[];c.world.patches=[];c.foodItems=[];c.world.carve([0,20],4,4);a.pos=[0,20];a.cell=[0,20];a.motion.angle=0;
+ for(const y of[-.5,.5])for(let x=-2;x<=2;x++)c.foodItems.push({id:c.foodItems.length,pos:[x/3,20+y],energy:1.5,protein:.5});for(const x of[-2,2])c.foodItems.push({id:c.foodItems.length,pos:[x/3,20],energy:1.5,protein:.5});beginTraffic(c);assert.ok(canOccupy(c.world,a,a.pos));assert.equal(routeAroundItems(c.world,a,[0,18]),null);
+ const item=c.foodItems.find(p=>p.pos[0]===0&&p.pos[1]<20),before=c.foodItems.reduce((n,p)=>n+p.energy+p.protein,0);assert.ok(liftCache(c,a,item));refreshItems(c);assert.equal(c.foodItems.reduce((n,p)=>n+p.energy+p.protein,0)+a.carried,before);assert.deepEqual(a.cargoNutrition,{energy:.75,protein:.25});a.route=routeAroundItems(c.world,a,[0,18]);assert.ok(a.route?.length);a.task='storeFood';for(let i=0;i<300&&a.route.length;i++){updateMotion(a,c.world,i*.1,.1,new Map());moveAnt(a,c.world,i*.1,.1);assert.ok(canOccupy(c.world,a,a.pos));}assert.ok(distance(a.pos,[0,18])<.08);
+});
 test('small seeded colonies forage, excavate, grow a mound, and develop brood',()=>{
   for(const seed of [17,287,914]){
     const c=new Colony(seed);c.food=2;c.water=1;for(let i=0;i<12000&&!(c.foodDelivered>0&&c.waterDelivered>0&&c.world.soilDeposited>0&&c.births>0);i++)c.step();

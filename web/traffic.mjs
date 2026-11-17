@@ -42,8 +42,8 @@ export function routeAroundItems(w,a,target,dynamic=false){
   if(!w.traffic)return w.path(a.cell,target.slice(0,2));let probe={id:a.id,caste:a.caste,bodySize:Math.ceil((a.bodySize??.4)*5)/5,pos:a.pos,motion:a.motion};
   const headings=[a.motion?.angle??0,0,Math.PI/2,Math.PI,-Math.PI/2];if(!canOccupy(w,probe,a.pos,headings[0],null,!dynamic)||!headings.some(angle=>canOccupy(w,probe,target,angle,null,!dynamic)))probe=a;
   const queen=w.traffic.colony.ants.find(b=>b.caste==='queen'),id=key(a.pos)+'@'+a.motion?.angle+'>'+key(target.slice(0,2))+':'+probe.caste+':'+probe.bodySize+':'+(queen?key(queen.pos)+'@'+queen.motion?.angle:'none');
-  if(!dynamic&&w.traffic.routes.has(id))return w.traffic.routes.get(id).map(p=>[...p]);
-  const route=bodyRoute(w,probe,target,{canOccupy,sweptFree},dynamic);if(route&&!dynamic)cacheRoute(w,id,route);return route;
+  if(!dynamic&&w.traffic.routes.has(id))return w.traffic.routes.get(id)?.map(p=>[...p])??null;
+  const route=bodyRoute(w,probe,target,{canOccupy,sweptFree},dynamic);if(!dynamic)cacheRoute(w,id,route);return route;
 }
 export function idlePlace(w,a){const queue=[a.cell],seen=new Set([key(a.cell)]);let head=0,best=null,score=-Infinity;const claims=new Set((w.traffic?.colony.ants??[]).filter(b=>b.id!==a.id&&['resting','reserve','grooming'].includes(b.task)&&b.destination).map(b=>key(b.motion?.yieldTarget??b.destination)));while(head<queue.length&&head<90){const p=queue[head++],degree=w.neighbors(p).length;if(canOccupy(w,a,p)&&!claims.has(key(p))&&[[1,0],[-1,0],[0,1],[0,-1]].filter(d=>w.walkable([p[0]+d[0],p[1]+d[1]])).length>=3){const neighbors=around(w.traffic?.adults??new Map(),p,1).length,n=degree-neighbors*3-dist(a.cell,p)*.4+(a.id*17+p[0]*7+p[1]*11)%13*.05;if(n>score){score=n;best=p;}}for(const n of w.neighbors(p))if(!seen.has(key(n))){seen.add(key(n));queue.push(n);}}return best;}
 export function spaceForItem(w,pos,radius,ignoreAnt=null){if(!w.traffic)return true;for(const a of around(w.traffic.adults,pos,1))if(a.id!==ignoreAnt){const [u,v]=axis(a);if(pointSegment(pos,u,v)<bodyShape(a).radius+radius+.025)return false;}return true;}

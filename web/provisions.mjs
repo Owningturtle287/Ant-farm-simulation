@@ -71,13 +71,19 @@ export function takeCache(c,a,item){
   total=item.energy+item.protein;if(a.cachePurpose==='care'&&a.socialProtein<.05&&!a.carried&&!a.carryingBrood&&item.protein>.001&&total>1e-9){n=Math.min(ITEM_UNIT,total,cropCapacity(a));const e=n*item.energy/total,p=n-e;item.energy-=e;item.protein-=p;a.carried=n;a.cargoKind='broodMeal';a.cargoNutrition={energy:e/n,protein:p/n};moved+=n;}
   cleanCache(c);return moved>0;
 }
+export function liftCache(c,a,item){
+  if(!item||a.carried||a.carryingBrood||dist(a.pos,item.pos)>.8)return false;
+  const total=item.energy+item.protein;if(total<=1e-9)return false;
+  a.carried=total;a.cargoKind='food';a.cargoNutrition={energy:item.energy/total,protein:item.protein/total};
+  a.cacheClearance={pos:[...item.pos],until:c.time+30};item.energy=0;item.protein=0;cleanCache(c);return true;
+}
 export function feedBroodCargo(c,a,wanted){
   if(a.cargoKind!=='broodMeal'||!a.carried||!(a.cargoNutrition?.protein>0))return 0;const mix=a.cargoNutrition,n=Math.min(a.carried,wanted/mix.protein),protein=n*mix.protein,energy=n*mix.energy;a.carried-=n;c.nutrition.energy-=energy;c.nutrition.protein-=protein;c.supplyLedger.energy.consumed+=energy;c.supplyLedger.protein.consumed+=protein;if(a.carried<1e-9){a.carried=0;a.cargoKind=null;a.cargoNutrition=null;}return protein;
 }
 export function nearestCache(c,a,protein=false){
   const candidates=c.foodItems.filter(p=>c.world.walkable(p.pos.map(Math.round))&&(protein?p.protein>.001:p.energy>.001));let best=null,d=Infinity;for(const p of candidates){const n=dist(a.pos,p.pos)+(protein?p.energy:p.protein)/Math.max(.001,p.energy+p.protein)*12;if(n<d){d=n;best=p;}}return best;
 }
-export function cacheSlotFor(c,a){const p=findCacheSlot(c.world,anchor(c));if(p)reserveSlot(c.world,p,'a:'+a.id);return p;}
+export function cacheSlotFor(c,a){const p=findCacheSlot(c.world,anchor(c),a.cacheClearance?.until>c.time?a.cacheClearance.pos:null);if(p)reserveSlot(c.world,p,'a:'+a.id);return p;}
 export function storeCargo(c,a){
   if(!a.cacheSlot||dist(a.pos,a.cacheSlot)>1.4||a.cargoKind!=='food'||!a.carried)return false;
   const n=Math.min(ITEM_UNIT,a.carried),mix=a.cargoNutrition??{energy:.5,protein:.5},item={id:c.nextFoodID++,pos:[...a.cacheSlot],energy:n*mix.energy,protein:n*mix.protein,createdAt:c.time};releaseSlot(c.world,a.cacheSlot,'a:'+a.id);reserveSlot(c.world,item.pos,'f:'+item.id);c.foodItems.push(item);a.carried-=n;a.cacheSlot=null;if(a.carried<1e-9){a.carried=0;a.cargoKind=null;}return true;

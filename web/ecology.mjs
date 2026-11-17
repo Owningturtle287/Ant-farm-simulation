@@ -1,5 +1,6 @@
 import {DAY,Random,clamp} from './biology.mjs';
 import {initLedger,restoreLedger,addStock,removeStock,NUTRITION} from './resources.mjs';
+import {densityAt} from './geometry.mjs';
 export function terrainHash(x,seed){let h=(Math.imul(x,374761393)^seed)>>>0;h=Math.imul(h^(h>>>13),1274126177);return (h^(h>>>16))>>>0;}
 function noise(x,seed){const i=Math.floor(x),t=x-i,s=t*t*(3-2*t);return ((terrainHash(i,seed)%1000)*(1-s)+(terrainHash(i+1,seed)%1000)*s)/1000;}
 export function terrainHeight(x,seed){
@@ -54,7 +55,7 @@ export function harvest(w,p,amount,time){
 export function tickHabitat(w,time){
   const elapsed=time-w.environmentAt;if(elapsed<2)return;w.environmentAt=time;
   const weather=w.weather;if(weather.raining)weather.lastRainAt=time;
-  if(w.spaceReady&&w.resourceGeometryRevision!==w.revision){w.resourceGeometryRevision=w.revision;for(const p of w.patches)for(const i of [...(p.pieces??[])])if(w.solid(i.pos.map(Math.round))){p.activePieceID=i.id;removeStock(w,p,i.amount,'buried');delete p.activePieceID;}}
+  if(w.spaceReady&&w.resourceGeometryRevision!==w.revision){w.resourceGeometryRevision=w.revision;for(const p of w.patches)for(const i of [...(p.pieces??[])])if(densityAt(...i.pos,(x,y)=>w.solid([x,y]))>=.49){p.activePieceID=i.id;removeStock(w,p,i.amount,'buried');delete p.activePieceID;}}
   if(!weather.raining&&time>=weather.nextRain){weather.raining=true;weather.intensity=.5+w.ecologyRng.float()*.5;weather.until=time+70+w.ecologyRng.int(0,110);weather.storms++;}
   if(weather.raining&&time>=weather.until){weather.raining=false;weather.intensity=0;weather.nextRain=time+DAY*(2+w.ecologyRng.float()*4);}
   weather.wetness=clamp(weather.wetness+(weather.raining?.003:-.00022)*elapsed,.08,.9);
