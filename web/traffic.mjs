@@ -11,7 +11,15 @@ export const broodRadius=b=>broodStage(b)==='egg'?.16:broodStage(b)==='larva'?.2
 function axis(a,p=a.pos,angle=a.motion?.angle??0){const s=bodyShape(a),dx=Math.cos(angle)*s.half,dy=Math.sin(angle)*s.half;return [[p[0]-dx,p[1]-dy],[p[0]+dx,p[1]+dy]];}
 function pointSegment(p,a,b){const x=b[0]-a[0],y=b[1]-a[1],t=Math.max(0,Math.min(1,((p[0]-a[0])*x+(p[1]-a[1])*y)/(x*x+y*y||1)));return Math.hypot(p[0]-a[0]-x*t,p[1]-a[1]-y*t);}
 function discsGap(first,second){let gap=Infinity;for(const u of first)for(const v of second)gap=Math.min(gap,Math.hypot(u.x-v.x,u.y-v.y)-u.radius-v.radius);return gap;}
-export function bodyGap(a,b,p=a.pos,angle=a.motion?.angle??0,joints=a.motion){const bound=(bodyPixel(a)+bodyPixel(b))*21,distance=dist(p,b.pos);if(distance>bound)return distance-bound;return discsGap(bodyDiscs(a,p,angle,joints),bodyDiscs(b));}
+export function bodyGap(a,b,p=a.pos,angle=a.motion?.angle??0,joints=a.motion){const bound=(bodyPixel(a)+bodyPixel(b))*21,distance=dist(p,b.pos);if(distance>bound)return distance-bound;const first=bodyDiscs(a,p,angle,joints),second=bodyDiscs(b);let gap=discsGap(first,second);
+  // The neck and waist are occupied too: a continuous body cannot interlock through a joint gap.
+  const segments=ds=>[ds.slice(0,2),[ds[0],ds[2]]];
+  for(const [u,v] of segments(first))for(const [x,y] of segments(second)){
+    const A=[u.x,u.y],B=[v.x,v.y],C=[x.x,x.y],D=[y.x,y.y],cross=(p,q,r)=>(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]);
+    const intersects=Math.max(Math.min(A[0],B[0]),Math.min(C[0],D[0]))<=Math.min(Math.max(A[0],B[0]),Math.max(C[0],D[0]))&&Math.max(Math.min(A[1],B[1]),Math.min(C[1],D[1]))<=Math.min(Math.max(A[1],B[1]),Math.max(C[1],D[1]))&&cross(A,B,C)*cross(A,B,D)<=0&&cross(C,D,A)*cross(C,D,B)<=0;
+    const d=intersects?0:Math.min(pointSegment(A,C,D),pointSegment(B,C,D),pointSegment(C,A,B),pointSegment(D,A,B));
+    gap=Math.min(gap,d-Math.min(u.radius,v.radius)-Math.min(x.radius,y.radius));
+  }return gap;}
 function insert(map,o,p){const k=bin(p);if(!map.has(k))map.set(k,new Set());map.get(k).add(o);}
 function around(map,p,r=2){const out=[];for(let y=Math.floor(p[1])-r;y<=Math.floor(p[1])+r;y++)for(let x=Math.floor(p[0])-r;x<=Math.floor(p[0])+r;x++)for(const o of map.get(x+','+y)??[])out.push(o);return out;}
 export function nearbyAdults(w,a,range=1.3){return w.traffic?around(w.traffic.adults,a.pos,1).filter(b=>b.id!==a.id&&dist(a.pos,b.pos)<range):[];}
@@ -104,7 +112,7 @@ export function unjam(c,a){
     yieldTo(c,yielder,winner,bay);
     yielder.decision='Antennal contact: making room for a nearby nestmate, then resuming the same task.';winner.decision='A nearby nestmate is making room. Pausing briefly before continuing.';return;
   }
-  const retreat=near.length?(clearancePlace(w,a,c.time)??backingPlace(w,a,c.time)):null;if(retreat){yieldTo(c,a,near[0],retreat);a.brain.traffic={partner:near[0].id,signal:'Taking a short step clear to turn',at:c.time,until:c.time+1};return;}
+  const retreat=clearancePlace(w,a,c.time)??(near.length?backingPlace(w,a,c.time):null);if(retreat){yieldTo(c,a,near[0]??a,retreat);a.brain.traffic={partner:near[0]?.id??null,signal:'Taking a short step clear to turn',at:c.time,until:c.time+1};return;}
   const goal=m.yieldTarget??a.destination;if(goal){const stance=canOccupy(w,a,goal)?goal:nearestStance(w,a,goal),detour=stance?routeAroundItems(w,a,stance,true):null;if(detour?.length&&JSON.stringify(detour)!==JSON.stringify(a.route)){a.route=detour;m.trafficBlocked=0;return;}}
   if(c.time-(m.waitingSince??c.time)>6&&w.neighbors(a.cell).length<=3){c.congestionUntil=c.time+15;if(a.cell[1]>w.baseSurface(a.cell[0])+3)for(const dx of[-1,1]){const p=[a.cell[0]+dx,a.cell[1]];if(w.solid(p)&&!w.construction.some(q=>key(q)===key(p))){w.construction.push(p,[p[0],p[1]+1]);w.frontierVersion=-1;break;}}}
 }

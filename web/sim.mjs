@@ -254,10 +254,12 @@ export class Colony{
     return a.knownNeeds;
   }
   send(a,target){
-    if(!target)return false;if(a.motion){a.motion.yieldingRoute=false;a.motion.resumeGoal=null;a.motion.yieldTarget=null;}a.target=[...target];a.destination=[...target];
+    if(!target)return false;if(a.motion){a.motion.yieldingRoute=false;a.motion.resumeGoal=null;a.motion.yieldTarget=null;a.motion.clearanceUntil=0;a.motion.backingUntil=0;a.motion.gaitDirection=1;}a.target=[...target];a.destination=[...target];
     const stances=this.world.traffic?nearbyStances(this.world,a,target):[target];if(canOccupy(this.world,a,target))stances.unshift(target);
     for(const stance of stances.slice(0,6)){const route=routeAroundItems(this.world,a,stance);if(route){a.route=route;a.routeFailures=0;return true;}}
-    a.route=[];a.routeFailures++;a.busyUntil=this.time+Math.min(5,1+a.routeFailures);
+    a.route=[];a.routeFailures++;a.motion.trafficBlocked=Math.max(.5,a.motion.trafficBlocked??0);unjam(this,a);
+    if(a.motion.yieldingRoute)return true;
+    a.busyUntil=this.time+Math.min(5,1+a.routeFailures);
     if(!a.carried&&!a.carryingBrood&&a.caste!=='queen'){
       for(const m of a.memories)if(same(m.cell,target))m.avoidUntil=this.time+60;
       a.task='resting';a.decision='The route changed. Reassessing the task from a safe position.';
@@ -483,7 +485,7 @@ export class Colony{
   chooseJob(a){
     if(a.task==='toBrood'&&!a.carryingBrood)this.releaseBrood(a);
     if(a.cacheSlot){releaseSlot(this.world,a.cacheSlot,'a:'+a.id);a.cacheSlot=null;}
-    if(a.motion){a.motion.yieldingRoute=false;a.motion.resumeGoal=null;a.motion.yieldTarget=null;}
+    if(a.motion){a.motion.yieldingRoute=false;a.motion.resumeGoal=null;a.motion.yieldTarget=null;a.motion.clearanceUntil=0;a.motion.backingUntil=0;a.motion.gaitDirection=1;}
     if(this.careClaims?.get(a.broodID)===a.id)this.careClaims.delete(a.broodID);
     a.lastProgressAt=this.time;a.lastProgressPos=[...a.pos];a.target=null;a.route=[];
     if((a.energy<.28&&foodFill(a)<.01)||(a.hydration<.25&&a.socialWater<.01)){

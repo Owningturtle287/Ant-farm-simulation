@@ -17,7 +17,7 @@ export function bodyRoute(w,a,target,physics,dynamic=false,local=false){
   const {canOccupy,sweptFree}=physics,start=a.pos.slice(0,2),goal=target.slice(0,2),initial=wrap(a.motion?.angle??0);
   if(distance(start,goal)<.06)return [];
   const shared=dynamic?{valid:new Map(),edges:new Map(),positions:new Map()}:(w.traffic.bodyNavigation??={valid:new Map(),edges:new Map(),positions:new Map()});
-  const queen=w.traffic.colony.ants.find(b=>b.caste==='queen'),stamp=(queen&&queen.id!==a.id?queen.pos.join(',')+':'+queen.motion?.angle:'none')+':'+a.caste+':'+a.bodySize;
+  const stamp=a.caste+':'+a.bodySize+':'+(a.motion?.neck??0)+':'+(a.motion?.waist??0);
   const valid=(p,angle)=>{const id=stamp+':'+pointKey(p)+':'+angle;return shared.valid.has(id)?shared.valid.get(id):boundedSet(shared.valid,id,canOccupy(w,a,p,angle,null,!dynamic),15000);};
   const edge=(from,to,angle,oldAngle)=>{const id=stamp+':'+pointKey(from)+'>'+pointKey(to)+':'+oldAngle+'>'+angle;return shared.edges.has(id)?shared.edges.get(id):boundedSet(shared.edges,id,sweptFree(w,a,from,to,angle,oldAngle,false,!dynamic),40000);};
   // A free direct movement keeps arbitrary, natural headings. Rotate in place only when needed.

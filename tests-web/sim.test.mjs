@@ -564,11 +564,11 @@ test('routing recognizes a clear vertical stance even when a horizontal body can
   c.foodItems=[];beginTraffic(c);assert.equal(canOccupy(c.world,a,[0,20],0),false);assert.equal(canOccupy(c.world,a,[0,20],Math.PI/2),true);const route=routeAroundItems(c.world,a,[0,20]);assert.ok(route);assert.deepEqual(route.at(-1).slice(0,2),[0,20]);
 });
 
-test('finite grain piles remain climbable without walking through their pieces',()=>{
-  const c=new Colony(287),a=c.ants[2];a.cell=[45,0];a.pos=[...a.cell];beginTraffic(c);
-  const route=routeAroundItems(c.world,a,[1,11]);assert.ok(route?.length,'a crop-laden worker needs a route over grain piles');
-  let prior=a.pos,angle=a.motion.angle;for(const point of route){const heading=point[2]??Math.atan2(point[1]-prior[1],point[0]-prior[0]);assert.ok(sweptFree(c.world,a,prior,point,heading,angle,false,true),'Every portion of the route must keep clear of finite grain.');prior=point;angle=heading;}
-  assert.ok(route.every(p=>canOccupy(c.world,a,p,p[2]??0,null,true)));
+test('finite grain piles remain climbable without walking through their pieces',async()=>{
+  const {moveAnt,updateMotion}=await import('../web/locomotion.mjs');const c=new Colony(287),a=c.ants[2];c.ants=[a];c.brood=[];c.foodItems=[];a.cell=[45,0];a.pos=[...a.cell];a.task='returningFood';a.carried=2;beginTraffic(c);
+  a.route=routeAroundItems(c.world,a,[1,11]);assert.ok(a.route?.length,'a crop-laden worker needs a route over grain piles');
+  for(let i=0;i<1600&&a.route.length;i++){updateMotion(a,c.world,i*.1,.1,new Map());moveAnt(a,c.world,i*.1,.1);assert.ok(canOccupy(c.world,a,a.pos),'The actual turning and walking body must keep clear of every finite grain portion.');}
+  assert.ok(distance(a.pos,[1,11])<.08,'The loaded worker must finish the route, rather than merely finding clear endpoints.');assert.equal(a.carried,2);
 });
 
 test('a stalled distant queen feeder does not exclude a nearby donor',()=>{
