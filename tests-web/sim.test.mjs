@@ -19,6 +19,12 @@ import {SaveStore,SAVE_KEY,decodeSave} from '../web/persistence.mjs';
 function primeCrop(c,a,food=0,protein=0,water=0){for(const [field,kind,n] of [['socialFood','energy',food],['socialProtein','protein',protein],['socialWater','water',water]]){c.supplyLedger[kind].introduced+=n-(a[field]??0);a[field]=n;}updateSupplyTotals(c);}
 function clearBrood(c){for(const b of c.brood)bedRelease(c,b);c.brood=[];}
 const run=(c,seconds)=>{for(let i=0;i<seconds*10;i++)c.step();return c;};
+test('a route still moves the body when its logical cell already equals the goal',()=>{
+ const c=new Colony(),a=c.ants[1];c.ants=[a];c.brood=[];c.foodItems=[];c.world.patches=[];c.world.carve([0,20],4,4);a.cell=[0,20];a.pos=[.4,20.4];a.motion.angle=0;beginTraffic(c);const route=routeAroundItems(c.world,a,[0,20]);assert.ok(route?.length,'Logical arrival cannot leave the actual body outside contact range.');
+});
+test('a route through occupied brood space connects body-clear segments rather than only clear endpoints',async()=>{
+ const {sweptFree}=await import('../web/traffic.mjs');const c=new Colony(),a=c.ants[1];c.ants=[a];c.foodItems=[];c.world.patches=[];c.world.carve([0,20],4,5);c.brood=[20,21].map((y,id)=>({id:900+id,cell:[0,y],age:0,carriedBy:null}));a.cell=[0,19];a.pos=[0,19];a.motion.angle=0;beginTraffic(c);const route=routeAroundItems(c.world,a,[0,22]);assert.ok(route?.length);let prior=a.pos,angle=a.motion.angle;for(const point of route){const heading=point[2]??Math.atan2(point[1]-prior[1],point[0]-prior[0]);assert.ok(sweptFree(c.world,a,prior,point,heading,angle),'Every planned transition must fit the body around the brood.');prior=point;angle=heading;}
+});
 test('small seeded colonies forage, excavate, grow a mound, and develop brood',()=>{
   for(const seed of [17,287,914]){
     const c=new Colony(seed);c.food=2;c.water=1;for(let i=0;i<12000&&!(c.foodDelivered>0&&c.waterDelivered>0&&c.world.soilDeposited>0&&c.births>0);i++)c.step();
