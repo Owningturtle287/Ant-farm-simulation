@@ -1,4 +1,4 @@
-import {sweptFree,reindexAdult,canOccupy} from './traffic.mjs';
+import {sweptFree,reindexAdult,canOccupy,terrainFree} from './traffic.mjs';
 // Local sensorimotor approximation, not a reconstruction of an ant nervous system.
 import {clamp} from './biology.mjs';
 import {densityAt} from './geometry.mjs';
@@ -41,7 +41,7 @@ export function senseAntennae(a,w,time,occupancy){
   }else m.mode=a.carried||a.carryingBrood?'carrying':a.task==='investigating'?'alert':a.route.length?'travelling':'resting';
 }
 export function updateMotion(a,w,time,dt,occupancy){
-  const m=a.motion;w.motionRevisions??=new Map();if(w.motionRevisions.get(a.id)!==w.revision){w.motionRevisions.set(a.id,w.revision);if(densityAt(...a.pos,(x,y)=>w.solid([x,y]))>=.49)m.recovering=true;}m.phase=wrapAngle(m.phase+dt*(m.mode==='sampling'?11:6.5)+(a.brain.arousal??0)*dt*2);
+  const m=a.motion;w.motionRevisions??=new Map();const revision=w.revision+':'+(w.traffic?.itemHash??0);if(w.motionRevisions.get(a.id)!==revision){w.motionRevisions.set(a.id,revision);if(!terrainFree(w,a.pos))m.recovering=true;}m.phase=wrapAngle(m.phase+dt*(m.mode==='sampling'?11:6.5)+(a.brain.arousal??0)*dt*2);
   if(time>=m.nextVariation){m.wander=m.wander*.6+(random(m)-.5)*.32;m.pace=.87+random(m)*.26;m.nextVariation=time+.45+random(m)*.7;}
   senseAntennae(a,w,time,occupancy);
   if(!a.route.length){m.speed*=Math.exp(-dt*12);if(m.speed<.01)m.speed=0;}
@@ -54,7 +54,7 @@ export function clearSegment(w,from,to,escaping=false){
 }
 export function recoverBody(a,w,dt){
   const m=a.motion,density=densityAt(...a.pos,(x,y)=>w.solid([x,y]));
-  if(density<.49){
+  if(terrainFree(w,a.pos)){
     m.recovering=false;
     if(Math.hypot(a.pos[0]-a.cell[0],a.pos[1]-a.cell[1])>.9){let nearest=null,best=Infinity;const cx=Math.round(a.pos[0]),cy=Math.round(a.pos[1]);for(let y=cy-1;y<=cy+1;y++)for(let x=cx-1;x<=cx+1;x++){const d=Math.hypot(x-a.pos[0],y-a.pos[1]);if(d<best&&w.walkable([x,y])){nearest=[x,y];best=d;}}if(nearest){a.cell=nearest;const goal=a.route.at(-1)??a.destination;if(goal&&w.path)a.route=w.path(a.cell,goal)??[];}}
     return;
@@ -62,8 +62,8 @@ export function recoverBody(a,w,dt){
   const dx=a.cell[0]-a.pos[0],dy=a.cell[1]-a.pos[1],length=Math.hypot(dx,dy),step=Math.min(length,1.6*dt),toward=[a.pos[0]+dx/Math.max(length,.0001)*step,a.pos[1]+dy/Math.max(length,.0001)*step];
   let next=clearSegment(w,a.pos,toward,true)?toward:null,best=density;
   if(!next)for(let i=0;i<8;i++){const angle=i*Math.PI/4,p=[a.pos[0]+Math.cos(angle)*step,a.pos[1]+Math.sin(angle)*step],value=densityAt(...p,(x,y)=>w.solid([x,y]));if(value<best&&clearSegment(w,a.pos,p,true)){best=value;next=p;}}
-  if(next&&!canOccupy(w,a,next,m.angle,null,false,true))next=null;
-  if(next){const old=[...a.pos],travel=Math.hypot(next[0]-a.pos[0],next[1]-a.pos[1]);m.travel+=travel;m.speed=travel/dt;m.angle=wrapAngle(m.angle+clamp(wrapAngle(Math.atan2(next[1]-a.pos[1],next[0]-a.pos[0])-m.angle),-7.5*dt,7.5*dt));a.pos=next;reindexAdult(w,a,old);m.mode='reorienting';}
+  let angle=m.angle;if(next){const turn=wrapAngle(m.angle+clamp(wrapAngle(Math.atan2(next[1]-a.pos[1],next[0]-a.pos[0])-m.angle),-7.5*dt,7.5*dt));if(sweptFree(w,a,a.pos,next,turn,m.angle,true))angle=turn;else if(!sweptFree(w,a,a.pos,next,m.angle,m.angle,true))next=null;}
+  if(next){const old=[...a.pos],travel=Math.hypot(next[0]-a.pos[0],next[1]-a.pos[1]);m.travel+=travel;m.speed=travel/dt;m.angle=angle;a.pos=next;reindexAdult(w,a,old);m.mode='reorienting';}
 }
 export function moveAnt(a,w,time,dt,traffic=0){
   const m=a.motion,next=a.route[0];if(!next)return false;const previousAngle=m.angle;

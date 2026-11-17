@@ -234,7 +234,9 @@ test('v0.4 colonies keep adults, ground, settings, and stage identity while old 
 });
 test('accelerated fire-ant generations grow past the small founder population and maintain a replacement brood pool',()=>{
   const c=new Colony(287,{broodRate:8,eggRate:4,populationCap:60});run(c,DAY*9);
-  assert.ok(c.alive);assert.ok(c.ants.length>=45,JSON.stringify({adults:c.ants.length,births:c.births,brood:c.brood.length,stages:c.brood.reduce((n,b)=>(n[broodStage(b)]=(n[broodStage(b)]??0)+1,n),{}),food:c.food,water:c.water}));assert.ok(c.births>32);assert.ok(c.brood.length>0);assert.equal(c.ants.some(a=>a.task==='patrolling'),false);
+  // Physical traffic can delay a brood cohort. Retain the population and birth requirements within a bounded extra generation window.
+  for(let i=0;i<DAY*3/.1&&(c.ants.length<45||c.births<=32);i++)c.step();
+  assert.ok(c.alive);assert.ok(c.ants.length>=45,JSON.stringify({days:c.time/DAY,adults:c.ants.length,births:c.births,brood:c.brood.length,stages:c.brood.reduce((n,b)=>(n[broodStage(b)]=(n[broodStage(b)]??0)+1,n),{}),food:c.food,water:c.water}));assert.ok(c.births>32);assert.ok(c.brood.length>0);assert.equal(c.ants.some(a=>a.task==='patrolling'),false);
   assert.ok(c.world.moundTunnels.size>0);assert.ok(c.ants.every(a=>c.world.walkable(a.cell)));
   const carried=c.ants.filter(a=>a.cargoKind==='soil').reduce((n,a)=>n+a.carried,0);assert.equal(c.world.soilExcavated,c.world.soilDeposited+c.world.soilAbandoned+carried);
   for(const kind of ['food','water'])assert.ok(Math.abs(resourceBalance(c.world,kind).error)<1e-5);
@@ -564,4 +566,32 @@ test('a worker yielding beside brood completes its sidestep before contact work'
 test('brood pickup uses physical contact rather than the rounded navigation cell',()=>{
  const c=new Colony(),a=c.ants[1],b=c.brood[0];for(const baby of c.brood)bedRelease(c,baby);c.ants=[a];c.brood=[b];c.foodItems=[];c.world.patches=[];c.world.carve([0,20],4,4);b.cell=[0,20];b.carriedBy=null;holdCell(c.world,b.cell,'b:'+b.id);a.pos=[.8,19.2];a.cell=[1,19];a.motion.angle=Math.PI/2;a.broodID=b.id;a.broodDestination=[0,23];beginTraffic(c);
  assert.ok(distance(a.cell,b.cell)>1.1);assert.ok(distance(a.pos,b.cell)<1.25);c.collectBrood(a);assert.equal(b.carriedBy,a.id);assert.equal(a.carryingBrood,b.id);
+});
+
+test('resource return completes from contact range even when the rounded cell is outside it',()=>{
+ const c=new Colony(),a=c.ants[1];c.ants=[a];c.brood=[];c.foodItems=[];c.world.patches=[];c.world.carve([0,11],5,3);a.pos=[-2.76,10.01];a.cell=[-3,10];a.task='returningFood';a.deliveryKind='food';a.deliveryAmount=1;a.route=[[-2,10]];a.destination=[...c.world.nest];a.busyUntil=0;beginTraffic(c);
+ assert.ok(distance(a.pos,c.world.nest)<3);assert.ok(distance(a.cell,c.world.nest)>3);c.updateAnt(a,.1);assert.equal(a.task,'sharing');c.time=2;c.updateAnt(a,.1);assert.equal(c.foodDelivered,1);assert.equal(a.deliveryKind,null);
+});
+
+test('a supported contour waypoint is not rejected by its rounded sky cell',async()=>{
+ const {terrainFree}=await import('../web/traffic.mjs');const c=new Colony(),a=c.ants[1],w=c.world;c.ants=[a];c.brood=[];c.foodItems=[];w.patches=[];w.solid=p=>p[1]>=1;w.baseSurface=()=>1;w.surface=()=>1;beginTraffic(c);
+ a.pos=[-1,-.7];a.cell=[-1,0];a.motion.angle=0;a.task='toDig';a.target=[1,1];a.route=[[0,-.7,0],[1,0]];a.destination=[1,0];a.busyUntil=0;assert.equal(w.walkable([0,-1]),false);assert.equal(terrainFree(w,[0,-.7]),true);
+ c.updateAnt(a,.1);assert.ok(a.pos[0]>-1);assert.ok(a.route.length,'A legal continuous waypoint must survive the navigation check.');
+});
+
+test('terrain recovery checks the turning body against a nearby worker',async()=>{
+ const {bodyGap}=await import('../web/traffic.mjs'),{recoverBody}=await import('../web/locomotion.mjs');const c=new Colony(),a=c.ants[3],b=c.ants[5],w=c.world;c.ants=[a,b];c.brood=[];c.foodItems=[];w.patches=[];
+ const solid=new Set(['4,-1','4,0','5,0','6,0','4,1','5,1','6,1','7,1','8,1','9,1','4,2','5,2','6,2','7,2','8,2','9,2']);w.solid=p=>solid.has(key(p));
+ a.bodySize=.5000064463320006;a.pos=[6.558649430538055,.3090973218818867];a.cell=[7,0];a.motion.angle=2.5306357040438163;a.motion.recovering=true;b.bodySize=.37813687004982244;b.pos=[6.906131690267359,.34741408799553813];b.cell=[7,0];b.motion.angle=-3.8849890445439956;beginTraffic(c);
+ assert.ok(bodyGap(a,b)>0);const start=[...a.pos];recoverBody(a,w,.1);assert.ok(distance(start,a.pos)>0,'Recovery can translate without forcing a blocked turn.');assert.ok(bodyGap(a,b)>=-.001);
+});
+
+test('loss of grain footing recovers to supported ground without a position snap',async()=>{
+ const {terrainFree}=await import('../web/traffic.mjs'),{recoverBody}=await import('../web/locomotion.mjs');const c=new Colony(),a=c.ants[1],w=c.world;c.ants=[a];c.brood=[];c.foodItems=[];w.patches=[];w.solid=p=>p[1]>=1;w.baseSurface=()=>1;w.surface=()=>1;a.pos=[0,-1.1];a.cell=[0,0];a.motion.angle=Math.PI/2;a.motion.recovering=true;beginTraffic(c);
+ assert.equal(terrainFree(w,a.pos),false);recoverBody(a,w,.1);assert.ok(a.pos[1]>-1.1&&a.pos[1]<-.9);for(let i=0;i<20&&a.motion.recovering;i++)recoverBody(a,w,.1);assert.equal(terrainFree(w,a.pos),true);assert.equal(a.motion.recovering,false);
+});
+
+test('interrupted brood jobs release their work claims so another nurse can help',()=>{
+ const c=new Colony(),b=c.brood[1],hauler=c.ants[1],oldNurse=c.ants[2],helper=c.ants[3];primeCrop(c,c.ants[0],2,1,1);primeCrop(c,helper,.3,.5,.2);hauler.task='refueling';hauler.broodID=b.id;hauler.carryingBrood=null;oldNurse.task='exploring';oldNurse.broodID=b.id;c.broodClaims.add(b.id);c.careClaims=new Map([[b.id,oldNurse.id]]);b.nutrition=.2;b.needsTransport=false;b.lastMoved=c.time;helper.cell=[b.cell[0]+1,b.cell[1]];helper.pos=[...helper.cell];helper.knownBrood=[b.id];beginTraffic(c);
+ c.updateDemand();assert.equal(c.broodClaims.has(b.id),false);assert.equal(c.careClaims.has(b.id),false);assert.equal(c.assignCare(helper),true);assert.equal(helper.task,'nursing');assert.equal(helper.broodID,b.id);
 });

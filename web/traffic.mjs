@@ -17,9 +17,12 @@ export function refreshItems(c,force=true){const t=c.world.traffic;if(!t||(!forc
 export function beginTraffic(c){const w=c.world,old=w.traffic,changed=!old||old.broodRef!==c.brood||old.foodRef!==c.foodItems||old.patchRef!==w.patches||old.broodCount!==c.brood.length||old.foodCount!==c.foodItems.length||old.patchCount!==w.patches.length;w.traffic={adults:new Map(),items:old?.items??new Map(),routes:old?.geometry===w.revision?old.routes:new Map(),itemHash:old?.itemHash,itemDirty:changed||old?.itemDirty,broodRef:c.brood,foodRef:c.foodItems,patchRef:w.patches,broodCount:c.brood.length,foodCount:c.foodItems.length,patchCount:w.patches.length,geometry:w.revision,colony:c};refreshItems(c,false);for(const a of c.ants)insert(w.traffic.adults,a,a.pos);}
 export function reindexAdult(w,a,old){if(!w.traffic)return;w.traffic.adults.get(bin(old))?.delete(a);insert(w.traffic.adults,a,a.pos);}
 export function foodSupport(w,p){return !!w.traffic&&around(w.traffic.items,p,1).some(o=>o.kind==='food'&&Math.abs(o.pos[0]-p[0])<1.05&&Math.abs(o.pos[1]-p[1])<1.15);}
+export function terrainFree(w,p){
+  p=[p[0],p[1]];if(densityAt(...p,(x,y)=>w.solid([x,y]))>=.49)return false;
+  if(!w.walkable(p.map(Math.round))){const x=Math.floor(p[0]),y=Math.floor(p[1]);let supported=false;for(let dy=0;dy<=1;dy++)for(let dx=0;dx<=1;dx++)if(Math.hypot(p[0]-x-dx,p[1]-y-dy)<.81&&w.walkable([x+dx,y+dy]))supported=true;if(!supported)return false;}return true;
+}
 export function canOccupy(w,a,p,angle=a.motion?.angle??0,ignoreBrood=null,ignoreAdults=false,escaping=false){
-  p=[p[0],p[1]];if(!escaping&&densityAt(...p,(x,y)=>w.solid([x,y]))>=.49)return false;
-  if(!escaping&&!w.walkable(p.map(Math.round))){const x=Math.floor(p[0]),y=Math.floor(p[1]);let supported=false;for(let dy=0;dy<=1;dy++)for(let dx=0;dx<=1;dx++)if(Math.hypot(p[0]-x-dx,p[1]-y-dy)<.81&&w.walkable([x+dx,y+dy]))supported=true;if(!supported)return false;}
+  p=[p[0],p[1]];if(!escaping&&!terrainFree(w,p))return false;
   const [u,v]=axis(a,p,angle),r=bodyShape(a).radius,nx=-Math.sin(angle)*r,ny=Math.cos(angle)*r;
 
   const t=w.traffic;if(!t)return true;
@@ -28,7 +31,7 @@ export function canOccupy(w,a,p,angle=a.motion?.angle??0,ignoreBrood=null,ignore
   const queen=t.colony.ants[0];if(queen?.caste==='queen'&&queen.id!==a.id&&dist(queen.pos,p)<1.4&&bodyGap(a,queen,p,angle)<-.001)return false;
   return true;
 }
-export function sweptFree(w,a,from,to,angle,oldAngle=a.motion?.angle??angle){const n=Math.max(1,Math.ceil(dist(from,to)/.09),bodyShape(a).half?Math.ceil(Math.abs(Math.atan2(Math.sin(angle-oldAngle),Math.cos(angle-oldAngle)))/.15):1);for(let i=1;i<=n;i++){const t=i/n,delta=Math.atan2(Math.sin(angle-oldAngle),Math.cos(angle-oldAngle));if(!canOccupy(w,a,[from[0]+(to[0]-from[0])*t,from[1]+(to[1]-from[1])*t],oldAngle+delta*t))return false;}return true;}
+export function sweptFree(w,a,from,to,angle,oldAngle=a.motion?.angle??angle,escaping=false){const n=Math.max(1,Math.ceil(dist(from,to)/.09),bodyShape(a).half?Math.ceil(Math.abs(Math.atan2(Math.sin(angle-oldAngle),Math.cos(angle-oldAngle)))/.15):1);for(let i=1;i<=n;i++){const t=i/n,delta=Math.atan2(Math.sin(angle-oldAngle),Math.cos(angle-oldAngle));if(!canOccupy(w,a,[from[0]+(to[0]-from[0])*t,from[1]+(to[1]-from[1])*t],oldAngle+delta*t,null,false,escaping))return false;}return true;}
 export function nearestStance(w,a,target,range=1.4){
   const candidates=[];for(let y=-2;y<=2;y++)for(let x=-2;x<=2;x++){const p=[target[0]+x,target[1]+y];if(dist(p,target)<=range+.001&&(canOccupy(w,a,p)||canOccupy(w,a,p,0)||canOccupy(w,a,p,Math.PI/2)))candidates.push(p);}
   candidates.sort((x,y)=>dist(x,a.pos)-dist(y,a.pos)||dist(x,target)-dist(y,target));return candidates[0]??null;

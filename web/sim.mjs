@@ -1,4 +1,4 @@
-import {foodSupport,beginTraffic,refreshItems,settleAdults,canOccupy,nearestStance,routeAroundItems,idlePlace,spaceForItem,broodRadius,unjam,reindexAdult} from './traffic.mjs';
+import {foodSupport,beginTraffic,refreshItems,settleAdults,canOccupy,terrainFree,nearestStance,routeAroundItems,idlePlace,spaceForItem,broodRadius,unjam,reindexAdult} from './traffic.mjs';
 import {initGroundwater,tableLevel,flooded,tickGroundwater,groundwaterJSON} from './hydrology.mjs';
 import {initializeSupplies,setReserve,updateSupplyTotals,cropCapacity as socialCapacity,waterCapacity,foodFill,consumeSelf,fillFromCargo,shareCrops,takeCache,nearestCache,cacheSlotFor,storeCargo,consumeNutrient,bedAvailable,bedOccupy,bedRelease,freeBedCount,initCrop,accountIntake,accountDeath,rebuildReservations,feedBroodCargo} from './provisions.mjs';
 import {findBed,holdCell,releaseCell,freeCell,releaseSlot,initItemSpace,restorePieces} from './item-space.mjs';
@@ -207,6 +207,9 @@ export class Colony{
   setSettings(changes){this.settings=settingsFrom({...this.settings,...changes});this.world.groundwater.targetDepth=this.settings.waterTableDepth;}
   record(text){this.events.unshift({time:this.time,text});this.events=this.events.slice(0,6);}
   updateDemand(){
+    const broodIDs=new Set(this.brood.map(b=>b.id));
+    this.broodClaims=new Set(this.ants.filter(a=>a.carryingBrood!=null||a.task==='toBrood').map(a=>a.carryingBrood??a.broodID).filter(id=>broodIDs.has(id)));
+    if(this.careClaims?.size){const ants=new Map(this.ants.map(a=>[a.id,a]));for(const [id,owner] of this.careClaims){const a=ants.get(owner);if(!broodIDs.has(id)||!a||a.task!=='nursing'||a.broodID!==id)this.careClaims.delete(id);}}
     rebuildReservations(this);updateSupplyTotals(this);const count=this.ants.length,nurses=this.ants.filter(a=>a.task==='nursing').length,diggers=this.ants.filter(a=>['toDig','digging','haulingSoil'].includes(a.task)).length;
     const larvae=this.brood.filter(b=>broodStage(b)==='larva'),hungry=larvae.filter(b=>b.nutrition<.4).length,untended=this.brood.filter(b=>this.time-b.lastCare>20).length;
     const foodTarget=count*.65+4,proteinTarget=larvae.length*.75+count*.10+2,waterTarget=count*.4+this.brood.length*.08,desiredSpace=35+count*2.2+this.brood.length*1.4+this.foodItems.length/5;this.freeBeds=freeBedCount(this);
@@ -349,7 +352,7 @@ export class Colony{
     }
     if(a.route.length){
       const next=a.route[0];
-      if(!this.world.walkable(next.slice(0,2).map(Math.round))){a.route=[];const goal=a.destination;if(goal&&this.world.walkable(goal))a.route=this.world.path(a.cell,goal)??[];return;}
+      if(!terrainFree(this.world,next)){a.route=[];const goal=a.motion.yieldTarget??a.destination;if(goal){const stance=canOccupy(this.world,a,goal)?goal:nearestStance(this.world,a,goal);if(stance)a.route=routeAroundItems(this.world,a,stance)??[];}return;}
       const traffic=Math.max(0,(this.occupancy.get(key(next))?.length??0)-1),arrived=moveAnt(a,this.world,this.time,dt,traffic);if(!arrived)unjam(this,a);
       const actual=a.pos.map(Math.round);if(distance(a.pos,a.cell)>.9){const anchors=[];for(let y=actual[1]-1;y<=actual[1]+1;y++)for(let x=actual[0]-1;x<=actual[0]+1;x++)if(this.world.walkable([x,y]))anchors.push([x,y]);anchors.sort((p,q)=>distance(p,a.pos)-distance(q,a.pos));if(anchors[0]&&!same(anchors[0],a.cell)){a.cell=anchors[0];const goal=a.motion.yieldTarget??a.destination;if(goal)a.route=routeAroundItems(this.world,a,goal)??[];}}
       if(a.task==='haulingSoil'&&!a.depositTarget&&!a.motion.yieldingRoute&&this.world.onSurface(actual)){a.cell=actual;a.route=[];}
@@ -364,7 +367,7 @@ export class Colony{
     if(a.caste==='queen'){this.updateQueen(a);return;}
     switch(a.task){
       case 'returningFood':case 'returningWater':
-        if(distance(a.cell,this.world.nest)>3){this.send(a,this.world.nest);break;}
+        if(distance(a.pos,this.world.nest)>3){this.send(a,this.world.nest);break;}
         a.returnKind=a.task==='returningWater'?'water':'food';a.task='sharing';a.busyUntil=this.time+1.5;a.decision='Offering a crop load to nearby nestmates before putting solid excess into an individual cache space.';break;
       case 'sharing':{
         if(a.deliveryAmount==null&&a.carried&&a.cargoKind==='water')a.deliveryAmount=a.carried;
