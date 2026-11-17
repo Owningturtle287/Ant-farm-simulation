@@ -666,7 +666,7 @@ export class Colony{
     if(!b){this.releaseBrood(a);this.chooseJob(a);return;}
     if(!a.broodDestination||!this.world.walkable(a.broodDestination)||!freeCell(this.world,a.broodDestination,'b:'+b.id))a.broodDestination=this.broodSite(b);if(!a.broodDestination){a.busyUntil=this.time+1;this.proposeConstruction(a,{...this.needsFor(a),dig:1});return;}
     if(distance(a.pos,a.broodDestination)>1.4){this.send(a,a.broodDestination);return;}
-    if(!spaceForItem(this.world,a.broodDestination,broodRadius(b))){a.broodDestination=null;a.busyUntil=this.time+.5;return;}
+    if(!spaceForItem(this.world,a.broodDestination,Math.max(.31,broodRadius(b)))){a.broodDestination=null;a.busyUntil=this.time+.5;return;}
     if(!bedOccupy(this,b,a.broodDestination)){a.broodDestination=null;return;}delete b.pos;b.home=[...b.cell];b.carriedBy=null;refreshItems(this);b.needsTransport=false;b.lastMoved=this.time;b.lastCare=this.time;
     a.carryingBrood=null;this.broodClaims.delete(b.id);a.task='nursing';a.busyUntil=this.time+2;this.broodMoved++;
     a.decision='Placed brood in the nursery. Now grooming and tending it.';

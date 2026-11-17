@@ -543,3 +543,10 @@ test('a stalled distant queen feeder does not exclude a nearby donor',()=>{
   near.pos=[1,11];near.cell=[1,11];primeCrop(c,near,.6,.5,.5);beginTraffic(c);
   assert.equal(c.assignQueenCare(near),true);c.feedQueen(near);assert.ok(q.socialProtein>0);assert.ok(q.socialWater>0);
 });
+
+test('brood carriers leave the full growing bed clear before dropping an egg',()=>{
+ const c=new Colony(287),n=c.ants[1],b=c.brood[0];for(const baby of c.brood)bedRelease(c,baby);c.brood=[b];c.ants=[n];c.foodItems=[];c.world.patches=[];c.world.carve([0,20],4,3);
+ b.age=0;b.cell=[0,20];b.carriedBy=n.id;n.task='carryingBrood';n.carryingBrood=b.id;n.broodID=b.id;n.cell=[0,20];n.pos=[0,20.38];n.motion.angle=0;n.broodDestination=[0,20];holdCell(c.world,[0,20],'b:'+b.id);beginTraffic(c);
+ c.carryBrood(n);assert.equal(b.carriedBy,n.id,'A tiny egg must not be put inside the carrier body or its later growth space.');
+ n.cell=[0,21];n.pos=[0,21];n.broodDestination=[0,20];beginTraffic(c);c.carryBrood(n);assert.equal(b.carriedBy,null);assert.ok(canOccupy(c.world,n,n.pos));
+});
