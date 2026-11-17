@@ -2,7 +2,7 @@
 const distance=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
 const wrap=a=>Math.atan2(Math.sin(a),Math.cos(a));
 const pointKey=p=>p[0].toFixed(4)+','+p[1].toFixed(4);
-const HEADINGS=[0,Math.PI/2,Math.PI,-Math.PI/2];
+const HEADINGS=Array.from({length:8},(_,i)=>i*Math.PI/4);
 const STEPS=[[.5,0],[-.5,0],[0,.5],[0,-.5],[.5,.5],[.5,-.5],[-.5,.5],[-.5,-.5]];
 function boundedSet(map,key,value,limit){if(map.size>=limit)map.delete(map.keys().next().value);map.set(key,value);return value;}
 class Heap{
@@ -12,7 +12,7 @@ class Heap{
   get length(){return this.values.length;}
 }
 function compact(path){const out=[];for(const p of path){const b=out.at(-1),a=out.at(-2);if(a&&b&&p[2]===b[2]&&b[2]===a[2]&&distance(a,b)>0&&distance(b,p)>0){const cross=(b[0]-a[0])*(p[1]-b[1])-(b[1]-a[1])*(p[0]-b[0]),dot=(b[0]-a[0])*(p[0]-b[0])+(b[1]-a[1])*(p[1]-b[1]);if(Math.abs(cross)<1e-8&&dot>0){out[out.length-1]=p;continue;}}out.push(p);}return out;}
-function anchor(w,p){const rounded=p.map(Math.round);if(w.walkable(rounded))return rounded;const candidates=[];for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++){const q=[rounded[0]+x,rounded[1]+y];if(w.walkable(q))candidates.push(q);}candidates.sort((a,b)=>distance(a,p)-distance(b,p));return candidates[0]??null;}
+function anchor(w,p){const rounded=p.map(n=>Math.round(n)||0);if(w.walkable(rounded))return rounded;const candidates=[];for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++){const q=[rounded[0]+x,rounded[1]+y];if(w.walkable(q))candidates.push(q);}candidates.sort((a,b)=>distance(a,p)-distance(b,p));return candidates[0]??null;}
 export function bodyRoute(w,a,target,physics,dynamic=false,local=false){
   const {canOccupy,sweptFree}=physics,start=a.pos.slice(0,2),goal=target.slice(0,2),initial=wrap(a.motion?.angle??0);
   if(distance(start,goal)<.06)return [];
@@ -23,12 +23,11 @@ export function bodyRoute(w,a,target,physics,dynamic=false,local=false){
   // A free direct movement keeps arbitrary, natural headings. Rotate in place only when needed.
   const heading=Math.atan2(goal[1]-start[1],goal[0]-start[0]);
   if(valid(goal,heading)&&edge(start,start,heading,initial)&&edge(start,goal,heading,heading))return [[...start,heading,.02],[...goal,heading,.02]];
-  if(valid(goal,initial)&&edge(start,goal,initial,initial))return [[...goal,initial,.02]];
   const startCell=anchor(w,start),goalCell=anchor(w,goal);if(!startCell||!goalCell)return null;
   const coarse=w.path(startCell,goalCell);if(!coarse)return null;
   const raw=coarse.map(p=>p.slice(0,2));if(!raw.length||distance(raw.at(-1),goal)>.001)raw.push(goal);
   let prior=start,angle=initial,clear=true;
-  for(const p of raw){const nextAngle=Math.atan2(p[1]-prior[1],p[0]-prior[0]);if(!valid(p,nextAngle)||!edge(prior,p,nextAngle,angle)){clear=false;break;}prior=p;angle=nextAngle;}
+  for(const p of raw){const nextAngle=Math.atan2(p[1]-prior[1],p[0]-prior[0]);if(!valid(p,nextAngle)||!edge(prior,prior,nextAngle,angle)||!edge(prior,p,nextAngle,nextAngle)){clear=false;break;}prior=p;angle=nextAngle;}
   if(clear)return raw; // Ordinary open corridors retain the steered gait and rounded turns.
   // Repair short portions of a long terrain corridor independently. A distant food
   // pile must not exhaust the search budget before a returning forager reaches it.
@@ -55,13 +54,14 @@ export function bodyRoute(w,a,target,physics,dynamic=false,local=false){
   const limit=dynamic?80:Math.min(800,Math.max(160,coarse.length*25));
   while(heap.length&&expanded++<limit){
     const node=heap.pop();if(closed.has(node.id)||node.g>best.get(node.id)+1e-8)continue;closed.add(node.id);const orientation=angles[node.ori];
-    if(distance(node.p,goal)<2.5&&valid(goal,orientation)&&edge(node.p,goal,orientation,orientation)){
-      const path=[[...goal,orientation,.02]];let n=node;while(n.parent){path.push([...n.p,angles[n.ori],.02]);n=n.parent;}path.reverse();return compact(path);
+    const goalHeading=Math.atan2(goal[1]-node.p[1],goal[0]-node.p[0]);
+    if(distance(node.p,goal)<2.5&&valid(goal,goalHeading)&&edge(node.p,node.p,goalHeading,orientation)&&edge(node.p,goal,goalHeading,goalHeading)){
+      const path=[[...goal,null,.04]];let n=node;while(n.parent){path.push([...n.p,null,.04]);n=n.parent;}path.reverse();return compact(path);
     }
     const offer=(p,ori,cost)=>{const g=node.g+cost,id=pointKey(p)+'@'+ori;if(g+1e-8>=(best.get(id)??Infinity))return;best.set(id,g);heap.push(make(p,ori,g,node));};
-    for(let ori=0;ori<angles.length;ori++)if(ori!==node.ori&&valid(node.p,angles[ori])&&edge(node.p,node.p,angles[ori],orientation))offer(node.p,ori,.06+Math.abs(wrap(angles[ori]-orientation))*.12);
+
     const nearby=candidates(node.p).filter(p=>{const d=distance(p,node.p);return d>.035&&d<=1.12&&p[0]>=bounds.minX&&p[0]<=bounds.maxX&&p[1]>=bounds.minY&&p[1]<=bounds.maxY;}).sort((a,b)=>distance(a,node.p)-distance(b,node.p)||a[0]-b[0]||a[1]-b[1]);
-    const directions=new Set();for(const p of nearby){const dx=p[0]-node.p[0],dy=p[1]-node.p[1],direction=(Math.round(Math.atan2(dy,dx)/(Math.PI/4))+8)%8;if(directions.has(direction)||!valid(p,orientation)||!edge(node.p,p,orientation,orientation))continue;directions.add(direction);const forward=Math.cos(orientation)*dx+Math.sin(orientation)*dy;offer(p,node.ori,distance(p,node.p)+(forward<-.01?.10:0));if(directions.size===8)break;}
+    const directions=new Set();for(const p of nearby){const dx=p[0]-node.p[0],dy=p[1]-node.p[1],heading=Math.atan2(dy,dx),direction=(Math.round(heading/(Math.PI/4))+8)%8;if(directions.has(direction)||!valid(p,heading)||!edge(node.p,node.p,heading,orientation)||!edge(node.p,p,heading,heading))continue;directions.add(direction);let ori=angles.findIndex(v=>Math.abs(wrap(v-heading))<.001);if(ori<0){ori=angles.length;angles.push(heading);}offer(p,ori,distance(p,node.p)+Math.abs(wrap(heading-orientation))*.045);if(directions.size===8)break;}
   }
   return null;
 }

@@ -79,3 +79,5 @@ v0.9 adds separate size-dependent food/water crop bars, contact-based transfers,
 
 
 v0.10 adds physical adult body spacing, adjacent work positions, separate idle locations, local yielding and route replanning. Brood and food placements preserve travel lanes. The queen shifts her laying position as nearby beds fill, and nurses collect eggs from beside her. Eggs, curled larvae and pale ant-shaped pupae have distinct pixel art and molt/emergence effects. Roofed air gaps beneath mounds are navigable even without an excavation tag, and contour turns keep the navigation anchor aligned with the continuous body position. Old overlapping adults are unpacked into free space, adding a recorded holding annex only when necessary. The 10,000 ceiling remains experimental.
+
+v0.11 replaces sliding collision recovery with forward walking, deliberate turns and local passing requests. Ants have a bending neck and waist; the same three body segments drive contact geometry and close-view animation, and the antenna sensors follow the head. Legs and antennae may touch. Adults can walk over eggs, larvae, pupae and stored food, while those grounded items retain their separate spaces.

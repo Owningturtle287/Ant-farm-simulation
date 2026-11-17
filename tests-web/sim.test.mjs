@@ -31,9 +31,9 @@ test('opposing workers pass through a narrow tunnel without overlapping or aband
  for(const [i,n] of c.ants.entries()){n.pos=[i*8,20];n.cell=[...n.pos];n.motion.angle=i?Math.PI:0;n.task='routeTest';n.destination=[i?0:8,20];n.busyUntil=0;}beginTraffic(c);for(const n of c.ants)n.route=routeAroundItems(w,n,n.destination);assert.ok(a.route&&b.route);
  for(let i=0;i<600&&(a.pos[0]<7.8||b.pos[0]>.2);i++){c.time+=.1;beginTraffic(c);for(const n of c.ants)c.updateAnt(n,.1);assert.ok(canOccupy(w,a,a.pos));assert.ok(canOccupy(w,b,b.pos));}assert.ok(a.pos[0]>7.8&&b.pos[0]<.2,'Both workers must complete the crossing.');
 });
-test('a trapped worker can lift a blocking food parcel and leave without losing its nutrients',async()=>{
+test('cached parcels are walkable while moving one preserves its nutrients',async()=>{
  const {liftCache}=await import('../web/provisions.mjs'),{refreshItems}=await import('../web/traffic.mjs'),{moveAnt,updateMotion}=await import('../web/locomotion.mjs');const c=new Colony(),a=c.ants[1];c.ants=[a];c.brood=[];c.world.patches=[];c.foodItems=[];c.world.carve([0,20],4,4);a.pos=[0,20];a.cell=[0,20];a.motion.angle=0;
- for(const y of[-.5,.5])for(let x=-2;x<=2;x++)c.foodItems.push({id:c.foodItems.length,pos:[x/3,20+y],energy:1.5,protein:.5});for(const x of[-2,2])c.foodItems.push({id:c.foodItems.length,pos:[x/3,20],energy:1.5,protein:.5});beginTraffic(c);assert.ok(canOccupy(c.world,a,a.pos));assert.equal(routeAroundItems(c.world,a,[0,18]),null);
+ for(const y of[-.5,.5])for(let x=-2;x<=2;x++)c.foodItems.push({id:c.foodItems.length,pos:[x/3,20+y],energy:1.5,protein:.5});for(const x of[-2,2])c.foodItems.push({id:c.foodItems.length,pos:[x/3,20],energy:1.5,protein:.5});beginTraffic(c);assert.ok(canOccupy(c.world,a,a.pos));assert.ok(routeAroundItems(c.world,a,[0,18])?.length);
  const item=c.foodItems.find(p=>p.pos[0]===0&&p.pos[1]<20),before=c.foodItems.reduce((n,p)=>n+p.energy+p.protein,0);assert.ok(liftCache(c,a,item));refreshItems(c);assert.equal(c.foodItems.reduce((n,p)=>n+p.energy+p.protein,0)+a.carried,before);assert.deepEqual(a.cargoNutrition,{energy:.75,protein:.25});a.route=routeAroundItems(c.world,a,[0,18]);assert.ok(a.route?.length);a.task='storeFood';for(let i=0;i<300&&a.route.length;i++){updateMotion(a,c.world,i*.1,.1,new Map());moveAnt(a,c.world,i*.1,.1);assert.ok(canOccupy(c.world,a,a.pos));}assert.ok(distance(a.pos,[0,18])<.08);
 });
 test('cancelled brood trips release their destination while completed beds remain occupied',()=>{
@@ -533,13 +533,13 @@ test('nursery searches reuse geometry while observing new reservations, releases
   const far=[100,12];findBed(w,far);w.carve(far,3,2);assert.deepEqual(findBed(w,far),far);assert.ok(w.bedPools.size<=16);
 });
 
-test('adult bodies cannot pass through one another or grounded brood and cache parcels',async()=>{
+test('adult cores remain solid while brood and cached food are walkable',async()=>{
  const {beginTraffic,bodyGap,canOccupy,sweptFree}=await import('../web/traffic.mjs');
  const c=new Colony(287),w=c.world;c.ants=c.ants.slice(0,2);c.brood=[];c.foodItems=[];w.patches=[];w.carve([0,20],8,3);
  for(const [i,a] of c.ants.entries()){a.cell=[i*3,20];a.pos=[...a.cell];a.motion.angle=0;}beginTraffic(c);
  assert.ok(bodyGap(c.ants[0],c.ants[1])>0);assert.equal(sweptFree(w,c.ants[0],[0,20],[6,20],0),false,'A large time step must not tunnel through another adult.');
- c.brood=[{id:990,cell:[1,20],age:DAY*9,carriedBy:null}];beginTraffic(c);assert.equal(canOccupy(w,c.ants[0],[1,20]),false);
- c.brood=[];c.foodItems=[{id:991,pos:[1,20],energy:1,protein:0}];beginTraffic(c);assert.equal(canOccupy(w,c.ants[0],[1,20]),false);
+ c.brood=[{id:990,cell:[1,20],age:DAY*9,carriedBy:null}];beginTraffic(c);assert.equal(canOccupy(w,c.ants[0],[1,20]),true);
+ c.brood=[];c.foodItems=[{id:991,pos:[1,20],energy:1,protein:0}];beginTraffic(c);assert.equal(canOccupy(w,c.ants[0],[1,20]),true);
 });
 test('roofed untagged air gaps remain connected across the mound and original soil seam',()=>{
  const w=new World(287),x=0,y=w.baseSurface(x)-1;
@@ -560,8 +560,8 @@ test('a pupa can emerge beside its nurse when the actual adult footprint fits',a
   c.updateBrood(.1);const born=c.ants.find(a=>a.id===b.id);assert.ok(born,'Clear adult body space must allow emergence.');assert.ok(bodyGap(n,born)>=-.001);assert.equal(c.brood.some(x=>x.id===b.id),false);
 });
 test('routing recognizes a clear vertical stance even when a horizontal body cannot fit',async()=>{
-  const {routeAroundItems}=await import('../web/traffic.mjs');const c=new Colony(287),a=c.ants[1];c.ants=[a];c.brood=[];c.world.patches=[];c.world.carve([0,20],5,5);a.cell=[0,23];a.pos=[0,23];a.bodySize=.55;a.motion.angle=Math.PI/2;
-  c.foodItems=[[.4,20],[-.4,20]].map((pos,id)=>({id,pos,energy:1,protein:0}));beginTraffic(c);assert.equal(canOccupy(c.world,a,[0,20],0),false);assert.equal(canOccupy(c.world,a,[0,20],Math.PI/2),true);const route=routeAroundItems(c.world,a,[0,20]);assert.ok(route);assert.deepEqual(route.at(-1).slice(0,2),[0,20]);
+  const {routeAroundItems}=await import('../web/traffic.mjs');const c=new Colony(287),a=c.ants[1];const left=c.ants[2],right=c.ants[3];c.ants=[a,left,right];c.brood=[];c.world.patches=[];c.world.carve([0,20],5,5);left.pos=[-.3,20];right.pos=[.3,20];left.cell=[0,20];right.cell=[0,20];left.motion.angle=right.motion.angle=Math.PI/2;a.cell=[0,23];a.pos=[0,23];a.bodySize=.55;a.motion.angle=Math.PI/2;
+  c.foodItems=[];beginTraffic(c);assert.equal(canOccupy(c.world,a,[0,20],0),false);assert.equal(canOccupy(c.world,a,[0,20],Math.PI/2),true);const route=routeAroundItems(c.world,a,[0,20]);assert.ok(route);assert.deepEqual(route.at(-1).slice(0,2),[0,20]);
 });
 
 test('finite grain piles remain climbable without walking through their pieces',()=>{
@@ -578,11 +578,11 @@ test('a stalled distant queen feeder does not exclude a nearby donor',()=>{
   assert.equal(c.assignQueenCare(near),true);c.feedQueen(near);assert.ok(q.socialProtein>0);assert.ok(q.socialWater>0);
 });
 
-test('brood carriers leave the full growing bed clear before dropping an egg',()=>{
+test('brood can be placed beneath adults while retaining its own ground reservation',()=>{
  const c=new Colony(287),n=c.ants[1],b=c.brood[0];for(const baby of c.brood)bedRelease(c,baby);c.brood=[b];c.ants=[n];c.foodItems=[];c.world.patches=[];c.world.carve([0,20],4,3);
  b.age=0;b.cell=[0,20];b.carriedBy=n.id;n.task='carryingBrood';n.carryingBrood=b.id;n.broodID=b.id;n.cell=[0,20];n.pos=[0,20.38];n.motion.angle=0;n.broodDestination=[0,20];holdCell(c.world,[0,20],'b:'+b.id);beginTraffic(c);
- c.carryBrood(n);assert.equal(b.carriedBy,n.id,'A tiny egg must not be put inside the carrier body or its later growth space.');
- n.cell=[0,21];n.pos=[0,21];n.broodDestination=[0,20];beginTraffic(c);c.carryBrood(n);assert.equal(b.carriedBy,null);assert.ok(canOccupy(c.world,n,n.pos));
+ c.carryBrood(n);assert.equal(b.carriedBy,null,'Adults can stand over grounded brood.');assert.equal(freeCell(c.world,[0,20]),false);assert.ok(canOccupy(c.world,n,[0,20]));
+ n.cell=[0,21];n.pos=[0,21];beginTraffic(c);assert.equal(b.carriedBy,null);assert.ok(canOccupy(c.world,n,n.pos));
 });
 
 test('surface soil carriers keep a placement route instead of stopping at every step',()=>{

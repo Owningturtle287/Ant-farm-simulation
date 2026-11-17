@@ -27,7 +27,7 @@ jobs:
         with:
           node-version: '22'
       - name: Verify the living colony and save recovery
-        run: node --test tests-web/sim.test.mjs
+        run: node --test tests-web/*.test.mjs
       - name: Verify 120 modeled days at default reproduction
         run: node scripts/endurance-sim.mjs simulation-endurance.json
       - name: Upload long-run simulation evidence
