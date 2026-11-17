@@ -1,0 +1,43 @@
+name: Measure Little Colony performance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  measurements:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Measure simulation capacity with a four-minute limit
+        run: |
+          set +e
+          timeout 240s node scripts/benchmark-sim.mjs simulation-benchmark.json
+          sample_status=$?
+          echo "Capacity sampler exit code: $sample_status (124 means the time limit was reached)." > benchmark-status.txt
+          exit "$sample_status"
+      - name: Measure terrain snapshot and raster costs
+        if: always()
+        run: timeout 120s node scripts/benchmark-render.mjs render-benchmark.json
+      - name: Upload available measurement evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulation-performance
+          path: |
+            simulation-benchmark.json
+            render-benchmark.json
+            benchmark-status.txt
+          retention-days: 30
+      - name: Describe measurement scope
+        if: always()
+        run: |
+          echo "### Optional performance measurements" >> "$GITHUB_STEP_SUMMARY"
+          echo "These CPU measurements do not gate publication and do not establish iPhone population or battery limits." >> "$GITHUB_STEP_SUMMARY"
+          echo "Inspect the job result and benchmark-status.txt for incomplete or timed-out samples." >> "$GITHUB_STEP_SUMMARY"

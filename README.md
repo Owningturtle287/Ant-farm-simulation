@@ -37,7 +37,7 @@ This is a research-informed, accelerated model of **Solenopsis invicta**, using 
 
 **Deploy Little Colony** checks the simulation, builds the offline app, and runs Chromium and WebKit browser checks. Passing builds deploy to GitHub Pages.
 
-The workflow's **deploy** box and run summary contain the clickable live URL. Browser artifacts contain screenshots and test evidence. The `simulation-performance` artifact records repeatable CPU-only samples at 13–10,000 ants; it is not an iPhone rendering or battery benchmark. Future pushes that change web code update the same bookmark address.
+The publication job and run summary contain the clickable live URL. Browser artifacts contain screenshots and test evidence. Publication requires the simulation tests, the 120-day default run, and both browser suites. Optional capacity measurements run separately through **Measure Little Colony performance → Run workflow**; they do not delay publication. Its `simulation-performance` artifact contains CPU-only measurements, not an iPhone rendering or battery benchmark. Future pushes that change web code update the same bookmark address.
 
 Asset and service-worker URLs respect the repository subpath. Each build fingerprints its offline cache, replacing this game's old cache versions.
 

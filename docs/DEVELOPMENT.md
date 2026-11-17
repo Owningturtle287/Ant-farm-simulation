@@ -26,7 +26,7 @@ Browser checks cover Chromium and WebKit, phone layouts, settings persistence, 1
 
 Chromium checks reopening with network offline emulation. WebKit checks reopening after its actual origin server is stopped, requiring a service-worker response and failed uncached network probe. This avoids [Playwright's upstream offline-emulation bug](https://github.com/microsoft/playwright/issues/42775); it does not claim origin loss and airplane mode are identical disruptions.
 
-The `simulation-performance` Actions artifact samples CPU simulation ticks at 13–10,000 adults with a fixed seed. It separates warm-up costs and records median/p95 timings. This short initial-nest benchmark omits rendering and long-session terrain growth. Compare runs on the same hardware; these measurements are not physical iPhone capacity results.
+The manually triggered **Measure Little Colony performance** workflow produces the `simulation-performance` Actions artifact and samples CPU simulation ticks at 13–10,000 adults with a fixed seed. It separates warm-up costs and records median/p95 timings. This short initial-nest benchmark omits rendering and long-session terrain growth. Compare runs on the same hardware; these measurements are not physical iPhone capacity results.
 
 For device tests: use More → Show performance and Export readings. Record the phone model/OS manually alongside JSON, requested speed, actual speed, FPS, frame cost, simulation/drawing cost, population, brood, and excavated space. Test growing colonies and long sessions in both orientations. Check thermals and battery before claiming a supported maximum population. No telemetry is uploaded by the game.
 
@@ -91,7 +91,7 @@ Mound re-excavation decreases `soilDeposited`, increases `soilRehandled`, and pu
 
 Microclimate samples use a saved two-second moisture-source snapshot. Numeric cache epochs, brood-ID reuse, and avoiding unchanged population-array copies reduce hot-path work. These caches must never make saved continuation diverge. The six-millisecond frame budget remains in effect through 128×; requested speed is not a promise that every phone/population achieves it.
 
-`node scripts/endurance-sim.mjs report.json [seed]` checks 120 modeled days at the default reproduction settings, using the production 0.1-second tick and no player inputs. It asserts population renewal, walkable occupancy and soil/resource conservation. Actions runs seed 287 and uploads its checkpoints with the CPU benchmark. This is a regression scenario, not proof that every seed or parameter combination is viable.
+`node scripts/endurance-sim.mjs report.json [seed]` checks 120 modeled days at the default reproduction settings, using the production 0.1-second tick and no player inputs. It asserts population renewal, walkable occupancy and soil/resource conservation. The deployment workflow runs seed 287 and uploads its checkpoints in `simulation-endurance`. Capacity and raster measurements run separately and cannot block publication. This is a regression scenario, not proof that every seed or parameter combination is viable.
 
 
 `geometry.mjs` owns connected cubic passage rasterization, seeded rotated/lobed chamber footprints and shared bilinear occupancy sampling. Renderer chunks use 16 texture pixels and 8 contour samples per model cell. Cache invalidation includes adjacent chunks; sampling is world-aligned across seams. Never draw exposed former mound galleries as sheltered back walls.
