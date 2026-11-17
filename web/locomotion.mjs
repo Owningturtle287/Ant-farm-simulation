@@ -70,10 +70,10 @@ export function moveAnt(a,w,time,dt,traffic=0){
   const dx=next[0]-a.pos[0],dy=next[1]-a.pos[1],length=Math.hypot(dx,dy),following=a.route[1];
   // Look around a corner only inside the same traversable corridor.
   let aim=next;
-  if(following&&length<.8){const t=(1-length/.8)*.48,p=[next[0]+(following[0]-next[0])*t,next[1]+(following[1]-next[1])*t];if(clearSegment(w,a.pos,p))aim=p;}
+  if(next[3]==null&&following&&length<.8){const t=(1-length/.8)*.48,p=[next[0]+(following[0]-next[0])*t,next[1]+(following[1]-next[1])*t];if(clearSegment(w,a.pos,p))aim=p;}
   const searching=a.task==='exploring',loaded=!!(a.carried||a.carryingBrood),urgent=loaded||['refueling','queenMoving','toBrood','feedingQueen'].includes(a.task);
   const offset=urgent?m.wander*.12:m.wander*(searching?1:.35),sensory=(urgent?0:m.turn+(m.touchTurn??0))+(m.separation??0)*(urgent?.45:1);
-  const desired=next[2]!=null&&length<1.2?next[2]:Math.atan2(aim[1]-a.pos[1],aim[0]-a.pos[0])+(length<.3?0:offset+sensory);
+  const desired=next[2]!=null&&(next[3]!=null||length<1.2)?next[2]:Math.atan2(aim[1]-a.pos[1],aim[0]-a.pos[0])+(length<.3?0:offset+sensory);
   const difference=wrapAngle(desired-m.angle),turnLimit=(a.caste==='queen'?4.2:7.5)*dt;
   m.angle=wrapAngle(m.angle+clamp(difference,-turnLimit,turnLimit));
   const base=(a.caste==='queen'?.85:a.caste==='major'?2.5:3)*(loaded?.72:1)*(.7+a.energy*.3)/(1+Math.min(traffic,7)*.18);
@@ -104,6 +104,6 @@ export function moveAnt(a,w,time,dt,traffic=0){
   const targetKey=next.join(',');if(m.progressTarget!==targetKey){m.progressTarget=targetKey;m.bestDistance=length;m.progressAt=time;}const newDistance=Math.hypot(p[0]-next[0],p[1]-next[1]);if(newDistance<m.bestDistance-.02){m.bestDistance=newDistance;m.progressAt=time;}else if(time-(m.progressAt??time)>1.5)m.trafficBlocked=2;
   const old=[...a.pos],travel=Math.hypot(p[0]-a.pos[0],p[1]-a.pos[1]);m.travel+=travel;a.pos=p;reindexAdult(w,a,old);
   // Intermediate waypoints are passed without snapping the continuous body position.
-  const remaining=Math.hypot(next[0]-p[0],next[1]-p[1]),arrived=remaining<(following?.42:.075);
+  const remaining=Math.hypot(next[0]-p[0],next[1]-p[1]),arrived=remaining<(next[3]??(following?.42:.075))&&(next[3]==null||Math.abs(wrapAngle(m.angle-next[2]))<.15);
   if(arrived){a.cell=next.slice(0,2).map(Math.round);a.route.shift();}return arrived;
 }

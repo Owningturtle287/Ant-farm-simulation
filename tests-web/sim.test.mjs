@@ -23,7 +23,13 @@ test('a route still moves the body when its logical cell already equals the goal
  const c=new Colony(),a=c.ants[1];c.ants=[a];c.brood=[];c.foodItems=[];c.world.patches=[];c.world.carve([0,20],4,4);a.cell=[0,20];a.pos=[.4,20.4];a.motion.angle=0;beginTraffic(c);const route=routeAroundItems(c.world,a,[0,20]);assert.ok(route?.length,'Logical arrival cannot leave the actual body outside contact range.');
 });
 test('a route through occupied brood space connects body-clear segments rather than only clear endpoints',async()=>{
- const {sweptFree}=await import('../web/traffic.mjs');const c=new Colony(),a=c.ants[1];c.ants=[a];c.foodItems=[];c.world.patches=[];c.world.carve([0,20],4,5);c.brood=[20,21].map((y,id)=>({id:900+id,cell:[0,y],age:0,carriedBy:null}));a.cell=[0,19];a.pos=[0,19];a.motion.angle=0;beginTraffic(c);const route=routeAroundItems(c.world,a,[0,22]);assert.ok(route?.length);let prior=a.pos,angle=a.motion.angle;for(const point of route){const heading=point[2]??Math.atan2(point[1]-prior[1],point[0]-prior[0]);assert.ok(sweptFree(c.world,a,prior,point,heading,angle),'Every planned transition must fit the body around the brood.');prior=point;angle=heading;}
+ const {sweptFree}=await import('../web/traffic.mjs'),{moveAnt,updateMotion}=await import('../web/locomotion.mjs');const c=new Colony(),a=c.ants[1];c.ants=[a];c.foodItems=[];c.world.patches=[];c.world.carve([0,20],4,5);c.brood=[20,21].map((y,id)=>({id:900+id,cell:[0,y],age:0,carriedBy:null}));a.cell=[0,19];a.pos=[0,19];a.motion.angle=0;beginTraffic(c);const route=routeAroundItems(c.world,a,[0,22]);assert.ok(route?.length);let prior=a.pos,angle=a.motion.angle;for(const point of route){const heading=point[2]??Math.atan2(point[1]-prior[1],point[0]-prior[0]);assert.ok(sweptFree(c.world,a,prior,point,heading,angle),'Every planned transition must fit the body around the brood.');prior=point;angle=heading;}
+ a.route=route;a.task='returningFood';a.carried=1;for(let i=0;i<500&&a.route.length;i++){updateMotion(a,c.world,i*.1,.1,new Map());moveAnt(a,c.world,i*.1,.1);assert.ok(canOccupy(c.world,a,a.pos));}assert.ok(distance(a.pos,[0,22])<.08,'The actuator must actually finish the planned body path.');
+});
+test('opposing workers pass through a narrow tunnel without overlapping or abandoning movement',()=>{
+ const c=new Colony(),a=c.ants[1],b=c.ants[2],w=c.world;c.ants=[a,b];c.brood=[];c.foodItems=[];w.patches=[];const open=new Set();for(let x=0;x<=8;x++)open.add(key([x,20]));open.add('4,19');open.add('3,19');open.add('5,19');w.solid=p=>!open.has(key(p));w.neighborCache.clear();w.pathCache.clear();
+ for(const [i,n] of c.ants.entries()){n.pos=[i*8,20];n.cell=[...n.pos];n.motion.angle=i?Math.PI:0;n.task='routeTest';n.destination=[i?0:8,20];n.busyUntil=0;}beginTraffic(c);for(const n of c.ants)n.route=routeAroundItems(w,n,n.destination);assert.ok(a.route&&b.route);
+ for(let i=0;i<600&&(a.pos[0]<7.8||b.pos[0]>.2);i++){c.time+=.1;beginTraffic(c);for(const n of c.ants)c.updateAnt(n,.1);assert.ok(canOccupy(w,a,a.pos));assert.ok(canOccupy(w,b,b.pos));}assert.ok(a.pos[0]>7.8&&b.pos[0]<.2,'Both workers must complete the crossing.');
 });
 test('small seeded colonies forage, excavate, grow a mound, and develop brood',()=>{
   for(const seed of [17,287,914]){
@@ -535,7 +541,7 @@ test('a pupa can emerge beside its nurse when the actual adult footprint fits',a
 });
 test('routing recognizes a clear vertical stance even when a horizontal body cannot fit',async()=>{
   const {routeAroundItems}=await import('../web/traffic.mjs');const c=new Colony(287),a=c.ants[1];c.ants=[a];c.brood=[];c.world.patches=[];c.world.carve([0,20],5,5);a.cell=[0,23];a.pos=[0,23];a.bodySize=.55;a.motion.angle=Math.PI/2;
-  c.foodItems=[[.4,20],[-.4,20],[0,19.4],[0,20.6]].map((pos,id)=>({id,pos,energy:1,protein:0}));beginTraffic(c);assert.equal(canOccupy(c.world,a,[0,20],0),false);assert.equal(canOccupy(c.world,a,[0,20],Math.PI/2),true);const route=routeAroundItems(c.world,a,[0,20]);assert.ok(route);assert.deepEqual(route.at(-1).slice(0,2),[0,20]);
+  c.foodItems=[[.4,20],[-.4,20]].map((pos,id)=>({id,pos,energy:1,protein:0}));beginTraffic(c);assert.equal(canOccupy(c.world,a,[0,20],0),false);assert.equal(canOccupy(c.world,a,[0,20],Math.PI/2),true);const route=routeAroundItems(c.world,a,[0,20]);assert.ok(route);assert.deepEqual(route.at(-1).slice(0,2),[0,20]);
 });
 
 test('finite grain piles remain climbable without walking through their pieces',()=>{

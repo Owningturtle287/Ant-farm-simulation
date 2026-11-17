@@ -108,7 +108,7 @@ export class World{
   }
   changed(c){
     if(!this.navigation)this.rebuildNavigation();this.navigation.minX=Math.min(this.navigation.minX,c[0]);this.navigation.maxX=Math.max(this.navigation.maxX,c[0]);this.navigation.maxY=Math.max(this.navigation.maxY,c[1]);
-    this.revision++;this.pathCache.clear();this.neighborCache.clear();this.frontierVersion=-1;
+    this.revision++;this.pathCache.clear();this.neighborCache.clear();this.frontierVersion=-1;if(this.traffic){this.traffic.routes.clear();this.traffic.bodyNavigation=null;}
     for(const n of [c,...adjacent(c)])this.chunkRevisions.set(key([Math.floor(n[0]/16),Math.floor(n[1]/16)]),this.revision);
   }
   excavate(c){
@@ -267,12 +267,14 @@ export class Colony{
   auditProgress(a){
     const moved=distance(a.pos,a.lastProgressPos??a.pos)>.15;
     if(moved){a.lastProgressAt=this.time;a.lastProgressPos=[...a.pos];}
-    const working=['toFood','toWater','returningFood','returningWater','toDig','haulingSoil','exploring','toBrood','carryingBrood','queenMoving','toQueenStore','feedingQueen','refueling','storeFood','toCache'].includes(a.task);
-    if(!working||this.time<a.busyUntil||this.time-(a.lastProgressAt??0)<18)return;
+    const working=['toFood','toWater','returningFood','returningWater','toDig','haulingSoil','exploring','toBrood','nursing','carryingBrood','queenMoving','toQueenStore','feedingQueen','refueling','storeFood','toCache'].includes(a.task);
+    const waypointStalled=a.route.length&&this.time-(a.motion.progressAt??this.time)>12;
+    if(!working||this.time<a.busyUntil||!waypointStalled&&this.time-(a.lastProgressAt??0)<18)return;
     this.world.runtime.recoveries++;a.lastProgressAt=this.time;this.world.pathCache.clear();a.route=[];
     if(a.task==='refueling'){this.send(a,this.world.nest);return;}
     if(a.caste==='queen'){a.task='queenRest';a.destination=null;a.queenCheckAt=0;return;}
     if(a.task==='toBrood'){this.releaseBrood(a);this.chooseJob(a);return;}
+    if(a.task==='nursing'){if(a.broodID!=null){a.careAvoid={id:a.broodID,until:this.time+30};if(this.careClaims?.get(a.broodID)===a.id)this.careClaims.delete(a.broodID);}a.broodID=null;this.chooseJob(a);return;}
     if(a.task==='carryingBrood'){a.broodDestination=null;this.carryBrood(a);return;}
     if(a.cargoKind==='queenMeal'){this.feedQueen(a);return;}
     if(a.carried){if(a.cargoKind==='soil'){this.headOut(a);}else{a.task=a.cargoKind==='water'?'returningWater':'returningFood';this.send(a,this.world.nest);}return;}
@@ -354,7 +356,7 @@ export class Colony{
       const next=a.route[0];
       if(!terrainFree(this.world,next)){a.route=[];const goal=a.motion.yieldTarget??a.destination;if(goal){const stance=canOccupy(this.world,a,goal)?goal:nearestStance(this.world,a,goal);if(stance)a.route=routeAroundItems(this.world,a,stance)??[];}return;}
       const waypointCell=next.slice(0,2).map(Math.round),traffic=Math.max(0,(this.occupancy.get(key(waypointCell))?.length??0)-1),arrived=moveAnt(a,this.world,this.time,dt,traffic);if(!arrived)unjam(this,a);
-      const actual=a.pos.map(Math.round);if(distance(a.pos,a.cell)>.9){const anchors=[];for(let y=actual[1]-1;y<=actual[1]+1;y++)for(let x=actual[0]-1;x<=actual[0]+1;x++)if(this.world.walkable([x,y]))anchors.push([x,y]);anchors.sort((p,q)=>distance(p,a.pos)-distance(q,a.pos));if(anchors[0]&&!same(anchors[0],a.cell)){a.cell=anchors[0];const goal=a.motion.yieldTarget??a.destination;if(goal)a.route=routeAroundItems(this.world,a,goal)??[];}}
+      const actual=a.pos.map(Math.round);if(a.route[0]?.[3]==null&&distance(a.pos,a.cell)>.9){const anchors=[];for(let y=actual[1]-1;y<=actual[1]+1;y++)for(let x=actual[0]-1;x<=actual[0]+1;x++)if(this.world.walkable([x,y]))anchors.push([x,y]);anchors.sort((p,q)=>distance(p,a.pos)-distance(q,a.pos));if(anchors[0]&&!same(anchors[0],a.cell)){a.cell=anchors[0];const goal=a.motion.yieldTarget??a.destination;if(goal)a.route=routeAroundItems(this.world,a,goal)??[];}}
       if(a.task==='haulingSoil'&&!a.depositTarget&&!a.motion.yieldingRoute&&this.world.onSurface(actual)){a.cell=actual;a.route=[];}
       if(arrived&&a.task.startsWith('returning')){
         const kind=a.task==='returningWater'?'water':'food',trail=this.world.trails[kind],strength=(.12+.20*Math.exp(-(this.time-a.sourceAt)/50))*(a.deliveryAmount??a.carried)/2.5;
@@ -538,7 +540,7 @@ export class Colony{
     this.sense(a);const meal=a.cargoKind==='broodMeal'&&a.carried;if(!meal&&a.socialProtein<.025&&this.brood.some(b=>broodStage(b)==='larva'&&b.nutrition<.7)&&this.assignCache(a,'care',true))return true;
     if(!meal&&this.assignQueenCare(a))return true;
     if(!meal&&this.assignBroodTransport(a))return true;
-    const targets=this.careCandidates(a).filter(b=>b.carriedBy==null&&!this.broodClaims.has(b.id)&&!this.careClaims.has(b.id)&&(!meal||broodStage(b)==='larva'&&b.nutrition<.95)&&(a.knownBrood.includes(b.id)||distance(a.cell,b.cell)<3.1)).map(b=>({b,priority:distance(a.cell,b.cell)*2-Math.min(20,Math.max(0,this.time-b.lastCare)*.05)-(broodStage(b)==='larva'?(1-b.nutrition)*40:0)})).sort((x,y)=>x.priority-y.priority).map(item=>item.b);
+    const targets=this.careCandidates(a).filter(b=>b.carriedBy==null&&!this.broodClaims.has(b.id)&&!this.careClaims.has(b.id)&&!(a.careAvoid?.id===b.id&&this.time<a.careAvoid.until)&&(!meal||broodStage(b)==='larva'&&b.nutrition<.95)&&(a.knownBrood.includes(b.id)||distance(a.cell,b.cell)<3.1)).map(b=>({b,priority:distance(a.cell,b.cell)*2-Math.min(20,Math.max(0,this.time-b.lastCare)*.05)-(broodStage(b)==='larva'?(1-b.nutrition)*40:0)})).sort((x,y)=>x.priority-y.priority).map(item=>item.b);
     for(const b of targets){const stance=nearestStance(this.world,a,b.cell);const route=stance?routeAroundItems(this.world,a,stance):null;if(route){if(a.lastJob!=='care')a.jobSince=this.time;a.task='nursing';a.route=route;a.target=[...b.cell];a.destination=[...b.cell];a.broodID=b.id;this.careClaims.set(b.id,a.id);a.lastJob='care';return true;}}
     if(meal)return false;
     const gradient=this.world.neighbors(a.cell).filter(c=>!this.world.onSurface(c)).sort((x,y)=>senseSignal(this.world,'brood',y)-senseSignal(this.world,'brood',x));
