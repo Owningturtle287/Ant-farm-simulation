@@ -33,10 +33,11 @@ export function canOccupy(w,a,p,angle=a.motion?.angle??0,ignoreBrood=null,ignore
   return true;
 }
 export function sweptFree(w,a,from,to,angle,oldAngle=a.motion?.angle??angle,escaping=false,ignoreAdults=false){const n=Math.max(1,Math.ceil(dist(from,to)/.09),bodyShape(a).half?Math.ceil(Math.abs(Math.atan2(Math.sin(angle-oldAngle),Math.cos(angle-oldAngle)))/.15):1);for(let i=1;i<=n;i++){const t=i/n,delta=Math.atan2(Math.sin(angle-oldAngle),Math.cos(angle-oldAngle));if(!canOccupy(w,a,[from[0]+(to[0]-from[0])*t,from[1]+(to[1]-from[1])*t],oldAngle+delta*t,null,ignoreAdults,escaping))return false;}return true;}
-export function nearestStance(w,a,target,range=1.2){
+export function nearbyStances(w,a,target,range=1.2){
   const candidates=[];if(dist(a.pos,target)<=range&&canOccupy(w,a,a.pos))candidates.push([...a.pos]);for(let y=-2;y<=2;y++)for(let x=-2;x<=2;x++){const p=[target[0]+x*.5,target[1]+y*.5];if(dist(p,target)<=range+.001&&(canOccupy(w,a,p)||canOccupy(w,a,p,0)||canOccupy(w,a,p,Math.PI/2)))candidates.push(p);}
-  candidates.sort((x,y)=>dist(x,a.pos)-dist(y,a.pos)||dist(x,target)-dist(y,target));return candidates[0]??null;
+  candidates.sort((x,y)=>dist(x,a.pos)-dist(y,a.pos)||dist(x,target)-dist(y,target));return candidates;
 }
+export function nearestStance(w,a,target,range=1.2){return nearbyStances(w,a,target,range)[0]??null;}
 function cacheRoute(w,id,route){const m=w.traffic.routes;if(m.size>=256)m.delete(m.keys().next().value);m.set(id,route);}
 export function routeAroundItems(w,a,target,dynamic=false){
   if(!w.traffic)return w.path(a.cell,target.slice(0,2));let probe={id:a.id,caste:a.caste,bodySize:Math.ceil((a.bodySize??.4)*5)/5,pos:a.pos,motion:a.motion};

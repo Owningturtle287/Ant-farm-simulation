@@ -1,4 +1,4 @@
-import {foodSupport,beginTraffic,refreshItems,settleAdults,canOccupy,terrainFree,nearestStance,routeAroundItems,idlePlace,spaceForItem,broodRadius,unjam,reindexAdult} from './traffic.mjs';
+import {foodSupport,beginTraffic,refreshItems,settleAdults,canOccupy,terrainFree,nearestStance,nearbyStances,routeAroundItems,idlePlace,spaceForItem,broodRadius,unjam,reindexAdult} from './traffic.mjs';
 import {initGroundwater,tableLevel,flooded,tickGroundwater,groundwaterJSON} from './hydrology.mjs';
 import {initializeSupplies,setReserve,updateSupplyTotals,cropCapacity as socialCapacity,waterCapacity,foodFill,consumeSelf,fillFromCargo,shareCrops,takeCache,liftCache,nearestCache,cacheSlotFor,storeCargo,consumeNutrient,bedAvailable,bedOccupy,bedRelease,freeBedCount,initCrop,accountIntake,accountDeath,rebuildReservations,feedBroodCargo} from './provisions.mjs';
 import {findBed,holdCell,releaseCell,freeCell,releaseSlot,initItemSpace,restorePieces} from './item-space.mjs';
@@ -255,9 +255,8 @@ export class Colony{
   }
   send(a,target){
     if(!target)return false;if(a.motion){a.motion.yieldingRoute=false;a.motion.resumeGoal=null;a.motion.yieldTarget=null;}a.target=[...target];a.destination=[...target];
-    const stance=this.world.traffic?(canOccupy(this.world,a,target)?target:nearestStance(this.world,a,target)):target;
-    const route=stance?routeAroundItems(this.world,a,stance):null;
-    if(route){a.route=route;a.routeFailures=0;return true;}
+    const stances=this.world.traffic?nearbyStances(this.world,a,target):[target];if(canOccupy(this.world,a,target))stances.unshift(target);
+    for(const stance of stances.slice(0,6)){const route=routeAroundItems(this.world,a,stance);if(route){a.route=route;a.routeFailures=0;return true;}}
     a.route=[];a.routeFailures++;a.busyUntil=this.time+Math.min(5,1+a.routeFailures);
     if(!a.carried&&!a.carryingBrood&&a.caste!=='queen'){
       for(const m of a.memories)if(same(m.cell,target))m.avoidUntil=this.time+60;
@@ -268,7 +267,7 @@ export class Colony{
     const moved=distance(a.pos,a.lastProgressPos??a.pos)>.15;
     if(moved){a.lastProgressAt=this.time;a.lastProgressPos=[...a.pos];}
     const working=['toFood','toWater','returningFood','returningWater','toDig','haulingSoil','exploring','toBrood','nursing','carryingBrood','queenMoving','toQueenStore','feedingQueen','refueling','storeFood','toCache'].includes(a.task);
-    const waypointStalled=a.route.length&&this.time-(a.motion.progressAt??this.time)>12;
+    const waypointStalled=a.route.length&&a.motion.progressTarget===a.route[0].join(',')&&this.time-(a.motion.progressAt??this.time)>12;
     if(!working||this.time<a.busyUntil||!waypointStalled&&this.time-(a.lastProgressAt??0)<18)return;
     this.world.runtime.recoveries++;a.lastProgressAt=this.time;this.world.pathCache.clear();a.route=[];
     if(a.caste!=='queen'&&!a.carried&&!a.carryingBrood){const item=this.foodItems.filter(p=>distance(p.pos,a.pos)<.8).sort((p,q)=>distance(p.pos,a.pos)-distance(q.pos,a.pos))[0];if(liftCache(this,a,item)){if(this.careClaims?.get(a.broodID)===a.id)this.careClaims.delete(a.broodID);a.broodID=null;refreshItems(this);this.assignFoodStorage(a);return;}}
@@ -347,6 +346,7 @@ export class Colony{
         }
       }
     }
+    if(a.task==='investigating'&&this.time>=a.guardUntil){a.brain.arousal=0;a.route=[];this.chooseJob(a);return;}
     if(a.motion.yieldingRoute&&(a.motion.trafficBlocked??0)>5){a.motion.yieldingRoute=false;a.route=[];a.motion.resumeGoal=null;a.motion.yieldTarget=null;this.chooseJob(a);return;}
     if(a.motion.yieldingRoute&&!a.route.length){if(this.time<a.motion.yieldEnd)return;const goal=a.motion.resumeGoal;a.motion.yieldingRoute=false;a.motion.yieldTarget=null;a.motion.resumeGoal=null;if(goal)this.send(a,goal);return;}
     if(a.route.length&&!a.motion.yieldingRoute){
@@ -404,7 +404,7 @@ export class Colony{
       }
       case 'harvesting':this.finishHarvest(a);break;
       case 'toDig':
-        if(!a.target||!this.world.solid(a.target)||distance(a.target,a.cell)>1.01){this.chooseJob(a);break;}
+        if(!a.target||!this.world.solid(a.target)||distance(a.target,a.pos)>1.25){this.chooseJob(a);break;}
         a.task='digging';a.busyUntil=this.time+this.world.digTime(a.target,a.skills.dig);a.decision='Excavating '+MATERIALS[this.world.material(a.target)].name.toLowerCase()+'. All earth is diggable; experience improves handling.';break;
       case 'digging':{
         const origin=a.target?(this.world.spoilOrigins.get(key(a.target))??this.world.material(a.target)):'topsoil';
@@ -553,7 +553,7 @@ export class Colony{
   }
   assignDig(a){
     const sites=this.world.frontier().filter(c=>!this.reserved.has(key(c))).sort((x,y)=>distance(x,a.cell)-distance(y,a.cell));
-    for(const site of sites.slice(0,8))for(const neighbor of adjacent(site).filter(n=>this.world.walkable(n)).sort((x,y)=>distance(x,a.cell)-distance(y,a.cell))){
+    for(const site of sites.slice(0,8))for(const neighbor of nearbyStances(this.world,a,site,1.2).slice(0,8)){
       const route=routeAroundItems(this.world,a,neighbor);if(route){a.task='toDig';a.route=route;a.destination=[...neighbor];a.target=[...site];a.lastJob='dig';this.reserved.add(key(site));return true;}
     }return false;
   }
@@ -572,7 +572,7 @@ export class Colony{
 
     }
     if(!target)return false;
-    a.task=target.kind==='food'?'toFood':'toWater';const piece=target.pieces?.slice().sort((p,q)=>distance(p.pos,a.pos)-distance(q.pos,a.pos))[0];return this.send(a,(piece?.pos??target.cell).map(Math.round));
+    a.task=target.kind==='food'?'toFood':'toWater';const piece=target.pieces?.slice().sort((p,q)=>distance(p.pos,a.pos)-distance(q.pos,a.pos))[0];if(piece&&distance(piece.pos,a.pos)<1.25){a.target=[...target.cell];a.destination=[...target.cell];a.route=[];return true;}return this.send(a,(piece?.pos??target.cell).map(Math.round));
   }
   explore(a){
     a.task='exploring';

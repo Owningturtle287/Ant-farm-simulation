@@ -1,4 +1,4 @@
-import {canOccupy,settleAdults,beginTraffic,routeAroundItems} from '../web/traffic.mjs';
+import {canOccupy,settleAdults,beginTraffic,routeAroundItems,nearestStance,sweptFree} from '../web/traffic.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -14,7 +14,7 @@ import {broodStage} from '../web/biology.mjs';
 import {advanceSimulation} from '../web/clock.mjs';
 import {cropCapacity as socialCapacity,waterCapacity,foodFill,consumeSelf,shareCrops,updateSupplyTotals,supplyBalance,accountIntake,bedRelease,bedOccupy,initializeSupplies} from '../web/provisions.mjs';
 import {tickGroundwater,tableLevel} from '../web/hydrology.mjs';
-import {freeCell,slotKey,findBed,holdCell,releaseCell,openNestCells} from '../web/item-space.mjs';
+import {freeCell,slotKey,findBed,holdCell,releaseCell,openNestCells,initItemSpace} from '../web/item-space.mjs';
 import {SaveStore,SAVE_KEY,decodeSave} from '../web/persistence.mjs';
 function primeCrop(c,a,food=0,protein=0,water=0){for(const [field,kind,n] of [['socialFood','energy',food],['socialProtein','protein',protein],['socialWater','water',water]]){c.supplyLedger[kind].introduced+=n-(a[field]??0);a[field]=n;}updateSupplyTotals(c);}
 function clearBrood(c){for(const b of c.brood)bedRelease(c,b);c.brood=[];}
@@ -40,6 +40,17 @@ test('cancelled brood trips release their destination while completed beds remai
  const c=new Colony(),a=c.ants[1],b=c.brood[0],pending=[16,20];c.world.carve(pending,3,3);assert.ok(holdCell(c.world,pending,'b:'+b.id));a.broodID=b.id;a.broodDestination=pending;a.task='toBrood';c.releaseBrood(a);assert.ok(freeCell(c.world,pending));assert.equal(freeCell(c.world,b.cell),false);
  // A nurse loaded from an older save can still reference the bed it already filled.
  a.broodID=b.id;a.broodDestination=[...b.cell];a.task='nursing';c.releaseBrood(a);assert.equal(freeCell(c.world,b.cell),false);
+});
+test('an old blocked waypoint cannot cancel a newly assigned reachable trip',()=>{
+ const c=new Colony(),a=c.ants[1];c.ants=[a];c.brood=[];c.foodItems=[];c.world.patches=[];c.world.carve([0,20],4,4);a.pos=[0,20];a.cell=[0,20];a.lastProgressPos=[...a.pos];a.lastProgressAt=29;a.motion.progressAt=0;a.motion.progressTarget='-2,20';a.task='refueling';a.busyUntil=0;c.time=30;beginTraffic(c);assert.ok(c.send(a,[2,20]));c.auditProgress(a);assert.deepEqual(a.destination,[2,20]);assert.ok(a.route.length);
+});
+test('a loaded forager finishes a long trip around finite grain piles',async()=>{
+ const {moveAnt,updateMotion}=await import('../web/locomotion.mjs');const c=new Colony(287),a=c.ants[1];c.ants=[a];c.brood=[];c.foodItems=[];a.pos=[21,0];a.cell=[21,0];a.motion.angle=Math.PI;a.task='returningFood';a.carried=2;a.cargoKind='food';beginTraffic(c);a.route=routeAroundItems(c.world,a,c.world.nest);assert.ok(a.route?.length);
+ for(let i=0;i<1200&&a.route.length;i++){updateMotion(a,c.world,i*.1,.1,new Map());moveAnt(a,c.world,i*.1,.1);assert.ok(canOccupy(c.world,a,a.pos));}assert.ok(distance(a.pos,c.world.nest)<.08);assert.equal(a.carried,2);assert.equal(a.cargoKind,'food');
+});
+test('diggers can work from a clear fractional stance beside an occupied approach cell',async()=>{
+ const {moveAnt,updateMotion}=await import('../web/locomotion.mjs');const c=new Colony(),a=c.ants[1],w=c.world;c.ants=[a];c.foodItems=[];w.patches=[];c.brood=[{id:900,cell:[4,20],age:0,carriedBy:null}];const open=new Set();for(let x=0;x<=4;x++)for(const y of[19,20])open.add(key([x,y]));w.solid=p=>!open.has(key(p));w.construction=[[5,20]];w.frontierVersion=-1;w.pathCache.clear();w.neighborCache.clear();a.pos=[3,19];a.cell=[3,19];a.motion.angle=0;beginTraffic(c);assert.ok(c.assignDig(a));
+ for(let i=0;i<300&&a.route.length;i++){updateMotion(a,w,i*.1,.1,new Map());moveAnt(a,w,i*.1,.1);assert.ok(canOccupy(w,a,a.pos));}assert.ok(distance(a.pos,[5,20])<=1.25);a.busyUntil=0;c.updateAnt(a,.1);assert.equal(a.task,'digging');
 });
 test('small seeded colonies forage, excavate, grow a mound, and develop brood',()=>{
   for(const seed of [17,287,914]){
@@ -98,7 +109,7 @@ test('young workers can switch to resource work during a shortage instead of fol
 });
 test('source memories are not omniscient and lose reliability after an actual failed visit',()=>{
   const c=new Colony(17),a=c.ants[1];c.world.place('food',-19);const food=c.world.patches.find(p=>p.kind==='food'&&p.cell[0]===-19);
-  c.world.patches=[food];a.cell=[-17,c.world.surface(-17)-1];a.pos=[...a.cell];a.foragingKind='food';assert.ok(c.discover(a));food.amount=0;
+  c.world.patches=[food];beginTraffic(c);a.cell=[-17,c.world.surface(-17)-1];a.pos=[...a.cell];a.foragingKind='food';assert.ok(c.discover(a));food.amount=0;
   a.cell=[10,c.world.surface(10)-1];a.pos=[...a.cell];assert.ok(c.discover(a));assert.deepEqual(a.target,food.cell,'Distant depletion is not magically known.');
   a.cell=[...food.cell];a.pos=[...a.cell];a.route=[];a.busyUntil=0;c.updateAnt(a,.1);
   assert.ok(a.memories[0].confidence<.85);assert.equal(a.memories[0].failures,1);assert.ok(a.memories[0].avoidUntil>c.time);
@@ -219,7 +230,7 @@ test('water and protein searches do not loop on plentiful carbohydrate food',()=
 test('large fire-ant workers change tasks with stimuli instead of becoming permanent guards',()=>{
   const c=new Colony(287),a=c.ants[1];Object.assign(a,{caste:'major',bodySize:.95,cell:[...c.world.nest],pos:[...c.world.nest],initialAgeDays:15});
   c.food=0;c.protein=0;c.water=30;c.updateDemand();a.knownNeeds=null;c.chooseJob(a);assert.equal(a.lastJob,'forage');assert.notEqual(a.task,'patrolling');
-  c.food=100;c.protein=100;primeCrop(c,c.ants[0],1,.4,.5);c.brood[0].nutrition=0;c.brood[0].age=DAY*10;a.initialAgeDays=1;a.traits.care=.45;c.brood.forEach(b=>b.lastCare=-100);c.world.construction=[];c.world.carve([0,15],12,7);c.updateDemand();a.knownNeeds=null;a.cell=[...c.brood[0].cell];a.pos=[...a.cell];a.senseAt=0;c.chooseJob(a);assert.ok(['nursing','toBrood','carryingBrood','toCache'].includes(a.task));
+  c.food=100;c.protein=100;primeCrop(c,c.ants[0],1,.4,.5);c.brood[0].nutrition=0;c.brood[0].age=DAY*10;a.initialAgeDays=1;a.traits.care=.45;c.brood.forEach(b=>b.lastCare=-100);c.world.construction=[];c.world.carve([0,15],12,7);c.updateDemand();a.knownNeeds=null;a.cell=[...c.brood[0].cell];a.pos=[...a.cell];a.senseAt=0;beginTraffic(c);const carePose=nearestStance(c.world,a,c.brood[0].cell);assert.ok(carePose);a.pos=carePose;a.cell=carePose.map(Math.round);beginTraffic(c);c.chooseJob(a);assert.ok(['nursing','toBrood','carryingBrood','toCache'].includes(a.task));
   const count=a.brain.taskHistory.length;for(let i=0;i<600;i++)c.step();assert.ok(a.brain.taskHistory.length>count);assert.equal(c.ants.some(a=>a.task==='patrolling'),false);
 });
 test('contact recognizes colony odor rather than an ID and unfamiliar cues release alarm',()=>{
@@ -320,10 +331,9 @@ test('queen attendants do not drain food stores when only unavailable water is n
 });
 
 test('protein collectors take insect pieces rather than seeds sharing the same location',()=>{
-  const c=new Colony(287),a=c.ants[1];c.world.place('food',20);const prey=c.world.patches.find(p=>p.origin==='prey'&&p.renewable===false),grain={...prey,id:c.world.nextPatchID++,origin:'grass',amount:5,nutrition:{energy:.85,protein:.15}};c.world.patches.unshift(grain);initLedger(c.world);
-  a.cell=[...prey.cell];a.pos=[...prey.cell];a.foragingKind='food';a.wantProtein=true;a.memories=[];assert.ok(c.discover(a));a.route=[];a.collectKind='food';c.finishHarvest(a);assert.ok(a.cargoNutrition.protein>.4);assert.equal(grain.amount,5);assert.ok(prey.amount<24);
+  const c=new Colony(287),a=c.ants[1];c.world.patches=[];initItemSpace(c.world);c.world.place('food',20);const prey=c.world.patches.find(p=>p.origin==='prey'&&p.renewable===false),grain={...prey,id:c.world.nextPatchID++,origin:'grass',amount:0,capacity:5,pieces:[],nutrition:{energy:.85,protein:.15}};c.world.patches.unshift(grain);addStock(c.world,grain,5);initLedger(c.world);beginTraffic(c);
+  const pose=nearestStance(c.world,a,prey.cell);assert.ok(pose);a.pos=pose;a.cell=pose.map(Math.round);beginTraffic(c);a.foragingKind='food';a.wantProtein=true;a.memories=[];const grainBefore=grain.amount,preyBefore=prey.amount;assert.ok(grainBefore>0);assert.ok(c.discover(a));assert.equal(a.sourceID,prey.id);a.route=[];a.collectKind='food';c.finishHarvest(a);assert.ok(a.cargoNutrition.protein>.4);assert.equal(grain.amount,grainBefore);assert.ok(prey.amount<preyBefore);
 });
-
 
 test('thousands of haul-and-gallery cycles retain bounded, supported mound slopes',()=>{
   for(const seed of [17,287,914]){
@@ -557,7 +567,7 @@ test('routing recognizes a clear vertical stance even when a horizontal body can
 test('finite grain piles remain climbable without walking through their pieces',()=>{
   const c=new Colony(287),a=c.ants[2];a.cell=[45,0];a.pos=[...a.cell];beginTraffic(c);
   const route=routeAroundItems(c.world,a,[1,11]);assert.ok(route?.length,'a crop-laden worker needs a route over grain piles');
-  assert.ok(route.some(p=>p[0]===9&&p[1]<1),'the route climbs above the grain instead of crossing its occupied row');
+  let prior=a.pos,angle=a.motion.angle;for(const point of route){const heading=point[2]??Math.atan2(point[1]-prior[1],point[0]-prior[0]);assert.ok(sweptFree(c.world,a,prior,point,heading,angle,false,true),'Every portion of the route must keep clear of finite grain.');prior=point;angle=heading;}
   assert.ok(route.every(p=>canOccupy(c.world,a,p,p[2]??0,null,true)));
 });
 
