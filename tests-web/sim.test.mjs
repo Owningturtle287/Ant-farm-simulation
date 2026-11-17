@@ -536,3 +536,10 @@ test('finite grain piles remain climbable without walking through their pieces',
   assert.ok(route.some(p=>p[0]===9&&p[1]<1),'the route climbs above the grain instead of crossing its occupied row');
   assert.ok(route.every(p=>canOccupy(c.world,a,p,p[2]??0,null,true)));
 });
+
+test('a stalled distant queen feeder does not exclude a nearby donor',()=>{
+  const c=new Colony(287),q=c.ants[0],far=c.ants[1],near=c.ants[2];
+  primeCrop(c,q,0,0,0);far.pos=[60,0];far.cell=[60,0];far.task='feedingQueen';far.lastProgressAt=c.time;
+  near.pos=[1,11];near.cell=[1,11];primeCrop(c,near,.6,.5,.5);beginTraffic(c);
+  assert.equal(c.assignQueenCare(near),true);c.feedQueen(near);assert.ok(q.socialProtein>0);assert.ok(q.socialWater>0);
+});

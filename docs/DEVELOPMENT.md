@@ -139,7 +139,7 @@ Do not turn path waypoints into position teleports. Validate continuous segments
 
 `hydrology.mjs` owns seeded contours, gradual target depth, finite column reserves, recharge, exposed seep creation and drainage. `World.waterTable(x)` is cached by lateral terrain shape. `World.walkable` rejects saturated openings while `digTime` stays finite in all soil. `architecture.mjs` queues short moisture probes from known excavation; it must never instantly carve a completed well or reveal remote source coordinates.
 
-The minimum zoom is 0.10. Two- and four-pixel terrain levels lower contour-sampling cost at distant views, while the 16-pixel raster checksum remains unchanged. The worker accepts up to four distant tiles per batch, keeping the existing byte-bounded cache and cooperative fallback. New modules are precached for offline reopening.
+The minimum zoom is 0.10. Two- and four-pixel terrain levels lower contour-sampling cost at distant views, while the 16-pixel raster checksum remains unchanged. The worker accepts up to twelve tiles per batch at the coarsest two-pixel terrain level (four at the next level), keeping the existing byte-bounded cache and cooperative fallback. New modules are precached for offline reopening.
 
 Regression coverage includes shared item-space uniqueness, local crop transfers and mass balance, dry-pool depletion, finite/recharged aquifer columns, depth changes, legacy stacked-brood conversion, abandoned-claim cleanup, crop/cache persistence, the broader phone camera, and the existing 10,000-ant save/camera scenarios. The drought fixture was produced by actual worker digging and collection, not a pre-carved instant water source.
 

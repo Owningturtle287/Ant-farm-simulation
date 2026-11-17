@@ -18,7 +18,7 @@ export function beginTraffic(c){const w=c.world,old=w.traffic,changed=!old||old.
 export function reindexAdult(w,a,old){if(!w.traffic)return;w.traffic.adults.get(bin(old))?.delete(a);insert(w.traffic.adults,a,a.pos);}
 export function foodSupport(w,p){return !!w.traffic&&around(w.traffic.items,p,1).some(o=>o.kind==='food'&&Math.abs(o.pos[0]-p[0])<1.05&&Math.abs(o.pos[1]-p[1])<1.15);}
 export function canOccupy(w,a,p,angle=a.motion?.angle??0,ignoreBrood=null,ignoreAdults=false,escaping=false){
-  if(!escaping&&densityAt(...p,(x,y)=>w.solid([x,y]))>=.49)return false;
+  p=[p[0],p[1]];if(!escaping&&densityAt(...p,(x,y)=>w.solid([x,y]))>=.49)return false;
   if(!escaping&&!w.walkable(p.map(Math.round))){const x=Math.floor(p[0]),y=Math.floor(p[1]);let supported=false;for(let dy=0;dy<=1;dy++)for(let dx=0;dx<=1;dx++)if(Math.hypot(p[0]-x-dx,p[1]-y-dy)<.81&&w.walkable([x+dx,y+dy]))supported=true;if(!supported)return false;}
   const [u,v]=axis(a,p,angle),r=bodyShape(a).radius,nx=-Math.sin(angle)*r,ny=Math.cos(angle)*r;
 

@@ -632,7 +632,7 @@ export class Colony{
   assignQueenCare(a){
     const queen=this.ants.find(b=>b.caste==='queen');if(!queen||a.id===queen.id)return false;
     const needFood=foodFill(queen)<socialCapacity(queen)*.8&&(queen.socialFood<.45||queen.socialProtein<.15||queen.energy<.65),needWater=queen.socialWater<.2||(queen.hydration<.65&&queen.socialWater<.1);
-    if(!needFood&&!needWater||this.ants.some(b=>b.id!==a.id&&((b.task==='toCache'&&b.cachePurpose==='queen')||b.task==='feedingQueen')))return false;
+    if(!needFood&&!needWater||this.ants.some(b=>b.id!==a.id&&((b.task==='toCache'&&b.cachePurpose==='queen')||b.task==='feedingQueen')&&distance(b.pos,queen.pos)<Math.max(1.4,distance(a.pos,queen.pos))&&this.time-(b.lastProgressAt??0)<20))return false;
     if((foodFill(a)>.35&&needFood)||(a.socialWater>.12&&needWater)){if(this.send(a,queen.cell)){a.task='feedingQueen';a.lastJob='care';return true;}}
     if(needFood)return this.assignCache(a,'queen',queen.socialProtein<.15);return false;
   }
