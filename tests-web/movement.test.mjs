@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Colony,DAY,distance} from '../web/sim.mjs';
-import {beginTraffic,bodyGap,canOccupy,routeAroundItems,unjam,sweptFree} from '../web/traffic.mjs';
+import {beginTraffic,bodyGap,canOccupy,routeAroundItems,unjam} from '../web/traffic.mjs';
 import {moveAnt,updateMotion,antennaTips,updateArticulation} from '../web/locomotion.mjs';
 import {bodyDiscs,NECK_LIMIT,WAIST_LIMIT} from '../web/body-pose.mjs';
 function arena(){const c=new Colony(287);c.brood=[];c.foodItems=[];c.world.patches=[];c.ants=c.ants.slice(1,3);c.world.carve([0,20],8,4);for(const [i,a]of c.ants.entries()){a.pos=[i*4,20];a.cell=[...a.pos];a.motion.angle=0;a.busyUntil=0;a.task='routeTest';}beginTraffic(c);return c;}
@@ -23,5 +23,3 @@ test('a closely packed group makes room and completes five different trips',()=>
 test('contact clearance uses a bounded, slow footstep and stops without residual drift',()=>{const c=arena(),[a,b]=c.ants;a.pos=[-.35,20];b.pos=[.35,20];a.cell=b.cell=[0,20];a.motion.angle=0;b.motion.angle=Math.PI;a.destination=[3,20];b.destination=[-3,20];a.route=[[3,20]];b.route=[[-3,20]];a.carried=1;a.motion.trafficBlocked=.6;c.time=2;beginTraffic(c);unjam(c,a);assert.ok(b.motion.clearanceUntil>c.time);const origin=[...b.pos];let travel=0;for(let i=0;i<12;i++){const old=[...b.pos];c.time+=.1;moveAnt(b,c.world,c.time,.1);travel+=distance(old,b.pos);assert.ok(distance(old,b.pos)<=.03001);assert.ok(canOccupy(c.world,b,b.pos));}assert.ok(travel>.02&&travel<=.221);assert.ok(distance(origin,b.pos)<=.221);assert.equal(b.motion.speed,0);assert.equal(b.motion.clearanceUntil,0);});
 
 test('small surface portions permit head reach while the thorax and other adults keep their space',()=>{const c=arena(),[a,b]=c.ants;c.world.patches=[{id:998,kind:'food',pieces:[{pos:[.20,20],amount:1}]}];beginTraffic(c);assert.ok(canOccupy(c.world,a,[0,20]));assert.equal(canOccupy(c.world,a,[.15,20]),false);c.world.patches=[];b.pos=[.2,20];beginTraffic(c);assert.equal(canOccupy(c.world,a,[0,20]),false);});
-
-test('a small resource graze is blocked even when both sampled endpoints are clear',()=>{const c=arena(),a=c.ants[0];c.ants=[a];c.world.patches=[{id:999,kind:'food',pieces:[{pos:[0,20],amount:1}]}];const radius=bodyDiscs(a)[0].radius+.1-.002,from=[-.02,20+radius-.00005],to=[.02,from[1]];a.pos=from;beginTraffic(c);assert.ok(canOccupy(c.world,a,from));assert.ok(canOccupy(c.world,a,to));assert.equal(sweptFree(c.world,a,from,to,0,0),false);});

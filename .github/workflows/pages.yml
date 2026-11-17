@@ -29,14 +29,6 @@ jobs:
           node-version: '22'
       - name: Verify the living colony and save recovery
         run: node --test tests-web/*.test.mjs
-      - name: Verify 120 modeled days at default reproduction
-        run: node scripts/endurance-sim.mjs simulation-endurance.json
-      - name: Upload long-run simulation evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: simulation-endurance
-          path: simulation-endurance.json
-          retention-days: 30
       - name: Build offline web app
         run: node scripts/build-web.mjs
       - name: Configure GitHub Pages
@@ -45,6 +37,23 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+
+  endurance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify 120 modeled days at default reproduction
+        run: node scripts/endurance-sim.mjs simulation-endurance.json
+      - name: Upload long-run simulation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulation-endurance
+          path: simulation-endurance.json
+          retention-days: 30
 
   browser-checks:
     runs-on: ubuntu-latest
@@ -78,7 +87,7 @@ jobs:
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: [build, browser-checks]
+    needs: [build, endurance, browser-checks]
     runs-on: ubuntu-latest
     permissions:
       pages: write

@@ -102,7 +102,7 @@ export function moveAnt(a,w,time,dt,traffic=0){
   }
   m.gaitDirection=1;
   // Discard the rotation-only markers used by older saves. Headings never drive translation.
-  while(a.route.length&&Math.hypot(a.route[0][0]-a.pos[0],a.route[0][1]-a.pos[1])<(a.route[0][3]??.065)){a.cell=a.route.shift().slice(0,2).map(n=>Math.round(n)||0);passed=true;}
+  while(a.route.length&&Math.hypot(a.route[0][0]-a.pos[0],a.route[0][1]-a.pos[1])<.065){a.cell=a.route.shift().slice(0,2).map(n=>Math.round(n)||0);passed=true;}
   const next=a.route[0];if(!next){m.speed=0;return passed;}
   const previousAngle=m.angle,dx=next[0]-a.pos[0],dy=next[1]-a.pos[1],length=Math.hypot(dx,dy),following=a.route[1];let aim=next;
   if(next[3]==null&&following&&length<.65){const fx=following[0]-next[0],fy=following[1]-next[1],fl=Math.hypot(fx,fy),look=Math.min(.16,fl*(1-length/.65)*.35),q=[next[0]+fx/Math.max(fl,.001)*look,next[1]+fy/Math.max(fl,.001)*look];if(clearSegment(w,a.pos,q))aim=q;}

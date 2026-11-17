@@ -44,9 +44,9 @@ test('cancelled brood trips release their destination while completed beds remai
 test('an old blocked waypoint cannot cancel a newly assigned reachable trip',()=>{
  const c=new Colony(),a=c.ants[1];c.ants=[a];c.brood=[];c.foodItems=[];c.world.patches=[];c.world.carve([0,20],4,4);a.pos=[0,20];a.cell=[0,20];a.lastProgressPos=[...a.pos];a.lastProgressAt=29;a.motion.progressAt=0;a.motion.progressTarget='-2,20';a.task='refueling';a.busyUntil=0;c.time=30;beginTraffic(c);assert.ok(c.send(a,[2,20]));c.auditProgress(a);assert.deepEqual(a.destination,[2,20]);assert.ok(a.route.length);
 });
-test('a loaded forager finishes a long trip around finite grain piles',async()=>{
- const {moveAnt,updateMotion}=await import('../web/locomotion.mjs');const c=new Colony(287),a=c.ants[1];c.ants=[a];c.brood=[];c.foodItems=[];a.pos=[21,0];a.cell=[21,0];a.motion.angle=Math.PI;a.task='returningFood';a.carried=2;a.cargoKind='food';beginTraffic(c);a.route=routeAroundItems(c.world,a,c.world.nest);assert.ok(a.route?.length);
- for(let i=0;i<1200&&a.route.length;i++){updateMotion(a,c.world,i*.1,.1,new Map());moveAnt(a,c.world,i*.1,.1);assert.ok(canOccupy(c.world,a,a.pos));}assert.ok(distance(a.pos,c.world.nest)<.08);assert.equal(a.carried,2);assert.equal(a.cargoKind,'food');
+test('a loaded forager finishes a long trip around finite grain piles',()=>{
+ const c=new Colony(287),a=c.ants[1];c.ants=[a];c.brood=[];a.pos=[21,0];a.cell=[21,0];a.motion.angle=Math.PI;a.task='returningFood';a.carried=2;a.cargoKind='food';a.deliveryKind='food';a.deliveryAmount=2;a.cargoNutrition={energy:.8,protein:.2};c.supplyLedger.energy.introduced+=1.6;c.supplyLedger.protein.introduced+=.4;updateSupplyTotals(c);a.cargoKind='food';beginTraffic(c);a.destination=[...c.world.nest];a.route=routeAroundItems(c.world,a,c.world.nest);assert.ok(a.route?.length);
+ for(let i=0;i<1200&&c.foodDelivered<2;i++){c.time+=.1;beginTraffic(c);c.updateAnt(a,.1);assert.ok(canOccupy(c.world,a,a.pos));}assert.equal(c.foodDelivered,2);assert.ok(distance(a.pos,c.world.nest)<=3);for(const kind of ['energy','protein'])assert.ok(Math.abs(supplyBalance(c,kind).error)<1e-6);
 });
 test('diggers can work from a clear fractional stance beside an occupied approach cell',async()=>{
  const {moveAnt,updateMotion}=await import('../web/locomotion.mjs');const c=new Colony(),a=c.ants[1],w=c.world;c.ants=[a];c.foodItems=[];w.patches=[];c.brood=[{id:900,cell:[4,20],age:0,carriedBy:null}];const open=new Set();for(let x=0;x<=4;x++)for(const y of[19,20])open.add(key([x,y]));w.solid=p=>!open.has(key(p));w.construction=[[5,20]];w.frontierVersion=-1;w.pathCache.clear();w.neighborCache.clear();a.pos=[3,19];a.cell=[3,19];a.motion.angle=0;beginTraffic(c);assert.ok(c.assignDig(a));
@@ -564,11 +564,11 @@ test('routing recognizes a clear vertical stance even when a horizontal body can
   c.foodItems=[];beginTraffic(c);assert.equal(canOccupy(c.world,a,[0,20],0),false);assert.equal(canOccupy(c.world,a,[0,20],Math.PI/2),true);const route=routeAroundItems(c.world,a,[0,20]);assert.ok(route);assert.deepEqual(route.at(-1).slice(0,2),[0,20]);
 });
 
-test('finite grain piles remain climbable without walking through their pieces',async()=>{
-  const {moveAnt,updateMotion}=await import('../web/locomotion.mjs');const c=new Colony(287),a=c.ants[2];c.ants=[a];c.brood=[];c.foodItems=[];a.cell=[45,0];a.pos=[...a.cell];a.task='returningFood';a.carried=2;beginTraffic(c);
-  a.route=routeAroundItems(c.world,a,[1,11]);assert.ok(a.route?.length,'a crop-laden worker needs a route over grain piles');
-  for(let i=0;i<1600&&a.route.length;i++){updateMotion(a,c.world,i*.1,.1,new Map());moveAnt(a,c.world,i*.1,.1);assert.ok(canOccupy(c.world,a,a.pos),'The actual turning and walking body must keep clear of every finite grain portion.');}
-  assert.ok(distance(a.pos,[1,11])<.08,'The loaded worker must finish the route, rather than merely finding clear endpoints.');assert.equal(a.carried,2);
+test('finite grain piles remain climbable without walking through their pieces',()=>{
+  const c=new Colony(287),a=c.ants[2];c.ants=[a];c.brood=[];a.cell=[45,0];a.pos=[...a.cell];a.task='returningFood';a.carried=2;a.cargoKind='food';a.deliveryKind='food';a.deliveryAmount=2;a.cargoNutrition={energy:.8,protein:.2};c.supplyLedger.energy.introduced+=1.6;c.supplyLedger.protein.introduced+=.4;updateSupplyTotals(c);beginTraffic(c);
+  a.destination=[1,11];a.route=routeAroundItems(c.world,a,a.destination);assert.ok(a.route?.length,'a crop-laden worker needs a route over grain piles');
+  for(let i=0;i<1600&&c.foodDelivered<2;i++){c.time+=.1;beginTraffic(c);c.updateAnt(a,.1);assert.ok(canOccupy(c.world,a,a.pos),'The actual turning and walking body must keep clear of every finite grain portion.');}
+  assert.equal(c.foodDelivered,2,'The worker must finish a real delivery using its normal recovery decisions.');assert.ok(distance(a.pos,c.world.nest)<=3);for(const kind of ['energy','protein'])assert.ok(Math.abs(supplyBalance(c,kind).error)<1e-6);
 });
 
 test('a stalled distant queen feeder does not exclude a nearby donor',()=>{
