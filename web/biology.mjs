@@ -3,7 +3,7 @@ export const DAY=600;
 export const BROOD_DURATION=30*DAY;
 export const LIMIT=10000;
 export const POPULATION_CAPS=Object.freeze([20,40,60,100,120,200,250,500,750,1000,2000,2500,5000,7500,10000]);
-export const DEFAULT_SETTINGS=Object.freeze({startingWorkers:12,populationCap:120,eggRate:1,broodRate:1,waterTableDepth:56});
+export const DEFAULT_SETTINGS=Object.freeze({startingWorkers:12,populationCap:120,eggRate:1,broodRate:1,waterTableDepth:56,surfaceTemp:28,rainMode:"auto",surfaceWater:true});
 export const SPEEDS=Object.freeze([1,2,4,8,16,32,64,128]);
 export const clamp=(n,min=0,max=1)=>Math.max(min,Math.min(max,n));
 export class Random {
@@ -14,7 +14,8 @@ export class Random {
 }
 export function settingsFrom(data={}) {
   const number=(name,min,max)=>Number.isFinite(Number(data[name]))?clamp(Number(data[name]),min,max):DEFAULT_SETTINGS[name];
-  return {startingWorkers:Math.round(number('startingWorkers',4,40)),populationCap:Math.round(number('populationCap',20,LIMIT)),eggRate:number('eggRate',0,4),broodRate:number('broodRate',.1,8),waterTableDepth:Math.round(number('waterTableDepth',24,240))};
+  return {startingWorkers:Math.round(number('startingWorkers',4,40)),populationCap:Math.round(number('populationCap',20,LIMIT)),eggRate:number('eggRate',0,4),broodRate:number('broodRate',.1,8),waterTableDepth:Math.round(number('waterTableDepth',24,240)),
+    surfaceTemp:Math.round(number('surfaceTemp',8,46)),rainMode:['on','off'].includes(data.rainMode)?data.rainMode:'auto',surfaceWater:data.surfaceWater!==false};
 }
 export function traitsFor(id,seed){
   const r=new Random((Math.imul(id+1,2654435761)^(seed>>>0))>>>0);

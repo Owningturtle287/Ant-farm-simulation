@@ -8,7 +8,7 @@ import {cell,key,broodStage} from './sim.mjs';
 import {resourceTiles} from './resources.mjs';
 import {ChemicalOverlay} from './chemical-art.mjs';
 import {wrapAngle,antennaTips} from './locomotion.mjs';
-import {buildAntAtlas,buildAntParts,GAIT_FRAMES,SCAN_FRAMES,SPRITE_W,SPRITE_H} from './ant-art.mjs';
+import {buildAntAtlas,buildAntParts,paintHeldObject,GAIT_FRAMES,SCAN_FRAMES,SPRITE_W,SPRITE_H} from './ant-art.mjs';
 const visualClockForWater=(options,colony,clock)=>options.paused?colony.time:clock;
 function buffer(w,h) { const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
 export class Renderer {
@@ -118,10 +118,46 @@ export class Renderer {
     }
   }
   groundwater(world,clock){
-    if(!world.groundwater)return;const c=this.ctx,u=this.unit,min=this.world([0,0]),max=this.world([this.width,this.height]);if(max[1]<world.groundwater.depth-12)return;
-    c.beginPath();let first=true;for(let x=Math.floor(min[0])-1;x<=Math.ceil(max[0])+1;x++){const p=this.screen([x,world.waterTable(x)]);if(first){c.moveTo(...p);first=false;}else c.lineTo(...p);}c.lineTo(this.width,this.height);c.lineTo(0,this.height);c.closePath();c.fillStyle='#4e9baa25';c.fill();
-    c.strokeStyle='#9acbd282';c.lineWidth=Math.max(1,this.camera.zoom);c.beginPath();first=true;for(let x=Math.floor(min[0])-1;x<=Math.ceil(max[0])+1;x++){const p=this.screen([x,world.waterTable(x)+Math.sin(clock*.7+x*.15)*.025]);if(first){c.moveTo(...p);first=false;}else c.lineTo(...p);}c.stroke();
-    for(const id of world.excavated){const cell=id.split(',').map(Number);if(cell[0]<min[0]-1||cell[0]>max[0]+1||cell[1]<min[1]-1||cell[1]>max[1]+1||cell[1]<world.waterTable(cell[0])-.25)continue;const [x,y]=this.screen(cell);c.fillStyle='#438daba8';c.fillRect(x-u*.43,y-u*.43,u*.86,u*.86);}
+    if(!world.groundwater)return;
+    const c=this.ctx,u=this.unit,min=this.world([0,0]),max=this.world([this.width,this.height]);
+    const screenY=wy=>this.height*.30+(wy-this.camera.y)*u;
+    if(max[1]<world.groundwater.depth+world.groundwater.shift-13)return;
+    const horizon=x=>world.waterTable(x)+.10*Math.sin(clock*.85+x*.17)+.035*Math.sin(clock*1.8-x*.33);
+    const samples=Math.max(8,Math.min(236,Math.ceil(this.width/6))),curves=[];
+    for(let i=0;i<=samples;i++){
+      const x=min[0]+(max[0]-min[0])*i/samples;
+      curves.push([this.width*i/samples,screenY(horizon(x))]);
+    }
+    const top=Math.min(...curves.map(p=>p[1]));
+    if(top>this.height)return;
+    const trace=()=>{c.beginPath();c.moveTo(...curves[0]);for(let i=1;i<curves.length;i++)c.lineTo(...curves[i]);};
+    trace();c.lineTo(this.width,this.height);c.lineTo(0,this.height);c.closePath();
+    c.save();c.clip();
+    const haze=c.createLinearGradient(0,top,0,top+Math.max(32,u*11));
+    haze.addColorStop(0,'#3e899565');haze.addColorStop(1,'#28556b90');
+    c.fillStyle=haze;c.fillRect(0,Math.max(0,top-1),this.width,this.height-Math.max(0,top-1));
+    const pitch=Math.max(3,28/u);
+    for(let lane=0;lane<3;lane++){
+      c.strokeStyle=lane===0?'#abdee34a':'#83b8c43c';c.lineWidth=Math.max(.6,u*.045);
+      c.beginPath();const first=Math.floor(min[0]/pitch);
+      for(let n=0;n<=Math.min(70,Math.ceil(this.width/(pitch*u))+2);n++){
+        const id=first+n,x=(id+.5)*pitch+.30*Math.sin(clock*.8+id*.91+lane);
+        const p=this.screen([x,horizon(x)+(.35+lane*.43)+Math.sin(clock*1.25+id*1.8)*.07]);
+        const length=Math.max(4,u*(.22+(.5+.5*Math.sin(id*2.3+lane))*.65));
+        c.moveTo(p[0]-length,p[1]);c.quadraticCurveTo(p[0],p[1]-u*.065,p[0]+length,p[1]);
+      }
+      c.stroke();
+    }
+    for(const id of world.groundwaterWet??[]){
+      const [x,y]=cell(id);
+      if(x<min[0]-1||x>max[0]+1||y<min[1]-1||y>max[1]+1)continue;
+      const [sx,sy]=this.screen([x,y]),waterY=Math.max(sy-u*.45,screenY(horizon(x)));
+      if(waterY>=sy+u*.47)continue;
+      c.fillStyle='#4e98afbd';c.fillRect(sx-u*.44,waterY,u*.88,sy+u*.47-waterY);
+      c.strokeStyle='#b8e6e5b3';c.lineWidth=Math.max(.7,u*.055);c.beginPath();c.moveTo(sx-u*.33,waterY+1);c.lineTo(sx+u*.33,waterY+1);c.stroke();
+    }
+    c.restore();
+    trace();c.strokeStyle='#8ec4c3ab';c.lineWidth=Math.max(.75,u*.063);c.stroke();
   }
   rainfall(world,clock){
     if(!world.weather.raining)return;const c=this.ctx,z=this.camera.zoom,intensity=world.weather.intensity??.7;
@@ -191,15 +227,13 @@ export class Renderer {
       const width=(ant.caste==='queen'?18:9.5+ant.bodySize*4.5)*z,height=width*SPRITE_H/SPRITE_W;
       const heading=Math.cos(p.angle);
       const slope=contact&&Math.abs(heading)>.6?contact.slope+(heading<0?Math.PI:0):p.angle;
-      c.save();c.translate(x,y);c.rotate(p.angle+wrapAngle(slope-p.angle)*.65);if(p.hatchAt!=null&&clock-p.hatchAt<1.3){c.filter='brightness(1.45) saturate(.55)';c.fillStyle='#e8d6ad';c.fillRect(-8*z,3*z,2*z,z);c.fillRect(-5*z,4*z,2*z,z);}if(ant.task==='laying')c.scale(1+Math.sin(visualClock*7)*.045,1);if(z>=.95||ant.id===options.selected||ant.caste==='queen'){
+      c.save();c.translate(x,y);c.rotate(p.angle+wrapAngle(slope-p.angle)*.65);if(p.hatchAt!=null&&clock-p.hatchAt<1.3){c.filter='brightness(1.45) saturate(.55)';c.fillStyle='#e8d6ad';c.fillRect(-8*z,3*z,2*z,z);c.fillRect(-5*z,4*z,2*z,z);}if(ant.task==='laying')c.scale(1+Math.sin(visualClock*7)*.045,1);const baby=carriedBrood.get(ant.id),loaded=!!(baby||ant.carried);
+      if(z>=.95||loaded||ant.id===options.selected||ant.caste==='queen'){
         const parts=this.bodyParts[ant.caste],px=width/SPRITE_W,draw=(source,sx=0,sy=0,pivot=26)=>c.drawImage(source,sx,sy,SPRITE_W,SPRITE_H,-pivot*px,-17*px,width,height);
-        draw(parts.legs,frame*SPRITE_W);draw(parts.thorax);c.save();c.translate(-6*px,0);c.rotate(p.waist??0);draw(parts.abdomen,0,0,20);c.restore();c.save();c.translate(4*px,0);c.rotate(p.neck??0);draw(parts.head,scan*SPRITE_W,wide?SPRITE_H:0,30);c.restore();
+        draw(parts.legs,frame*SPRITE_W);draw(parts.thorax);c.save();c.translate(-6*px,0);c.rotate(p.waist??0);draw(parts.abdomen,0,0,20);c.restore();c.save();c.translate(4*px,0);c.rotate(p.neck??0);draw(parts.head,scan*SPRITE_W,wide?SPRITE_H:0,30);if(loaded)paintHeldObject(c,this.grainAtlas,ant,baby,px,visualClock);c.restore();
       }else c.drawImage(this.sprites[ant.caste],frame*SPRITE_W,row*SPRITE_H,SPRITE_W,SPRITE_H,-width*26/SPRITE_W,-height/2,width,height);
       if(ant.task==='laying'&&colony.time>ant.layUntil-2){c.fillStyle='#fff0cb';c.fillRect(-width*.55,-z,3*z,3*z);}
-      if(carriedBrood.has(ant.id)||ant.carried){c.save();c.translate(width*4/SPRITE_W,0);c.rotate(z>=.95||ant.id===options.selected||ant.caste==='queen'?p.neck??0:0);
-        if(carriedBrood.has(ant.id))paintBrood(c,carriedBrood.get(ant.id),width*.32,0,z,visualClock);
-        if(ant.carried&&(ant.cargoKind==='food'||ant.cargoKind==='broodMeal'||ant.cargoKind==='queenMeal'))drawGrain(c,this.grainAtlas,width*.34,-height*.2,u*.24,ant.id,ant.carried/2);
-        else if(ant.carried){c.fillStyle=ant.cargoKind==='soil'?'#c29a61':'#93ccda';for(let unit=0;unit<Math.ceil(ant.carried/2);unit++)c.fillRect(width*.28+unit*3*z,-height*.3,3*z,3*z);}c.restore();}c.restore();
+      c.restore();
     }
     const broodIDs=new Set(colony.brood.map(b=>b.id));for(const id of this.broodPoses.keys())if(!broodIDs.has(id))this.broodPoses.delete(id);
     for(const id of this.positions.keys())if(!live.has(id))this.positions.delete(id);

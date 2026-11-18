@@ -2,7 +2,7 @@ import {canOccupy,settleAdults,beginTraffic,routeAroundItems,nearestStance,swept
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {Colony,World,key,LIMIT,DAY,BROOD_DURATION,createAnt,Random,distance} from '../web/sim.mjs';
+import {Colony,World,key,LIMIT,DAY,DEFAULT_SETTINGS,BROOD_DURATION,createAnt,Random,distance} from '../web/sim.mjs';
 import {MATERIALS,baseMaterial} from '../web/materials.mjs';
 import {terrainHeight,basins,tickHabitat,harvest} from '../web/ecology.mjs';
 import {initializeBrain,recognize,cropCapacity} from '../web/fire-ant.mjs';
@@ -304,7 +304,7 @@ test('workers can tunnel through mound deposits without creating or losing soil'
 });
 test('v0.4 colonies keep adults, ground, settings, and stage identity while old patrols are released',()=>{
   const raw=readFileSync(new URL('./fixtures/v4-colony.json',import.meta.url),'utf8'),d=JSON.parse(raw).colony;d.ants[1].caste='major';d.ants[1].task='patrolling';
-  const c=Colony.fromJSON(d);assert.equal(c.ants.length,d.ants.length);assert.deepEqual(c.settings,{...d.settings,waterTableDepth:d.settings.waterTableDepth??56});assert.deepEqual([...c.world.excavated],d.world.excavated);assert.equal(c.world.deposits.size,d.world.deposits.length);assert.equal(c.ants[1].task,'reserve');
+  const c=Colony.fromJSON(d);assert.equal(c.ants.length,d.ants.length);assert.deepEqual(c.settings,{...DEFAULT_SETTINGS,...d.settings});assert.deepEqual([...c.world.excavated],d.world.excavated);assert.equal(c.world.deposits.size,d.world.deposits.length);assert.equal(c.ants[1].task,'reserve');
   assert.equal(c.species,'Solenopsis invicta');assert.deepEqual(c.brood.map(broodStage),d.brood.map(b=>b.age<8*DAY?'egg':b.age<27*DAY?'larva':'pupa'));
 });
 test('accelerated fire-ant generations grow past the small founder population and maintain a replacement brood pool',()=>{
@@ -600,9 +600,24 @@ test('brood space pressure queues real excavation instead of stacking new beds',
   }
   c.updateDemand();const before=w.excavated.size;assert.equal(c.freeBeds,0);assert.ok(c.demand.dig>0);c.proposeConstruction(c.ants[1],c.demand);assert.ok(w.construction.length>0);assert.equal(w.excavated.size,before,'A proposal must be physically excavated by workers.');
 });
-test('the deep water table has seeded contours, exposed finite seeps, and rain recharge',()=>{
-  const w=new World(287);assert.ok(tableLevel(w,0)>w.nest[1]+30);assert.ok(Math.abs(tableLevel(w,10)-tableLevel(w,70))>1);const y=Math.ceil(tableLevel(w,0)-1.2);w.carve([0,y],1,1);tickGroundwater(w,2);let seep=w.patches.find(p=>p.origin==='seep'&&p.cell[0]===0);assert.ok(seep&&seep.amount>0);let taken=harvest(w,seep,100,2);
-  for(let i=2;i<=2000;i++){tickGroundwater(w,i*2);taken+=harvest(w,seep,100,i*2);}assert.ok(taken<=48+1e-7);assert.ok(taken>40);assert.ok(w.groundwater.columns.get(0).water<1e-6);w.weather.raining=true;tickGroundwater(w,4010);assert.ok(seep.amount>0);assert.ok(Math.abs(resourceBalance(w,'water').error)<1e-7);
+test('groundwater requires a connected breach and exposed water stays finite',()=>{
+  const w=new World(287),x=0,y=Math.ceil(tableLevel(w,x)-.25);
+  assert.ok(y>w.nest[1]+30);assert.ok(Math.abs(tableLevel(w,10)-tableLevel(w,70))>1);
+  w.excavated.add(key([x,y-1]));w.excavated.add(key([x,y]));w.changed([x,y]);tickGroundwater(w,2);
+  assert.ok(!w.patches.some(p=>p.origin==='seep'),'An isolated cavity cannot expose water to the nest.');
+  w.excavated.delete(key([x,y]));w.changed([x,y]);
+  for(let depth=w.nest[1]+1;depth<y;depth++)if(w.solid([x,depth]))assert.ok(w.excavate([x,depth]));
+  tickGroundwater(w,4);assert.ok(!w.patches.some(p=>p.origin==='seep'),'The intact saturated soil still seals the shaft.');
+  assert.ok(w.excavate([x,y]));tickGroundwater(w,6);
+  const seep=w.patches.find(p=>p.origin==='seep'&&p.cell[0]===x);
+  assert.ok(seep?.amount>0);assert.deepEqual(seep.cell,[x,y-1]);assert.equal(w.walkable([x,y]),false);
+  let taken=harvest(w,seep,100,6);
+  for(let i=4;i<=1100;i++){tickGroundwater(w,i*2);taken+=harvest(w,seep,100,i*2);}
+  assert.ok(taken<=48+1e-7);assert.ok(taken>40);assert.ok(w.groundwater.columns.get(x).water<1e-6);
+  w.weather.raining=true;tickGroundwater(w,2210);assert.ok(seep.amount>0);
+  w.groundwater.shift=1;tickGroundwater(w,2212);
+  assert.equal(seep.amount,0,'A receding table drains the disconnected seep.');
+  assert.ok(Math.abs(resourceBalance(w,'water').error)<1e-7);
 });
 test('groundwater depth is adjustable and moves gradually while surviving a save',()=>{
   const c=new Colony();const before=c.world.waterTable(0);c.setSettings({waterTableDepth:120});tickGroundwater(c.world,10);assert.ok(c.world.waterTable(0)>before);assert.ok(c.world.waterTable(0)<120);const d=Colony.fromJSON(JSON.parse(JSON.stringify(c)));assert.equal(d.settings.waterTableDepth,120);assert.equal(d.world.waterTable(30),c.world.waterTable(30));assert.equal(d.ants.length,c.ants.length);
@@ -814,4 +829,38 @@ test('grounded display follows a trench profile without overshooting at the bott
   assert.ok(Math.max(...samples)<=1.33+1e-8);
   assert.ok(Math.abs(samples[60]-1.33)<1e-8);
   assert.ok(samples.slice(1).every((y,i)=>Math.abs(y-samples[i])<.08));
+});
+
+test('groundwater-only workers dig through saturated soil and bring back water',()=>{
+  const c=new Colony(287,{surfaceWater:false,rainMode:'off',waterTableDepth:24});
+  assert.equal(c.place('water',3),false);
+  while(c.time<900&&c.waterDelivered===0)c.step();
+  const w=c.world,seep=w.patches.find(p=>p.origin==='seep');
+  assert.ok(c.waterDelivered>0);assert.ok(seep&&w.path(w.nest,seep.cell));
+  assert.ok(w.excavated.has(key([seep.cell[0],seep.cell[1]+1])));
+  assert.ok(w.patches.every(p=>p.kind!=='water'||p.origin==='seep'));
+  assert.ok(Math.abs(resourceBalance(w,'water').error)<1e-7);
+});
+test('weather controls persist and separate rain from surface water',()=>{
+  const c=new Colony(287);
+  assert.ok(c.world.patches.some(p=>p.kind==='water'&&p.amount>0));
+  c.setSettings({surfaceTemp:34,rainMode:'on',surfaceWater:false});
+  run(c,5);assert.equal(c.world.weather.raining,true);
+  assert.ok(c.world.patches.every(p=>p.kind!=='water'||p.origin==='seep'));
+  assert.equal(c.place('water',12),false);assert.ok(Math.abs(resourceBalance(c.world,'water').error)<1e-7);
+  const restored=Colony.fromJSON(JSON.parse(JSON.stringify(c)));
+  assert.equal(restored.world.weather.raining,true);assert.deepEqual(restored.settings,c.settings);
+  restored.setSettings({rainMode:'off',surfaceWater:true});run(restored,2);
+  assert.equal(restored.world.weather.raining,false);assert.equal(restored.place('water',12),true);
+});
+test('the surface temperature sets the baseline and controls outdoor foraging and brood growth',()=>{
+  const c=establishedColony(287),w=c.world,a=c.ants[1];
+  c.setSettings({surfaceTemp:14});
+  const top=w.surface(0)-1,surface=w.conditions([0,top]).temperature,shallow=w.conditions([0,12]).temperature,deep=w.conditions([0,55]).temperature;
+  assert.equal(surface,14);assert.ok(surface>shallow&&shallow>deep);
+  const b=c.brood[1],age=b.age;c.updateBrood(5);assert.equal(b.age,age);
+  a.route=[];a.foragingKind='food';c.explore(a);assert.equal(a.task,'resting');
+  c.setSettings({surfaceTemp:30});a.cell=[0,11];a.pos=[0,11];a.route=[];
+  c.explore(a);assert.equal(a.task,'exploring');assert.ok(a.route.length);
+  c.updateBrood(5);assert.ok(b.age>age);
 });

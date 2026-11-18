@@ -22,7 +22,13 @@ export function contact(a,b,time){
   return trusted;
 }
 export const cropCapacity=a=>1.2+a.bodySize*2.4;
-export function developmentalRate(temp){return temp<=27.5?clamp(.55+(temp-24)*.45/3.5,0,1):clamp(1+(temp-27.5)*.3/7.5,0,1.3);}
+export function foragingTemperature(temp){
+  return Math.min(clamp((temp-15)/7),clamp((43-temp)/7));
+}
+export function developmentalRate(temp){
+  if(temp<27.5)return clamp(.55+(temp-24)*.45/3.5,0,1);
+  return temp<=34?1+(temp-27.5)*.3/7.5:1.26*clamp((40-temp)/6);
+}
 export function observeNeeds(a,neighbors,cache,brood,traffic,time){
   let food=0,protein=0,water=0;
   for(const other of neighbors){

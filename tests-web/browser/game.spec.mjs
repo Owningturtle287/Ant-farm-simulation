@@ -209,6 +209,17 @@ test('separate social crops, physical food caches and individual brood beds surv
 test('water-table depth and a much wider camera view work on a phone',async({page},info)=>{
   test.setTimeout(90000);const raw=readFileSync(new URL('../fixtures/v9-drought.json',import.meta.url),'utf8');await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await page.getByRole('button',{name:'Pause simulation',exact:true}).click();
   await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Colony & reproduction',exact:true}).click();await expect(page.locator('#water-depth')).toHaveValue('24');await page.locator('#water-depth').selectOption('80');await page.getByRole('button',{name:'Back to the colony',exact:true}).click();await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.settings.waterTableDepth)).toBe(80);
+  await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Colony & reproduction',exact:true}).click();
+  await page.getByLabel('Surface temperature (°C)').fill('34');
+  await page.getByLabel('Surface temperature (°C)').press('Tab');
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.settings.surfaceTemp)).toBe(34);
+  await page.getByLabel('Rain',{exact:true}).selectOption('on');
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.settings.rainMode)).toBe('on');
+  await page.getByLabel('Surface water').selectOption('off');
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.settings.surfaceWater)).toBe(false);
+  await page.getByRole('button',{name:'Back to the colony',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Place water',exact:true})).toBeDisabled();
+  await expect(page.locator('#weather')).toContainText('Rain · groundwater only · 34°C');
   for(let i=0;i<18;i++)await page.getByRole('button',{name:'Zoom out',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-camera-zoom','0.100');await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:45000});await page.screenshot({path:info.outputPath('deep-water-table-and-wide-view.png')});
 });
 

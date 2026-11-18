@@ -1,4 +1,4 @@
-# Little Colony behavior model · v0.15
+# Little Colony behavior model · v0.16
 
 The reference species is the red imported fire ant, **Solenopsis invicta**, using the **single-queen (monogyne)** social form. This is a mechanistic, research-informed game model. It is not a reconstruction of neurons, a fitted whole-colony biological model, or an exact ant brain.
 
@@ -115,7 +115,7 @@ Old virtual reserves are materialized once. Crowded older brood is separated whi
 
 The default groundwater horizon is about 56 game cells below the reference surface, with independently seeded, smooth lateral contours. Rain/dry periods shift it slowly, and a player depth change moves gradually toward its target. The setting spans 24–240 cells. Distances are game units, not calibrated meters. Fully saturated openings are unsuitable for ant travel; the earth remains diggable, with no stone layer.
 
-During a shortage or prolonged dry surface conditions, workers can propose short descending probes from explored ground, using nearby moisture conditions. Workers then physically excavate and haul the earth. Water scouts can investigate accessible lower passages. A source is learned only after local detection; the brain receives no remote aquifer coordinates. Digging avoids the saturated extreme and can expose a capillary fringe. An exposed column has a finite 48-unit reserve, at most two units available at its seep, and a bounded release rate. Rain can recharge it. Moving horizons drain obsolete seeps and expose others. This is a bounded reservoir/capillary-fringe model, not a Darcy-flow or flooding-physics solver.
+During prolonged drought or in groundwater-only mode, workers extend short descending probes from reachable excavation. Drinking requires both a cut into saturated soil and a reachable ledge immediately above it. An exposed column has a finite 48-unit reserve, up to two units at its seep, and a bounded release rate. A moving water table can close an old seep until workers extend the shaft. Rain recharges exposed columns even with surface puddles disabled. Turning surface water off drains existing surface pools and disables the placement tool. Surface rain and groundwater depth are independent controls.
 
 Surface puddles evaporate during dry spells, with natural depressions determining space and capacity. Rain admits actual finite portions; water that cannot occupy a source is not silently stacked. Rain graphics use varying streaks, surface splashes, pool shimmer and localized ripples.
 
@@ -134,3 +134,13 @@ Adult body footprints exclude other adult bodies. Antennae and feet can make con
 Nursery/cache placement leaves room-access lanes and avoids narrow shafts. Egg laying requires a clear bed beside the queen; when nearby beds fill she seeks another local position. Efficient egg removal lets her remain settled longer. A pupa emerges only if the actual new adult body fits beside attending workers. Brood silhouettes, brief molt crossfades and pale emergence effects are visual explanations of stage transitions, not a microscopic metamorphosis model.
 
 Older compressed saves need a one-time spacing conversion. Adults and supplies are retained; if the existing dry terrain cannot hold those adults, a connected holding annex is added and its removed soil is explicitly recorded. Routine walking repairs route references rather than snapping bodies to a grid cell.
+
+
+## v0.16 temperature
+
+The player sets the temperature at the surface in Celsius. Soil cools with depth and the game profile approaches a six-degree difference at great depth. This models a warm surface over cooler ground in game units. Real soil temperatures also depend on time of day, weather and season and can temporarily be warmer at depth.
+
+Exterior foraging is most active across a broad warm range and tails off below 22°C and above 36°C. The modeled field-foraging window spans 15–43°C. Workers walk more slowly outside the warm range. At brood temperature extremes, available warmer or cooler beds are compared with the current bed. Temperature also affects brood development and whether the queen can lay.
+
+- [Porter & Tschinkel, 1987. Foraging in Solenopsis invicta](https://doi.org/10.1093/ee/16.3.802) — seasonal field measurements and the observed range of soil temperatures at which workers foraged.
+- [Penick & Tschinkel, 2008. Thermoregulatory brood transport](https://penicklab.com/wp-content/uploads/2019/09/2008-Penick-Insectes-Sociaux-brood-thermo.pdf) — workers moved brood toward warm mound sections and deeper when the shallow area became hotter than preferred.

@@ -1,12 +1,12 @@
 import {beginTraffic,settleAdults,canOccupy,terrainFree,nearestStance,nearbyStances,routeAroundItems,idlePlace,spaceForItem,broodRadius,unjam,reindexAdult,nearbyAdults} from './traffic.mjs';
-import {initGroundwater,tableLevel,flooded,tickGroundwater,groundwaterJSON} from './hydrology.mjs';
+import {initGroundwater,tableLevel,flooded,tickGroundwater,groundwaterJSON,exposedSeep,drainClosedSeeps,floodedCells} from './hydrology.mjs';
 import {initializeSupplies,setReserve,updateSupplyTotals,cropCapacity as socialCapacity,waterCapacity,foodFill,consumeSelf,fillFromCargo,takeQueenMeal,takeCache,nearestCache,cacheSlotFor,storeCargo,consumeNutrient,bedPosition,bedAvailable,bedOccupy,bedRelease,freeBedCount,initCrop,accountIntake,accountDeath,rebuildReservations,feedBroodCargo} from './provisions.mjs';
 import {findBed,holdCell,releaseCell,freeCell,releaseSlot,initItemSpace,restorePieces} from './item-space.mjs';
 import {DAY,BROOD_DURATION,LIMIT,DEFAULT_SETTINGS,Random,clamp,settingsFrom,createAnt,normalizeAnt,adultDays,broodStage} from './biology.mjs';
-import {MATERIALS,materialAt,conditionsAt,digDuration,hashCell} from './materials.mjs';
-import {terrainHeight,initHabitat,ensureHabitat,tickHabitat,harvest,restoreHabitat} from './ecology.mjs';
+import {MATERIALS,materialAt,conditionsAt,soilTemperature,digDuration,hashCell} from './materials.mjs';
+import {terrainHeight,initHabitat,ensureHabitat,tickHabitat,harvest,restoreHabitat,setWeatherControls} from './ecology.mjs';
 import {NUTRITION,addStock,removeStock,resourcePiecesNear} from './resources.mjs';
-import {SPECIES,initializeBrain,lifespanFor,colonyOdor,contact,cropCapacity,developmentalRate,observeNeeds,taskScores,reinforceWork,relayLarvalCue,layingDrive,rememberTask} from './fire-ant.mjs';
+import {SPECIES,initializeBrain,lifespanFor,colonyOdor,contact,cropCapacity,developmentalRate,foragingTemperature,observeNeeds,taskScores,reinforceWork,relayLarvalCue,layingDrive,rememberTask} from './fire-ant.mjs';
 import {founderNest,closedFounderNest,planFirstExit,planPeripheralExit,planMoundPassage,planMoistureShaft} from './architecture.mjs';
 import {moveAnt,updateMotion,wrapAngle,recoverBody} from './locomotion.mjs';
 import {chamberCells,curvedPassage,densityAt} from './geometry.mjs';
@@ -28,13 +28,13 @@ export const taskLabels={queen:'Preparing eggs',queenRest:'Resting between eggs'
 export function reason(a){return a.decision || 'Responding to local conditions and colony needs.';}
 
 export class World{
-  constructor(seed=287,sealed=false){
-    this.seed=seed;this.geometryVersion=2;this.terrainVersion=1;this.terrainCache=new Map();this.climateCache=new Map();this.climateEpoch=null;this.excavated=new Set();this.deposits=new Set();this.heights=new Map();this.spoilOrigins=new Map();
+  constructor(seed=287,sealed=false,settings=DEFAULT_SETTINGS){
+    this.seed=seed;this.surfaceTemp=settings.surfaceTemp;this.surfaceWater=settings.surfaceWater;this.rainMode='auto';this.geometryVersion=2;this.terrainVersion=1;this.terrainCache=new Map();this.climateCache=new Map();this.climateEpoch=null;this.excavated=new Set();this.deposits=new Set();this.heights=new Map();this.spoilOrigins=new Map();
     this.construction=[];this.plannedRooms=0;this.revision=0;this.chunkRevisions=new Map();this.soilExcavated=0;this.soilDeposited=0;this.soilAbandoned=0;
     this.pheromones=new Map();this.trails={food:new Map(),water:new Map()};this.nest=[0,11];this.pathCache=new Map();this.neighborCache=new Map();
     this.runtime={pathCalls:0,pathMs:0,recoveries:0};this.frontierVersion=-1;this.frontierCache=[];
     if(sealed)closedFounderNest(this);else founderNest(this);initSignals(this);
-    initHabitat(this);initGroundwater(this);initItemSpace(this);restorePieces(this);this.rebuildNavigation();
+    initHabitat(this);setWeatherControls(this,settings,0);initGroundwater(this,settings.waterTableDepth);initItemSpace(this);restorePieces(this);this.rebuildNavigation();
   }
   carve(center,rx,ry){for(const c of chamberCells(center,rx,ry,this.seed))this.excavated.add(key(c));this.excavated.add(key(center));this.itemCellsRevision=-1;if(this.navigation)this.changed(center);}
   rebuildNavigation(){const bounds={minX:-12,maxX:12,maxY:15};for(const cells of [this.excavated,this.moundTunnels])for(const id of cells){const [x,y]=cell(id);bounds.minX=Math.min(bounds.minX,x);bounds.maxX=Math.max(bounds.maxX,x);bounds.maxY=Math.max(bounds.maxY,y);}this.navigation=bounds;}
@@ -151,12 +151,14 @@ export class World{
     for(const p of this.patches)if(p.cell[0]===c[0]){p.cell[1]=c[1]-1;if(p.kind==='food'){removeStock(this,p,p.amount,'buried');if(p.origin==='grass'){p.stage='dead';p.growth=0;}}if(p.origin==='puddle')removeStock(this,p,p.amount,'buried');}return true;
   }
   place(kind,x,quantity=null){
+    if(kind==='water'&&!this.surfaceWater)return false;
     x=Math.max(-2000,Math.min(2000,Math.round(x)))||0;
     if(kind==='food'){const candidates=[0,1,-1,2,-2,3,-3,4,-4,5,-5,6,-6,7,-7,8,-8].map(offset=>x+offset),land=candidates.find(px=>this.surface(px)===this.baseSurface(px)&&this.solid([px,this.baseSurface(px)]));if(land==null)return;x=land;}
     const make=(origin,amount,px)=>{
       const p={id:this.nextPatchID++,kind,origin,cell:[px,this.surface(px)-1],amount:0,capacity:amount,renewable:false,regrowAt:1e12,decayAt:this.environmentAt+DAY*5,nutrition:NUTRITION[origin]??null};this.patches.push(p);addStock(this,p,amount);
     };
     if(kind==='food')make('grain',quantity??24,x);else make('placed',quantity??40,x);
+    return true;
   }
 
   repairMound(){
@@ -173,7 +175,7 @@ export class World{
     for(const origin of soil){const site=this.depositSite();if(!site)throw Error('Unable to settle saved mound');this.deposit(site,origin);}
     this.repairedMound=true;return true;
   }
-  toJSON(){return {seed:this.seed,groundwater:groundwaterJSON(this),waterDig:this.waterDig,geometryVersion:this.geometryVersion,entrances:this.entrances,founding:this.founding,moundTunnels:[...this.moundTunnels],soilRehandled:this.soilRehandled,lastAccessPlan:this.lastAccessPlan,lastMoundPlan:this.lastMoundPlan,resourceLedger:this.resourceLedger,moistureSources:this.moistureSources,signals:signalsJSON(this),terrainVersion:this.terrainVersion,habitatRegions:[...this.habitatRegions],weather:this.weather,ecologyRng:{state:this.ecologyRng.state},environmentAt:this.environmentAt,nextPatchID:this.nextPatchID,excavated:[...this.excavated],deposits:[...this.deposits],spoilOrigins:[...this.spoilOrigins],construction:this.construction,rooms:this.rooms,plannedRooms:this.plannedRooms,
+  toJSON(){return {seed:this.seed,groundwater:groundwaterJSON(this),waterDig:this.waterDig,geometryVersion:this.geometryVersion,entrances:this.entrances,founding:this.founding,moundTunnels:[...this.moundTunnels],soilRehandled:this.soilRehandled,lastAccessPlan:this.lastAccessPlan,lastMoundPlan:this.lastMoundPlan,resourceLedger:this.resourceLedger,moistureSources:this.moistureSources,signals:signalsJSON(this),terrainVersion:this.terrainVersion,surfaceTemp:this.surfaceTemp,surfaceWater:this.surfaceWater,rainMode:this.rainMode,habitatRegions:[...this.habitatRegions],weather:this.weather,ecologyRng:{state:this.ecologyRng.state},environmentAt:this.environmentAt,nextPatchID:this.nextPatchID,excavated:[...this.excavated],deposits:[...this.deposits],spoilOrigins:[...this.spoilOrigins],construction:this.construction,rooms:this.rooms,plannedRooms:this.plannedRooms,
     revision:this.revision,chunkRevisions:[...this.chunkRevisions],soilExcavated:this.soilExcavated,soilDeposited:this.soilDeposited,soilAbandoned:this.soilAbandoned,
     pheromones:[...this.pheromones],trails:{food:[...this.trails.food],water:[...this.trails.water]},patches:this.patches};}
   static fromJSON(d,legacy=false){
@@ -183,13 +185,14 @@ export class World{
     w.trails={food:new Map(d.trails?.food??d.pheromones??[]),water:new Map(d.trails?.water??[])};
     w.heights=new Map();for(const id of w.deposits){const [x,y]=cell(id);if(y<w.baseSurface(x))w.heights.set(x,Math.min(w.heights.get(x)??Infinity,y));if(!w.spoilOrigins.has(id))w.spoilOrigins.set(id,'mixed');}
     if(legacy){w.construction=[];w.rooms=[{kind:'queen',center:[0,11],rx:6,ry:3},{kind:'nursery',center:[-10,10],rx:4,ry:2},{kind:'storage',center:[10,10],rx:4,ry:2}];}
-    w.geometryVersion=d.geometryVersion??1;w.pathCache=new Map();w.neighborCache=new Map();w.runtime={pathCalls:0,pathMs:0,recoveries:0};w.frontierVersion=-1;w.frontierCache=[];restoreHabitat(w,d);initGroundwater(w,56,d.groundwater);initSignals(w,d);w.rebuildNavigation();w.repairMound();return w;
+    w.geometryVersion=d.geometryVersion??1;w.pathCache=new Map();w.neighborCache=new Map();w.runtime={pathCalls:0,pathMs:0,recoveries:0};w.frontierVersion=-1;w.frontierCache=[];restoreHabitat(w,d);initGroundwater(w,56,d.groundwater);initSignals(w,d);w.rebuildNavigation();w.repairMound();w.groundwaterWet=floodedCells(w);drainClosedSeeps(w);return w;
   }
 }
 
 export class Colony{
-  constructor(seed=287,settings={},world=new World(seed,true)){
-    this.modelVersion=4;this.species=SPECIES.scientific;this.socialForm='monogyne';this.socialTransfers=0;this.recognitions=0;this.alarmEvents=0;this.settings=settingsFrom(settings);this.world=world;
+  constructor(seed=287,settings={},world=null){
+    this.modelVersion=4;this.species=SPECIES.scientific;this.socialForm='monogyne';this.socialTransfers=0;this.recognitions=0;this.alarmEvents=0;this.settings=settingsFrom(settings);this.world=world??=new World(seed,true,this.settings);
+    setWeatherControls(world,this.settings,0);
     if(!world.founding){world.carve(world.nest,3,2);world.carve([-4,12],2,2);world.rooms[0].rx=3;world.rooms[0].ry=2;world.rooms[1].ry=2;}
     this.rng=new Random(seed);this.time=0;
     const n=Math.min(this.settings.startingWorkers,this.settings.populationCap-1);
@@ -221,7 +224,13 @@ export class Colony{
     const scores=new Map();for(const r of rooms){let count=0;for(const b of this.brood)if(distance(b.cell,r.center)<4)count++;scores.set(r,Math.abs(this.world.conditions(r.center).humidity-.62)+count*.012);}
     rooms.sort((a,b)=>scores.get(a)-scores.get(b));return rooms[0]?.center??(this.world.founding?this.world.nest:[-5,10]);
   }
-  setSettings(changes){this.settings=settingsFrom({...this.settings,...changes});this.world.groundwater.targetDepth=this.settings.waterTableDepth;}
+  setSettings(changes){
+    const prior=this.settings;
+    this.settings=settingsFrom({...prior,...changes});this.world.groundwater.targetDepth=this.settings.waterTableDepth;
+    setWeatherControls(this.world,this.settings,this.time);
+    if(prior.surfaceTemp!==this.settings.surfaceTemp)for(const a of this.ants)a.senseAt=0;
+    if(prior.surfaceWater!==this.settings.surfaceWater)this.updateDemand();
+  }
   record(text){this.events.unshift({time:this.time,text});this.events=this.events.slice(0,6);}
   updateDemand(){
     const broodIDs=new Set(this.brood.map(b=>b.id));
@@ -230,7 +239,10 @@ export class Colony{
     rebuildReservations(this);updateSupplyTotals(this);const count=this.ants.length,nurses=this.ants.filter(a=>a.task==='nursing').length,diggers=this.ants.filter(a=>['toDig','digging','haulingSoil'].includes(a.task)).length;
     const larvae=this.brood.filter(b=>broodStage(b)==='larva'),hungry=larvae.filter(b=>b.nutrition<.4).length,untended=this.brood.filter(b=>this.time-b.lastCare>20).length;
     const foodTarget=count*.65+4,proteinTarget=larvae.length*.75+count*.10+2,waterTarget=count*.4+this.brood.length*.08,desiredSpace=35+count*2.2+this.brood.length*1.4+this.foodItems.length/5;this.freeBeds=freeBedCount(this);
-    const surfaceWater=this.world.patches.filter(p=>p.kind==='water'&&p.origin!=='seep').reduce((n,p)=>n+p.amount,0),dryTime=this.time-(this.world.weather.lastRainAt??0);this.waterPressure=!this.world.weather.raining&&dryTime>DAY*.8&&surfaceWater<8&&!this.world.patches.some(p=>p.origin==='seep'&&p.amount>.05)?.55:0;
+    const surfaceWater=this.world.patches.filter(p=>p.kind==='water'&&p.origin!=='seep').reduce((n,p)=>n+p.amount,0),dryTime=this.time-(this.world.weather.lastRainAt??0);
+    const noSeep=!this.world.patches.some(p=>p.origin==='seep'&&(p.amount>.02||(this.world.groundwater.columns.get(p.cell[0])?.water??0)>.02)&&exposedSeep(this.world,p));
+    const prolongedDry=!this.world.weather.raining&&dryTime>DAY*.8&&surfaceWater<8;
+    this.waterPressure=noSeep?(!this.world.surfaceWater ? .9:prolongedDry ? .55:0):0;
     const energyNeed=clamp((foodTarget-this.food)/foodTarget),proteinNeed=clamp((proteinTarget-this.protein)/proteinTarget);
     this.demand={forage:.05+Math.max(energyNeed,proteinNeed*1.25),protein:proteinNeed,energy:energyNeed,
       water:.03+clamp((waterTarget-this.water)/waterTarget),care:this.brood.length?(.05+hungry/Math.max(1,larvae.length)*.9+untended/this.brood.length*.9)/(1+nurses*.18):0,
@@ -348,8 +360,8 @@ export class Colony{
     const brain=a.brain;
     if(this.time<(a.senseAt??0))return;const elapsed=this.time-(a.sensedAt??this.time);a.sensedAt=this.time;a.senseAt=this.time+1;
     brain.arousal=Math.max(0,brain.arousal-elapsed*.08);
-    brain.senses={food:senseSignal(this.world,'food',a.cell),water:senseSignal(this.world,'water',a.cell),alarm:senseSignal(this.world,'alarm',a.cell),brood:senseSignal(this.world,'brood',a.cell),queen:senseSignal(this.world,'queen',a.cell),construction:this.world.frontier().some(c=>distance(c,a.cell)<3)?1:0};
-    for(const p of this.world.patches)if(p.origin==='seep'&&p.amount>.001&&distance(a.pos,p.cell)<3.2)this.learn(a,p.cell,'water');
+    brain.senses={temperature:soilTemperature(this.world,a.cell),food:senseSignal(this.world,'food',a.cell),water:senseSignal(this.world,'water',a.cell),alarm:senseSignal(this.world,'alarm',a.cell),brood:senseSignal(this.world,'brood',a.cell),queen:senseSignal(this.world,'queen',a.cell),construction:this.world.frontier().some(c=>distance(c,a.cell)<3)?1:0};
+    for(const p of this.world.patches)if(p.origin==='seep'&&p.amount>.001&&distance(a.pos,p.cell)<3.2&&exposedSeep(this.world,p))this.learn(a,p.cell,'water');
     const known=new Set(a.knownBrood);for(const baby of this.nearbyBrood(a.cell))if(baby.carriedBy==null&&!known.has(baby.id)){known.add(baby.id);a.knownBrood.push(baby.id);}
     const ids=this.broodIDs??new Set(this.brood.map(b=>b.id));a.knownBrood=a.knownBrood.filter(id=>ids.has(id)).slice(-96);
   }
@@ -395,6 +407,9 @@ export class Colony{
           a.task='refueling';a.route=[];a.busyUntil=this.time;this.send(a,this.world.nest);a.decision='Temporarily returning for nutrition while retaining the current load.';
         }
       }
+    }
+    if(['toFood','toWater','harvesting','exploring'].includes(a.task)&&this.world.onSurface(a.cell)&&foragingTemperature(this.world.surfaceTemp)===0){
+      a.route=[];this.explore(a);return;
     }
     if(a.task==='investigating'&&this.time>=a.guardUntil){a.brain.arousal=0;a.route=[];this.chooseJob(a);return;}
     if(a.motion.yieldingRoute&&((a.motion.trafficBlocked??0)>2||this.time>=(a.motion.yieldDeadline??Infinity))){const goal=a.motion.resumeGoal;a.motion.yieldingRoute=false;a.route=[];a.motion.resumeGoal=null;a.motion.yieldTarget=null;if(goal)this.resumeAfterYield(a,goal);else this.chooseJob(a);return;}
@@ -559,6 +574,7 @@ export class Colony{
     for(const source of resourcePiecesNear(this.world,kind,a.pos,PICKUP_REACH)){
       const {patch,piece}=source;
       if((!outside&&patch.origin!=='seep')||patch.amount<=.001||piece.amount<=1e-9)continue;
+      if(patch.origin==='seep'&&!exposedSeep(this.world,patch)||kind==='water'&&patch.origin!=='seep'&&!this.world.surfaceWater)continue;
       const d=distance(piece.pos,a.pos);
       if(d>PICKUP_REACH||d>bestDistance||d===bestDistance&&source.order>=best.order)continue;
       if(this.canReach(a,piece.pos,PICKUP_REACH)){best=source;bestDistance=d;}
@@ -617,6 +633,15 @@ export class Colony{
       if(this.world.founding.tip&&distance(a.pos,this.world.founding.tip)<1.7){const waiting=idlePlace(this.world,a);if(waiting)this.send(a,waiting);}
       return;
     }
+    const needsGroundwater=!this.world.surfaceWater&&this.waterPressure>.3;
+    if(needsGroundwater&&!a.carried&&!a.carryingBrood&&!this.world.onSurface(a.cell)){
+      this.proposeConstruction(a,this.needsFor(a));
+      const shaft=this.world.waterDig?.cells??[];
+      if(shaft.some(c=>this.world.solid(c)&&!this.reserved.has(key(c)))&&this.assignDig(a,shaft)){
+        a.decision='Following moisture at the working face to open a groundwater shaft.';
+        rememberTask(a,'dig',this.time);return;
+      }
+    }
     if((a.energy<.28&&foodFill(a)<.01)||(a.hydration<.25&&a.socialWater<.01)){
       if(a.energy<.28&&foodFill(a)<.01&&this.assignCache(a,'self'))return;a.foragingKind=a.hydration<.25&&a.socialWater<.01?'water':'food';a.task='exploring';if(!this.discover(a))this.explore(a);return;
     }
@@ -644,6 +669,9 @@ export class Colony{
     }
     const scores=taskScores(a,n,local,this.time,!!a.knownBrood.length||n.care>0);
     if(!canDig)scores.find(s=>s[0]==='dig')[1]=0;
+    const surfaceActivity=foragingTemperature(this.world.surfaceTemp);
+    scores.find(s=>s[0]==='forage')[1]*=surfaceActivity;
+    if(this.world.surfaceWater)scores.find(s=>s[0]==='water')[1]*=Math.max(surfaceActivity,this.waterPressure??0);
     for(const score of scores)score[1]*=.65+this.rng.float()*.7;
     scores.sort((x,y)=>y[1]-x[1]);
     if(scores[0][1]<.26&&this.rng.float()>.08+a.traits.exploration*.06&&!(a.brain.recruitUntil>this.time&&(n.forage>.15||n.water>.15))){
@@ -671,8 +699,8 @@ export class Colony{
   proposeConstruction(a,needs){
     const w=this.world;if(this.time<(this.proposalAt??0)||a.caste==='queen'||w.founding&&!w.entrances.length)return;
     const prolongedDry=this.time-(w.weather.lastRainAt??0)>DAY*.65&&!w.weather.raining;
-    const drought=(this.waterPressure??0)>.3||prolongedDry&&needs.water>.65;
-    if(drought&&planMoistureShaft(w,this.rng,this.time)){this.record(antName(a)+' initiated a short downward moisture probe.');this.proposalAt=this.time+5;return;}
+    const drought=(this.waterPressure??0)>.3||w.surfaceWater&&prolongedDry&&needs.water>.65;
+    if(drought&&planMoistureShaft(w,this.time)){this.record(antName(a)+' initiated a short downward moisture probe.');this.proposalAt=this.time+5;return;}
     if(w.construction.length)return;
     this.proposalAt=this.time+3;
     let proposed=false,cause='';
@@ -692,8 +720,8 @@ export class Colony{
     const gradient=this.world.neighbors(a.cell).filter(c=>!this.world.onSurface(c)).sort((x,y)=>senseSignal(this.world,'brood',y)-senseSignal(this.world,'brood',x));
     if(gradient[0]&&senseSignal(this.world,'brood',gradient[0])>.04){a.task='nursing';a.broodID=null;this.send(a,gradient[0]);return true;}return false;
   }
-  assignDig(a){
-    const sites=this.world.frontier().filter(c=>!this.reserved.has(key(c))).sort((x,y)=>distance(x,a.cell)-distance(y,a.cell));
+  assignDig(a,restrictTo=null){
+    const sites=this.world.frontier().filter(c=>!this.reserved.has(key(c))&&(!restrictTo||restrictTo.some(target=>same(c,target)))).sort((x,y)=>distance(x,a.cell)-distance(y,a.cell));
     for(const site of sites.slice(0,8))for(const neighbor of nearbyStances(this.world,a,site,1.2).slice(0,8)){
       const route=routeAroundItems(this.world,a,neighbor);if(route){a.task='toDig';a.route=route;a.destination=[...neighbor];a.target=[...site];a.lastJob='dig';this.reserved.add(key(site));return true;}
     }return false;
@@ -705,11 +733,12 @@ export class Colony{
     let target=null,bestDistance=4.5;
     for(const p of this.world.patches){
       if(p.kind!==kind||p.amount<=.001||!outside&&p.origin!=='seep')continue;
+      if(kind==='water'&&!this.world.surfaceWater&&p.origin!=='seep')continue;
       const d=distance(p.cell,a.cell);
-      if(d<bestDistance||d===bestDistance&&(!target||p.id<target.id)){target=p;bestDistance=d;}
+      if((d<bestDistance||d===bestDistance&&(!target||p.id<target.id))&&(p.origin!=='seep'||exposedSeep(this.world,p))){target=p;bestDistance=d;}
     }
     if(target){a.sourceID=target.id;this.learn(a,target.cell,target.kind);}
-    else{
+    else if(kind!=='water'||this.world.surfaceWater){
       const memories=a.memories.filter(m=>m.kind===kind&&m.confidence>.2&&(m.avoidUntil??0)<=this.time&&this.time-m.lastSeen<DAY*6).sort((x,y)=>y.confidence-x.confidence);
       if(memories[0])target={cell:memories[0].cell,kind};
     }
@@ -730,7 +759,22 @@ export class Colony{
     if(a.searchUntil&&this.time>=a.searchUntil){
       delete a.searchUntil;reinforceWork(a,a.foragingKind==='water'?'water':'forage',this.time,-.17);this.chooseJob(a);return;
     }
-    if((a.foragingKind==='water')&&(this.waterPressure??0)>.3&&!this.world.inForagingZone(a.cell)){
+    const w=this.world,water=a.foragingKind==='water';
+    if(water&&!w.surfaceWater){
+      if(this.discover(a))return;
+      const seep=w.patches.find(p=>p.origin==='seep'&&p.amount>.001&&exposedSeep(w,p));
+      if(seep&&this.send(a,seep.cell)){a.task='toWater';return;}
+      a.task='reserve';a.busyUntil=this.time+3;
+      if(w.onSurface(a.cell))this.send(a,w.nest);
+      return;
+    }
+    if(foragingTemperature(w.surfaceTemp)===0&&!(water&&!w.onSurface(a.cell)&&(this.waterPressure??0)>.3)){
+      a.task='resting';a.busyUntil=this.time+6;
+      if(w.onSurface(a.cell))this.send(a,w.nest);
+      a.decision='Waiting under cover because the surface temperature is outside the foraging range.';
+      return;
+    }
+    if(water&&(this.waterPressure??0)>.3&&!this.world.inForagingZone(a.cell)){
       if(this.discover(a))return;const choices=this.world.neighbors(a.cell).filter(c=>!this.world.onSurface(c)).map(c=>({c,weight:(c[1]>a.cell[1]?1.8:.7)*Math.exp((this.world.conditions(c).humidity-this.world.conditions(a.cell).humidity)*8)*Math.pow(.22,a.recent.filter(k=>k===key(c)).length)}));
       if(choices.length){let pick=this.rng.float()*choices.reduce((s,p)=>s+p.weight,0),chosen=choices[0].c;for(const p of choices){pick-=p.weight;if(pick<=0){chosen=p.c;break;}}a.recent.push(key(a.cell));a.recent=a.recent.slice(-20);this.send(a,chosen);a.decision='Searching accessible lower passages for local moisture while surface pools are scarce.';return;}
     }
@@ -770,7 +814,7 @@ export class Colony{
     const queen=this.ants.find(a=>a.caste==='queen');
     return queen&&this.settings.eggRate>0?DAY/((10+22*layingDrive(queen,this.time))*this.settings.eggRate):Infinity;
   }
-  canLay(){const q=this.ants.find(a=>a.caste==='queen');return !!q&&(q.socialFood+Math.max(0,q.socialProtein-.06)*.7)>.2&&q.socialWater>.08&&q.socialProtein>.06&&this.brood.length<Math.max(8,Math.min(Math.ceil(this.settings.populationCap*.9),(this.ants.length-1)*3));}
+  canLay(){const q=this.ants.find(a=>a.caste==='queen');return !!q&&foragingTemperature(soilTemperature(this.world,q.cell))>.35&&(q.socialFood+Math.max(0,q.socialProtein-.06)*.7)>.2&&q.socialWater>.08&&q.socialProtein>.06&&this.brood.length<Math.max(8,Math.min(Math.ceil(this.settings.populationCap*.9),(this.ants.length-1)*3));}
   layEgg(queen){
     if(!this.canLay()||!this.settings.eggRate)return false;
     const bed=findBed(this.world,queen.cell);if(!bed||distance(bed,queen.cell)>1.6||!spaceForItem(this.world,bed,.17,null,'brood'))return false;
@@ -802,7 +846,7 @@ export class Colony{
         if(choice&&this.send(a,choice)){a.task='queenMoving';a.lastProgressAt=this.time;a.decision='Walking within sheltered chambers, favoring suitable moisture and less crowding.';return;}
       }
     }
-    a.task='queenRest';a.decision=alarm>=.42?'Pausing egg laying while alarm cues reach the chamber.':this.canLay()?`Resting between eggs. Current laying target: ${(DAY/this.eggInterval).toFixed(1)} eggs per colony day.`:'Conserving resources; egg production waits for food, water, and available brood capacity.';
+    a.task='queenRest';a.decision=alarm>=.42?'Pausing egg laying while alarm cues reach the chamber.':this.canLay()?`Resting between eggs. Current laying target: ${(DAY/this.eggInterval).toFixed(1)} eggs per colony day.`:'Conserving resources; egg production waits for suitable temperature, food, water, and brood capacity.';
   }
   assignQueenCare(a){
     if((a.brain?.senses?.alarm??0)>.2&&(a.brain?.arousal??0)>.6)return false;
@@ -821,11 +865,25 @@ export class Colony{
     a.busyUntil=this.time+.5;a.decision='Waiting for the queen to take a meal collected on a foraging trip.';
   }
   broodComfort(b,c){const env=this.world.conditions(c),stage=typeof b==='string'?b:broodStage(b),idealHumidity=stage==='pupa'?.55:.65,idealTemperature=stage==='egg'?28:stage==='larva'?27.5:29;return Math.abs(env.humidity-idealHumidity)*2+Math.abs(env.temperature-idealTemperature)*.1;}
-  broodSite(b){return bedAvailable(this,b,this.nursery);}
+  broodSite(b){
+    const initial=bedAvailable(this,b,this.nursery),temp=this.world.conditions(b.cell).temperature;
+    if(temp>=24&&temp<=34)return initial;
+    const w=this.world;
+    const anchors=[...w.neighbors(b.cell),...w.rooms.map(r=>r.center)].filter(p=>!w.onSurface(p)&&w.walkable(p));
+    let best=initial,score=best?this.broodComfort(b,rounded(best)):Infinity;
+    for(const anchor of anchors){
+      const bed=bedAvailable(this,b,anchor);
+      if(!bed)continue;
+      const cell=rounded(bed),quality=this.broodComfort(b,cell)+distance(b.cell,cell)*.012;
+      if(quality<score&&w.path(b.cell,cell)){best=bed;score=quality;}
+    }
+    return best;
+  }
   assignBroodTransport(a){
     for(const b of this.careCandidates(a).filter(b=>b.carriedBy==null&&!this.broodClaims.has(b.id)).sort((x,y)=>Number(y.needsTransport)-Number(x.needsTransport)||distance(a.cell,x.cell)-distance(a.cell,y.cell))){
       if(!a.knownBrood.includes(b.id)&&distance(a.cell,b.cell)>3.1)continue;
-      if(!b.needsTransport&&this.time-(b.lastMoved??0)<DAY*.5)continue;
+      const temperature=this.world.conditions(b.cell).temperature,stress=temperature<24||temperature>34;
+      if(!b.needsTransport&&this.time-(b.lastMoved??0)<DAY*(stress?.12:.5))continue;
       const destination=this.broodSite(b);if(!destination)continue;const ideal=broodStage(b)==='pupa'?.55:.65;
       const improvement=this.broodComfort(b,b.cell)-this.broodComfort(b,destination);
       if(distance(bedPosition(b),destination)<1.5||(!b.needsTransport&&improvement<.10))continue;
@@ -851,7 +909,7 @@ export class Colony{
     a.decision='Placed brood in the nursery. Now grooming and tending it.';
   }
 
-  place(kind,x){if(!['food','water'].includes(kind))return;this.world.place(kind,x);this.record(kind==='food'?'Finite grain kernels placed. Ants must collect and carry them.':'A water source appeared on the surface.');}
+  place(kind,x){if(!['food','water'].includes(kind)||!this.world.place(kind,x))return false;this.record(kind==='food'?'Finite grain kernels placed. Ants must collect and carry them.':'A water source appeared on the surface.');return true;}
   toJSON(){
     const {occupancy,reserved,broodClaims,careClaims,broodIDs,broodSource,broodByID,localBrood,indexedBrood,...data}=this;return {...data,food:this.food,protein:this.protein,water:this.water,world:this.world.toJSON(),rng:{state:this.rng.state}};
   }
@@ -859,7 +917,7 @@ export class Colony{
     if(!d||!Number.isFinite(d.time)||d.time<0||!Number.isFinite(d.food)||!Number.isFinite(d.water)||!Array.isArray(d.ants)||d.ants.length>LIMIT)throw Error('Invalid colony save');
     if(new Set(d.ants.map(a=>a.id)).size!==d.ants.length||d.ants.some(a=>!Array.isArray(a.pos)||a.pos.some(n=>!Number.isFinite(n))))throw Error('Invalid ant data');
     const legacy=![2,3,4].includes(d.modelVersion),preV3=![3,4].includes(d.modelVersion),preV4=d.modelVersion!==4,c=new Colony(d.world.seed,d.settings);const {food,protein,water,...saved}=d;Object.assign(c,saved);
-    c.settings=settingsFrom(d.settings);c.world=World.fromJSON(d.world,legacy);c.rng=new Random(d.rng.state);c.modelVersion=4;c.species=SPECIES.scientific;
+    c.settings=settingsFrom(d.settings);c.world=World.fromJSON(d.world,legacy);setWeatherControls(c.world,c.settings,c.time);c.rng=new Random(d.rng.state);c.modelVersion=4;c.species=SPECIES.scientific;
     c.ants=d.ants.map(a=>{const ant=normalizeAnt(a,c.world.seed),life=ant.traits.lifeDays*(ant.caste==='queen'?35:ant.caste==='major'?1.4:1);initializeBrain(ant,c.world.seed);if(preV4)ant.traits.lifeDays=Math.max(life,adultDays(ant)+10);return ant;});
     c.brood=d.brood.map(b=>({...b,age:migrateBroodAge(b.age,d.modelVersion),carriedBy:b.carriedBy??null,needsTransport:b.needsTransport??false,nutrition:b.nutrition??1,vitality:b.vitality??1,lastCare:b.lastCare??c.time}));
     c.eggsLaid=d.eggsLaid??0;c.broodLost=d.broodLost??0;c.recruitments=d.recruitments??0;c.occupancy=new Map();c.reserved=new Set();c.broodClaims=new Set();c.careClaims=new Map();c.broodMoved=d.broodMoved??0;

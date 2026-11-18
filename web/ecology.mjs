@@ -13,7 +13,7 @@ export function initHabitat(w){
   w.weather={raining:false,until:0,nextRain:120+w.ecologyRng.int(0,180),intensity:0,storms:0,wetness:.35};
   w.patches=[];w.nextPatchID=0;initLedger(w);
   for(let x=-96;x<=96;x+=32)ensureHabitat(w,x);
-  if(!w.patches.some(p=>p.kind==='water')){const pool=basins(w).sort((a,b)=>Math.abs(a.x)-Math.abs(b.x))[0];if(pool)addPuddle(w,pool,12);}
+  if(w.surfaceWater!==false&&!w.patches.some(p=>p.kind==='water')){const pool=basins(w).sort((a,b)=>Math.abs(a.x)-Math.abs(b.x))[0];if(pool)addPuddle(w,pool,12);}
   snapshotMoisture(w);
 }
 export function ensureHabitat(w,x){
@@ -37,7 +37,7 @@ export function basins(w,min=-96,max=127){
   }return result;
 }
 export function addPuddle(w,basin,amount){
-  if(w.entrances?.some(e=>Math.abs(e.mouth[0]-basin.x)<2))return;
+  if(w.surfaceWater===false||w.entrances?.some(e=>Math.abs(e.mouth[0]-basin.x)<2))return;
   let p=w.patches.find(p=>p.kind==='water'&&p.origin==='puddle'&&Math.abs(p.cell[0]-basin.x)<3);
   if(!p){p={id:w.nextPatchID++,kind:'water',origin:'puddle',cell:[basin.x,w.surface(basin.x)-1],amount:0,left:basin.left,right:basin.right,capacity:18*Math.max(1,basin.right-basin.left+1)};w.patches.push(p);}
   addStock(w,p,amount);p.left=basin.left;p.right=basin.right;return p;
@@ -51,12 +51,36 @@ export function harvest(w,p,amount,time,pieceID){
   }
   return taken;
 }
+export function setWeatherControls(w,settings,time){
+  w.surfaceTemp=settings.surfaceTemp;w.climateRevision=-1;
+  if(w.surfaceWater!==settings.surfaceWater){
+    w.surfaceWater=settings.surfaceWater;
+    if(!w.surfaceWater){
+      for(const p of w.patches)if(p.kind==='water'&&p.origin!=='seep')removeStock(w,p,p.amount,'drained');
+      w.patches=w.patches.filter(p=>p.kind!=='water'||p.origin==='seep');
+      snapshotMoisture(w);
+    }
+  }
+  if(w.rainMode===settings.rainMode)return;
+  w.rainMode=settings.rainMode;
+  const weather=w.weather;
+  if(w.rainMode==='on'){
+    weather.raining=true;weather.intensity=.8;weather.lastRainAt=time;
+  }else if(w.rainMode==='off'){
+    if(weather.raining)weather.lastRainAt=time;
+    weather.raining=false;weather.intensity=0;
+  }else if(weather.raining){
+    weather.until=Math.max(weather.until,time+60);
+  }else{
+    weather.nextRain=Math.max(weather.nextRain,time+30);
+  }
+}
 export function tickHabitat(w,time){
   const elapsed=time-w.environmentAt;if(elapsed<2)return;w.environmentAt=time;
   const weather=w.weather;if(weather.raining)weather.lastRainAt=time;
   if(w.spaceReady&&w.resourceGeometryRevision!==w.revision){w.resourceGeometryRevision=w.revision;for(const p of w.patches)for(const i of [...(p.pieces??[])])if(densityAt(...i.pos,(x,y)=>w.solid([x,y]))>=.49){p.activePieceID=i.id;removeStock(w,p,i.amount,'buried');delete p.activePieceID;}}
-  if(!weather.raining&&time>=weather.nextRain){weather.raining=true;weather.intensity=.5+w.ecologyRng.float()*.5;weather.until=time+70+w.ecologyRng.int(0,110);weather.storms++;}
-  if(weather.raining&&time>=weather.until){weather.raining=false;weather.intensity=0;weather.nextRain=time+DAY*(2+w.ecologyRng.float()*4);}
+  if((w.rainMode??'auto')==='auto'&&!weather.raining&&time>=weather.nextRain){weather.raining=true;weather.intensity=.5+w.ecologyRng.float()*.5;weather.until=time+70+w.ecologyRng.int(0,110);weather.storms++;}
+  if((w.rainMode??'auto')==='auto'&&weather.raining&&time>=weather.until){weather.raining=false;weather.intensity=0;weather.nextRain=time+DAY*(2+w.ecologyRng.float()*4);}
   weather.wetness=clamp(weather.wetness+(weather.raining?.003:-.00022)*elapsed,.08,.9);
   for(const p of w.patches){
     if(p.origin==='seep')continue;const y=w.surface(p.cell[0])-1;if(p.cell[1]!==y){p.cell[1]=y;}

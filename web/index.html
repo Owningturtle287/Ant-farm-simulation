@@ -94,7 +94,7 @@
 <dialog id="menu" class="panel menu-dialog" aria-labelledby="menu-title">
   <div class="dialog-heading"><h2 id="menu-title">A little care</h2><button data-close="menu" class="icon-button" aria-label="Close menu"><svg><use href="#i-close"/></svg></button></div>
   <div class="menu-actions"><button id="species-button" class="secondary">Fire ant behavior</button><button id="disturb-button" class="secondary">Disturb the ground</button><button id="settings-button" class="secondary">Colony &amp; reproduction</button><button id="performance-button" class="secondary">Show performance</button><button id="materials-button" class="secondary">Terrain guide</button><button id="save-now" class="secondary">Save colony now</button><button id="install-button" class="secondary">Save to my Home Screen</button><button id="help" class="secondary">How to play</button><button id="export" class="secondary">Export colony backup</button><button id="reset" class="danger">Start a new colony</button></div>
-  <p id="offline-state" class="offline-state muted" role="status">Preparing offline play…</p><p class="muted small">Life in the colony · v0.15<br>Solenopsis invicta · single-queen fire ants. Workers forage, build, provision the queen, and respond to local alarms. Growth follows resources, brood care, and nest conditions. Use Colony &amp; reproduction to control growth.</p>
+  <p id="offline-state" class="offline-state muted" role="status">Preparing offline play…</p><p class="muted small">Weather and groundwater · v0.16<br>Solenopsis invicta · single-queen fire ants. Workers forage, build, provision the queen, and respond to local alarms. Growth follows resources, brood care, and nest conditions. Use Colony &amp; reproduction to control growth.</p>
 </dialog>
 <dialog id="settings" class="panel settings-dialog" aria-labelledby="settings-title">
   <div class="dialog-heading"><div><span class="eyebrow">GROW AT YOUR OWN PACE</span><h2 id="settings-title">Colony &amp; reproduction</h2></div><button data-close="settings" class="icon-button" aria-label="Close colony settings"><svg><use href="#i-close"/></svg></button></div>
@@ -103,11 +103,17 @@
     <label>Brood development rate<select id="brood-rate"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1">1× · normal</option><option value="2">2×</option><option value="4">4×</option><option value="8">8× · accelerated</option></select></label>
     <label>Starting workers · next new colony<select id="starting-workers"><option value="6">6 workers + queen</option><option value="12">12 workers + queen</option><option value="20">20 workers + queen</option><option value="30">30 workers + queen</option></select></label>
     <label>Population ceiling<select id="population-cap"></select></label>
+  </div>
+  <h3>Environment</h3>
+  <div class="settings-grid">
+    <label>Surface temperature (°C)<input id="surface-temp" type="number" min="8" max="46" step="1" inputmode="numeric"></label>
+    <label>Rain<select id="rain-mode"><option value="auto">Natural weather</option><option value="on">Continuous rain</option><option value="off">No rain</option></select></label>
+    <label>Surface water<select id="surface-water"><option value="on">Puddles and placed water</option><option value="off">Off · groundwater only</option></select></label>
     <label>Water-table depth<select id="water-depth"><option value="24">24 cells · shallow</option><option value="40">40 cells</option><option value="56">56 cells · default</option><option value="80">80 cells · deep</option><option value="120">120 cells · very deep</option><option value="160">160 cells</option><option value="240">240 cells · extreme</option></select></label>
   </div>
   <p class="muted small">Egg laying and development are separate. Existing brood can still emerge when laying is off. Seed nutrition, care, moisture, and temperature continue to affect development.</p>
   <p class="muted small settings-note">At normal development, the model spans about 30 colony days under warm, well-fed conditions. Each colony day is compressed into ten minutes at 1×. Use higher time speeds to observe longer periods.</p>
-  <p class="muted small">Water-table changes move gradually. Dry surface pools evaporate; workers can probe deeper for moisture. Food parcels and brood need their own space. Water remains in ants’ crops.</p>
+  <p class="muted small">Deeper soil is cooler than the surface. With surface water off, rain still recharges groundwater. Workers must dig a connected tunnel to the water table before they can drink.</p>
   <p id="cap-note" class="muted small">Changing the ceiling never removes existing ants. Higher ceilings are experimental; actual time-lapse speed depends on your phone.</p><button data-close="settings" class="primary full">Back to the colony</button>
 </dialog>
 <dialog id="materials" class="panel materials-dialog" aria-labelledby="materials-title">
@@ -121,7 +127,7 @@
   <p>Workers weigh nutritional signals, brood contact, antennal encounters, local chemical trails, age, size, and experience. Young workers tend toward brood care; older workers are more likely to forage. These are tendencies that can change with need.</p>
   <p>Nestmates recognize a familiar blend of contact odors. Returning foragers activate nearby recruits. Workers remember recent successes and leave depleted sources to look for other work. The queen responds to cues passed to her by workers that have tended older larvae.</p>
   <p>Food and water have separate crop bars. Workers fill their crops by collecting from a source or dry food cache. The queen can take a meal brought by an attendant. New colonies start with empty crops and caches. Grains stay separate in storage, and each brood item has its own bed.</p>
-  <p>During drought, workers can explore and excavate short downward moisture probes. Reaching an exposed water-table fringe creates finite, replenishing seepage. Fully saturated space is not a dry nursery. Adjust groundwater depth in Colony &amp; reproduction.</p>
+  <p>Workers dig moisture probes during drought or in groundwater-only mode. They must break into saturated soil to expose a drinkable seep at the dry edge. Set temperature, rain, surface water and groundwater depth in Colony &amp; reproduction.</p>
   <p>Each antenna samples its own local chemical and touch cues. Workers compare left and right, cast wider when a trail weakens, and sometimes pause briefly to sample. Carrying food, soil or brood takes priority over wandering. Open an ant to see its current readings.</p>
   <p>Use <strong>More → Disturb the ground</strong> at 1× to see a brief local alarm response. With no threat, large workers return to useful work or wait as recruitable reserves.</p>
   <p>Narrow peripheral mouths connect to shallow foraging passages. The mound above them can contain its own tunnel network. New colonies generate the revised layout; established colonies keep their ground.</p>

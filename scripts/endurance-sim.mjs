@@ -25,5 +25,5 @@ const inspect=()=>{
 };
 inspect();for(let i=0;i<120*DAY/.1;i++){c.step(.1);if((i+1)%(20*DAY/.1)===0)inspect();}
 assert.ok(c.alive,'The default colony must survive a long run.');assert.ok(c.births>=30,'Normal reproduction must replace the founder generation.');assert.ok(c.ants.length>=25,'The colony must grow beyond its founders.');
-const report={version:'0.15',seed,simulatedDays:120,tickSeconds:.1,settings:c.settings,wallSeconds:(performance.now()-began)/1000,checkpoints,balances:['food','water'].map(kind=>({kind,...resourceBalance(c.world,kind)})),scope:'One seeded CPU simulation; not a biological validation or a real-iPhone performance limit.'};
+const report={version:'0.16',seed,simulatedDays:120,tickSeconds:.1,settings:c.settings,wallSeconds:(performance.now()-began)/1000,checkpoints,balances:['food','water'].map(kind=>({kind,...resourceBalance(c.world,kind)})),scope:'One seeded CPU simulation; not a biological validation or a real-iPhone performance limit.'};
 if(process.argv[2])writeFileSync(process.argv[2],JSON.stringify(report,null,2));

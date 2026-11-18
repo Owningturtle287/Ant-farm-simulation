@@ -31,7 +31,16 @@ function save(explicit=false){
 }
 function selectedAnt(){return colony.ants.find(a=>a.id===state.selected);}
 function select(id,focus=false){state.selected=id;state.following=false;state.tool=null;updateTools();if(focus){const a=selectedAnt();if(a)Object.assign(renderer.camera,renderer.focus(a));}updateUI();}
+const settingsControls=[
+  ['egg-rate','eggRate',Number],['brood-rate','broodRate',Number],['starting-workers','startingWorkers',Number],
+  ['population-cap','populationCap',Number],['water-depth','waterTableDepth',Number],
+  ['surface-temp','surfaceTemp',Number],['rain-mode','rainMode',String],['surface-water','surfaceWater',value=>value==='on'],
+];
 function updateTools(){
+  const waterTool=document.querySelector('[data-tool=water]');
+  waterTool.disabled=!colony.settings.surfaceWater;
+  waterTool.title=waterTool.disabled?'Surface water is off in colony settings.':'';
+  if(waterTool.disabled&&state.tool==='water')state.tool=null;
   document.querySelectorAll('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===state.tool)));
   $('trails').setAttribute('aria-pressed',String(state.trails));$('placement').hidden=!state.tool;
   $('placement-text').textContent=state.tool==='disturb'?'Tap near ants to create a brief local alarm.':state.tool?`Tap the world to leave ${state.tool} on the surface.`:'';
@@ -41,7 +50,8 @@ function updateTools(){
 function updateUI(){
   $('ants-count').textContent=colony.ants.length;$('food-count').textContent=Math.floor(colony.food+colony.protein);$('water-count').textContent=Math.floor(colony.water);$('brood-count').textContent=colony.brood.length;
   const clockMinutes=Math.floor((colony.time%DAY)/DAY*1440);
-  $('weather').textContent=colony.world.weather.raining?'Rain · puddles filling':'Dry weather · grassland';
+  const weather=colony.world.weather.raining?(colony.settings.surfaceWater?'Rain · puddles filling':'Rain · groundwater only'):(colony.settings.surfaceWater?'Dry weather':'Groundwater only');
+  $('weather').textContent=weather+' · '+colony.settings.surfaceTemp+'°C';
   $('day').textContent=`Day ${colony.day} · ${String(Math.floor(clockMinutes/60)).padStart(2,'0')}:${String(clockMinutes%60).padStart(2,'0')}`;$('event').textContent=colony.events[0]?.text??'Life, one small step at a time.';
   const pauseLabel=state.paused?'Resume simulation':'Pause simulation',pauseIcon=state.paused?'▶':'Ⅱ';$('pause-badge').hidden=!state.paused;if($('pause').getAttribute('aria-label')!==pauseLabel)$('pause').setAttribute('aria-label',pauseLabel);if($('pause-icon').textContent!==pauseIcon)$('pause-icon').textContent=pauseIcon;
   const speedText=state.speed+'×';if($('speed').textContent!==speedText){$('speed').textContent=speedText;$('speed').setAttribute('aria-label',`Simulation speed: ${state.speed} times`);}
@@ -52,7 +62,7 @@ function updateUI(){
     $('ant-age').textContent=adultDays(ant).toFixed(1)+' d';$('ant-experience').textContent=ant.experience;$('ant-trips').textContent=ant.trips;$('ant-reason').textContent=reason(ant);
     const follow=$('follow'),label=state.following?'Following ant':'Follow this ant';
     if(follow.textContent!==label)follow.textContent=label;
-    const senses=ant.brain.senses;$('ant-senses').textContent=`Antennae · food ${(senses.food??0).toFixed(2)} · water ${(senses.water??0).toFixed(2)} · alarm ${(senses.alarm??0).toFixed(2)} · brood ${(senses.brood??0).toFixed(2)}`;
+    const senses=ant.brain.senses;$('ant-senses').textContent=`Antennae · food ${(senses.food??0).toFixed(2)} · water ${(senses.water??0).toFixed(2)} · alarm ${(senses.alarm??0).toFixed(2)} · brood ${(senses.brood??0).toFixed(2)} · ${colony.world.conditions(ant.cell).temperature.toFixed(1)}°C`;
     const feelers=ant.brain.antennae,channel=feelers?.kind??'food',odor=channel==='food'?'foodOdor':'moisture',reading=side=>((feelers?.[side]?.[channel]??0)+(feelers?.[side]?.[odor]??0)*.8).toFixed(2);
     $('ant-sensing').textContent=`Left ${reading('left')} · right ${reading('right')} · ${channel} cue. ${ant.motion?.mode==='sampling'?'Pausing to sample':ant.motion?.mode==='tracking'?'Following the local gradient':ant.motion?.mode==='searching'?'Casting for a scent':ant.motion?.mode==='carrying'?'Keeping the load moving':ant.motion?.mode==='reorienting'?'Adjusting to freshly moved soil':'Scanning nearby cues'}.`;
     $('ant-social').textContent=`${ant.brain.recognized} recognized contacts · ${ant.brain.lastContact}`;
@@ -67,14 +77,16 @@ function updatePerformance(){
   const m=performanceSnapshot();$('performance-panel').dataset.readings=JSON.stringify(m);$('perf-fps').textContent=m.fps.toFixed(0);$('perf-frame').textContent=m.frameMs.toFixed(1)+' ms';$('perf-tick').textContent=m.tickMs.toFixed(2)+' ms';$('perf-draw').textContent=m.drawMs.toFixed(2)+' ms';$('perf-speed').textContent=m.effective.toFixed(1)+'× / '+m.requestedSpeed+'×';$('perf-population').textContent=m.ants+' / '+m.populationCap;$('perf-mound').textContent=m.soilDeposited;$('perf-routing').textContent=m.routingMs.toFixed(2)+' ms';$('perf-recoveries').textContent=colony.world.runtime.recoveries;
 }
 function syncSettings(){
-  for(const [id,field] of [['egg-rate','eggRate'],['brood-rate','broodRate'],['starting-workers','startingWorkers'],['population-cap','populationCap'],['water-depth','waterTableDepth']])$(id).value=String(colony.settings[field]);
+  for(const [id,field] of settingsControls){
+    const value=colony.settings[field];$(id).value=typeof value==='boolean'?(value?'on':'off'):String(value);
+  }
   $('cap-note').textContent=colony.ants.length>=colony.settings.populationCap?'The ceiling pauses further growth; your existing ants remain.':'The ceiling controls growth. Changing it never removes existing ants.';
 }
 function buildRoster(){
-  const stock=resourceBalance(colony.world,'food'),water=resourceBalance(colony.world,'water');$('habitat-stats').textContent=`${SPECIES.scientific} · single queen · finite food ${stock.available.toFixed(1)} · water ${water.available.toFixed(1)} outside · ${colony.world.entrances.filter(e=>e.state==='open').length} open mouths · ${colony.world.moundTunnels.size} mound tunnel cells`;
+  const stock=resourceBalance(colony.world,'food'),water=resourceBalance(colony.world,'water');$('habitat-stats').textContent=`${SPECIES.scientific} · single queen · finite food ${stock.available.toFixed(1)} · water ${water.available.toFixed(1)} available · ${colony.world.entrances.filter(e=>e.state==='open').length} open mouths · ${colony.world.moundTunnels.size} mound tunnel cells`;
   $('supply-stats').textContent=`${colony.foodItems.length} separate stored food parcels · ${colony.water.toFixed(1)} water carried in crops · ${colony.freeBeds??0} free brood beds · water table ~${colony.settings.waterTableDepth} cells deep`;
   const hungry=colony.brood.filter(b=>broodStage(b)==='larva'&&b.nutrition<.25).length;
-  $('growth-status').textContent=colony.ants.length>=colony.settings.populationCap?'Population ceiling reached. Ready brood waits for an adult vacancy.':!colony.alive?'The queen has died.':colony.settings.eggRate===0?'New eggs are disabled in reproduction settings.':hungry?`${hungry} hungry larvae need care and protein from grain.`:colony.canLay()?'Growth is proceeding through egg, larva, and pupa stages. Development takes modeled weeks.':'Laying is paused by nutrition or brood-care capacity. The colony must support existing brood first.';
+  $('growth-status').textContent=colony.ants.length>=colony.settings.populationCap?'Population ceiling reached. Ready brood waits for an adult vacancy.':!colony.alive?'The queen has died.':colony.settings.eggRate===0?'New eggs are disabled in reproduction settings.':hungry?`${hungry} hungry larvae need care and protein from grain.`:colony.canLay()?'Growth is proceeding through egg, larva, and pupa stages. Development takes modeled weeks.':'Laying is paused by temperature, nutrition or brood-care capacity. The colony must support existing brood first.';
   const counts={egg:0,larva:0,pupa:0};for(const b of colony.brood)counts[broodStage(b)]++;
   $('brood-breakdown').textContent=`${counts.egg} eggs · ${counts.larva} larvae · ${counts.pupa} pupae · ${colony.broodMoved} brood deliveries`;
   $('queen-laying').textContent=`Queen laying target: ${(DAY/colony.eggInterval).toFixed(1)} eggs / colony day · ${colony.eggsLaid} laid. Recent larval cues affect the rate. Food, water, space and alarm can pause laying.`;
@@ -114,7 +126,13 @@ $('species-button').addEventListener('click',()=>openDialog('species'));
 $('disturb-button').addEventListener('click',()=>{closeDialog('menu');state.tool='disturb';state.selected=null;updateTools();updateUI();});
 $('performance-button').addEventListener('click',()=>{$('performance-panel').hidden=!$('performance-panel').hidden;closeDialog('menu');updateUI();});
 $('close-performance').addEventListener('click',()=>{$('performance-panel').hidden=true;updateUI();});
-for(const [id,field] of [['egg-rate','eggRate'],['brood-rate','broodRate'],['starting-workers','startingWorkers'],['population-cap','populationCap'],['water-depth','waterTableDepth']])$(id).addEventListener('change',async()=>{await settleForEdit();colony.setSettings({[field]:Number($(id).value)});syncSettings();toast(await save()?'Colony settings saved.':'Colony settings updated for this session.');});
+for(const [id,field,parse] of settingsControls)$(id).addEventListener('change',async event=>{
+  const value=event.target.value;
+  if(value===''){syncSettings();return;}
+  await settleForEdit();
+  colony.setSettings({[field]:parse(value)});syncSettings();updateTools();updateUI();
+  toast(await save()?'Colony settings saved.':'Colony settings updated for this session.');
+});
 $('enter').addEventListener('click',()=>{try{storage?.setItem('little-colony.guide','seen');}catch{}closeDialog('guide');});
 $('reset').addEventListener('click',()=>openDialog('reset-confirm'));
 $('confirm-reset').addEventListener('click',async()=>{await settleForEdit();colony=new Colony(Date.now()>>>0,colony.settings);state.selected=null;state.following=false;state.paused=false;accumulator=0;lastAlive=true;runner.reset();renderer.reset();monitor.reset();closeDialog('reset-confirm');save(true);updateUI();toast('A small colony takes root.');});

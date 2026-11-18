@@ -119,7 +119,8 @@ export function moveAnt(a,w,time,dt,traffic=0){
   const sensory=length<.4?0:(urgent?0:(m.turn??0)*.35+(m.touchTurn??0)*.3)+(m.separation??0)*.35+wander;
   const desired=Math.atan2(aim[1]-a.pos[1],aim[0]-a.pos[0])+sensory,difference=wrapAngle(desired-m.angle),turnLimit=(a.caste==='queen'?2.8:5.5)*dt;
   let angle=wrapAngle(m.angle+clamp(difference,-turnLimit,turnLimit));
-  const alignment=Math.max(0,Math.cos(wrapAngle(desired-angle))),base=(a.caste==='queen'?.85:a.caste==='major'?2.5:3)*(loaded?.72:1)*(.7+a.energy*.3)/(1+Math.min(traffic,5)*.08);
+  const temp=a.brain?.senses?.temperature??28,thermalPace=.35+.65*Math.min(clamp((temp-8)/14),clamp((47-temp)/11));
+  const alignment=Math.max(0,Math.cos(wrapAngle(desired-angle))),base=(a.caste==='queen'?.85:a.caste==='major'?2.5:3)*(loaded?.72:1)*thermalPace*(.7+a.energy*.3)/(1+Math.min(traffic,5)*.08);
   const waiting=time<(m.waitUntil??0),sampling=time<m.pauseUntil&&!urgent,approach=Math.min(1,length/(following?.32:.5));
   const targetSpeed=waiting||sampling?0:base*(m.pace??1)*(m.yielding??1)*alignment*alignment*approach;
   let speed=m.speed+(targetSpeed-m.speed)*(1-Math.exp(-dt*(targetSpeed<m.speed?18:8)));

@@ -11,3 +11,5 @@
 
 .crop-heading{margin:18px 0 10px;font:600 9px ui-monospace,monospace;letter-spacing:1px;color:var(--amber)}.crop-heading span{display:block;color:var(--muted);font:9px/1.5 system-ui;letter-spacing:0;margin-top:3px}.track .water-crop{background:var(--blue)}.supply-stats{font-size:11px;line-height:1.8;margin:12px 0}
 .inspector #follow{flex:none;margin-top:8px}
+
+.settings-grid input[type=number]{width:100%;min-height:44px;padding:9px 11px;color:var(--cream);background:#1d3027;border:1px solid #a5c98644;border-radius:9px;font:inherit;color-scheme:dark}.settings-grid input:focus-visible{outline:2px solid var(--amber)}

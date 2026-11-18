@@ -92,3 +92,5 @@ v0.13 uses grain for natural and placed food, eases exterior slopes, keeps new a
 v0.14 starts new colonies in one sealed chamber. Workers respond to the missing exit by excavating at a shared upward face, stage the earth inside, and favor deposits near the exit when they reach the surface. Grain stays attached to seed heads as the grass sways, grows, and withers.
 
 v0.15 gives workers local observations and changing task preferences. Nurses relay a late-larval cue to the queen, which changes how quickly she lays. Workers can climb over one another above ground and follow the terrain contour into shallow dips.
+
+v0.16 adds surface temperature, rain and surface-water controls under **More → Colony & reproduction**. Soil cools with depth, and workers and brood respond to their local temperature. Workers must open a connected tunnel into the water table to drink. The table has moving highlights, and carried items sit between the mandibles as ants turn.

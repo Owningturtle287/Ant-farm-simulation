@@ -97,14 +97,20 @@ export function planMoundPassage(w,rng,time){
   }return false;
 }
 
-export function planMoistureShaft(w,rng,time){
+export function planMoistureShaft(w,time){
   const g=w.groundwater;if(!g||time-g.lastPlan<20)return false;
   if(w.waterDig&&w.solid(w.waterDig.tip)&&w.construction.some(c=>same(c,w.waterDig.tip)))return false;
   const known=[...w.excavated].map(s=>s.split(',').map(Number)).filter(c=>w.walkable(c)&&c[1]>w.baseSurface(c[0])+5);
-  if(!known.length)return false;known.sort((a,b)=>b[1]-a[1]||Math.abs(a[0])-Math.abs(b[0]));const origin=known[0];
-  if(w.conditions([origin[0],origin[1]+1]).humidity>.947)return false;
-  // Short, locally sampled probes: no remote water coordinates are given to a worker.
-  const options=[-1,0,1].map(dx=>[origin[0]+dx,origin[1]+3]);options.sort((a,b)=>w.conditions(b).humidity-w.conditions(a).humidity);
-  const target=options[0],route=passage(origin,target,rng).filter(c=>w.conditions(c).humidity<.947);if(!route.some(c=>w.solid(c)))return false;
-  queuePassage(w,route);g.lastPlan=time;w.waterDig={tip:[...route.at(-1)],startedAt:time};return true;
+  const previous=w.waterDig?.tip;
+  const priority=([x,y])=>y+Math.min(4,Math.abs(x-w.nest[0]))*.75;
+  known.sort((a,b)=>Number(!!previous&&same(b,previous))-Number(!!previous&&same(a,previous))||priority(b)-priority(a));
+  // A new probe follows a reachable, moist working face. The last cut opens the saturated soil.
+  const origin=known.find(([x,y])=>w.solid([x,y+1])&&w.path(w.nest,[x,y]));
+  if(!origin)return false;
+  const [x,y]=origin,route=[];
+  for(let step=1;step<=3;step++){
+    const c=[x,y+step];route.push(c);
+    if(c[1]>=w.waterTable(x)-.25)break;
+  }
+  queuePassage(w,route);g.lastPlan=time;w.waterDig={tip:route.at(-1),cells:route,startedAt:time};return true;
 }
