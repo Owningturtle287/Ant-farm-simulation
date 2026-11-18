@@ -104,12 +104,14 @@ export function moveAnt(a,w,time,dt,traffic=0){
   // Discard the rotation-only markers used by older saves. Headings never drive translation.
   while(a.route.length&&Math.hypot(a.route[0][0]-a.pos[0],a.route[0][1]-a.pos[1])<.065){a.cell=a.route.shift().slice(0,2).map(n=>Math.round(n)||0);passed=true;}
   const next=a.route[0];if(!next){m.speed=0;return passed;}
-  const previousAngle=m.angle,dx=next[0]-a.pos[0],dy=next[1]-a.pos[1],length=Math.hypot(dx,dy),following=a.route[1],precise=next[3]!=null;let aim=next;
-  if(!precise&&following&&length<.65){const fx=following[0]-next[0],fy=following[1]-next[1],fl=Math.hypot(fx,fy),look=Math.min(.16,fl*(1-length/.65)*.35),q=[next[0]+fx/Math.max(fl,.001)*look,next[1]+fy/Math.max(fl,.001)*look];if(clearSegment(w,a.pos,q))aim=q;}
+  const previousAngle=m.angle,dx=next[0]-a.pos[0],dy=next[1]-a.pos[1],length=Math.hypot(dx,dy),following=a.route[1];let aim=next;
+  if(next[3]==null&&following&&length<.65){const fx=following[0]-next[0],fy=following[1]-next[1],fl=Math.hypot(fx,fy),look=Math.min(.16,fl*(1-length/.65)*.35),q=[next[0]+fx/Math.max(fl,.001)*look,next[1]+fy/Math.max(fl,.001)*look];if(clearSegment(w,a.pos,q))aim=q;}
   const laneTarget=time<(m.passUntil??0)?.20:0;m.lane=(m.lane??0)+(laneTarget-(m.lane??0))*(1-Math.exp(-dt*6));
-  if(!precise&&m.lane>.005&&length>.25){const angle=m.passAngle??Math.atan2(dy,dx);const lead=Math.min(.65,length);aim=[a.pos[0]+dx/length*lead-Math.sin(angle)*m.lane,a.pos[1]+dy/length*lead+Math.cos(angle)*m.lane];}
+  if(m.lane>.005&&length>.25){const angle=m.passAngle??Math.atan2(dy,dx);const lead=Math.min(.65,length);aim=[a.pos[0]+dx/length*lead-Math.sin(angle)*m.lane,a.pos[1]+dy/length*lead+Math.cos(angle)*m.lane];}
   const loaded=!!(a.carried||a.carryingBrood),urgent=loaded||['refueling','queenMoving','toBrood','feedingQueen'].includes(a.task),searching=a.task==='exploring';
-  const sensory=precise||length<.4?0:(urgent?0:(m.turn??0)*.35+(m.touchTurn??0)*.3)+(m.separation??0)*.35+(m.wander??0)*(searching?.25:.08);
+  // A body-routed waypoint has checked clearance. Keep contact steering but avoid random drift.
+  const wander=next[3]==null?(m.wander??0)*(searching?.25:.08):0;
+  const sensory=length<.4?0:(urgent?0:(m.turn??0)*.35+(m.touchTurn??0)*.3)+(m.separation??0)*.35+wander;
   const desired=Math.atan2(aim[1]-a.pos[1],aim[0]-a.pos[0])+sensory,difference=wrapAngle(desired-m.angle),turnLimit=(a.caste==='queen'?2.8:5.5)*dt;
   let angle=wrapAngle(m.angle+clamp(difference,-turnLimit,turnLimit));
   const alignment=Math.max(0,Math.cos(wrapAngle(desired-angle))),base=(a.caste==='queen'?.85:a.caste==='major'?2.5:3)*(loaded?.72:1)*(.7+a.energy*.3)/(1+Math.min(traffic,5)*.08);
@@ -117,8 +119,7 @@ export function moveAnt(a,w,time,dt,traffic=0){
   const targetSpeed=waiting||sampling?0:base*(m.pace??1)*(m.yielding??1)*alignment*alignment*approach;
   let speed=m.speed+(targetSpeed-m.speed)*(1-Math.exp(-dt*(targetSpeed<m.speed?18:8)));
   // No forward creep during an about-turn, and no stored momentum at contact.
-  // Body-routed waypoints were checked for a turn followed by a straight step.
-  if(alignment<.45||(precise&&Math.abs(difference)>.12)||waiting||sampling)speed=0;
+  if(alignment<.45||waiting||sampling)speed=0;
   const step=Math.min(length,speed*dt),delta=wrapAngle(angle-previousAngle),origin=[...a.pos];
   const arc=(t,travel=step,turn=delta)=>Math.abs(turn)<1e-8?[origin[0]+Math.cos(previousAngle)*travel*t,origin[1]+Math.sin(previousAngle)*travel*t]:[origin[0]+travel/turn*(Math.sin(previousAngle+turn*t)-Math.sin(previousAngle)),origin[1]+travel/turn*(Math.cos(previousAngle)-Math.cos(previousAngle+turn*t))];
   const free=(t,travel=step,turn=delta)=>{const count=Math.max(1,Math.ceil(Math.abs(turn*t)/.12),Math.ceil(travel*t/.10));let p=origin,prior=previousAngle;for(let i=1;i<=count;i++){const fraction=t*i/count,q=arc(fraction,travel,turn),heading=previousAngle+turn*fraction;if(!clearSegment(w,p,q)||!sweptFree(w,a,p,q,heading,prior))return false;p=q;prior=heading;}return true;};
