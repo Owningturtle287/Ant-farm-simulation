@@ -41,6 +41,10 @@ jobs:
   browser-checks:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    container:
+      # Match @playwright/test in package.json for both browser binaries and OS dependencies.
+      image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+      options: --ipc=host
     strategy:
       fail-fast: false
       matrix:
@@ -52,8 +56,6 @@ jobs:
           node-version: '22'
       - name: Install pinned browser test tools
         run: npm install --ignore-scripts --no-audit --no-fund
-      - name: Install browser
-        run: npx playwright install --with-deps ${{ matrix.browser }}
       - name: Build app
         run: node scripts/build-web.mjs
       - name: Check play, phone layout, saves, Home Screen setup, and offline reopening
