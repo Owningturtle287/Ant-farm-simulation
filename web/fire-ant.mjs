@@ -10,6 +10,7 @@ export function initializeBrain(a,seed){
   a.caste=a.caste==='queen'?'queen':a.bodySize>.78?'major':'worker';
   a.odor??=odor.map(v=>v+(r.float()-.5)*.025);a.recognitionTemplate??=[...odor];
   a.brain??={arousal:0,habituation:0,lastDecision:0,contacts:0,recognized:0,lastContact:'No recent antennal contact',recruitedKind:null,recruitUntil:0,senses:{},taskHistory:[]};
+  a.brain.recentWork??={};
   a.traits.lifeDays=a.fireAnt?a.traits.lifeDays:lifespanFor(a,seed);
   initCrop(a);initializeMotion(a,seed);a.fireAnt=true;a.knownBrood??=[];a.cargoNutrition??=null;return a;
 }
@@ -22,14 +23,62 @@ export function contact(a,b,time){
 }
 export const cropCapacity=a=>1.2+a.bodySize*2.4;
 export function developmentalRate(temp){return temp<=27.5?clamp(.55+(temp-24)*.45/3.5,0,1):clamp(1+(temp-27.5)*.3/7.5,0,1.3);}
-export function taskScores(a,needs,local,time,hasBrood){
-  const age=adultDays(a),size=a.bodySize,t=a.traits,experience=a.skills;
-  const recruitment=a.brain.recruitUntil>time?clamp(needs.forage*.8):0;
-  const forage=(needs.forage+recruitment*(a.brain.recruitedKind==='food'?.55:0))*(.6+Math.min(age,24)/30+size*.45)*(1+experience.forage*.2)/t.forage;
-  const water=(needs.water+recruitment*(a.brain.recruitedKind==='water'?.55:0))*(.65+Math.min(age,24)/35+size*.2)/t.water;
-  const care=hasBrood?(needs.care*(1+Math.min(2,local.brood)*.3))*(age<10?1.15:.72)*(1.15-size*.4)*(1+experience.care*.2)/t.care:0;
-  const dig=(needs.dig*1.6+local.construction*.65)*(1+experience.dig*.25)/t.dig;
-  const defend=local.alarm>.12?Math.min(2,local.alarm*2)*(1+size*.6):0;
-  return [['forage',forage],['water',water],['care',care],['dig',dig],['defend',defend]];
+export function observeNeeds(a,neighbors,cache,brood,traffic,time){
+  let food=0,protein=0,water=0;
+  for(const other of neighbors){
+    const capacity=cropCapacity(other);
+    food+=clamp((other.socialFood??0)/(capacity*.45));
+    protein+=clamp((other.socialProtein??0)/(capacity*.18));
+    water+=clamp((other.socialWater??0)/.65);
+  }
+  const count=Math.max(1,neighbors.length);
+  const energy=1-clamp(cache.energy+food/count*.92);
+  const proteinGap=1-clamp(cache.protein+protein/count*.92);
+  const care=brood;
+  const sample={
+    forage:.04+Math.max(energy,proteinGap*(care>.25?1.15:.85)),
+    protein:proteinGap,energy,water:.04+1-clamp(water/count),
+    care,dig:traffic,
+  };
+  const old=a.knownNeeds;
+  a.knownNeeds=Object.fromEntries(Object.entries(sample).map(([name,value])=>[name,old?value*.62+(old[name]??value)*.38:value]));
+  a.needsAt=time;
+  return a.knownNeeds;
 }
+
+export function taskScores(a,needs,local,time,hasBrood){
+  const age=Math.min(adultDays(a),24),size=a.bodySize,t=a.traits;
+  const crop=a.socialFood+a.socialProtein,full=clamp(crop/cropCapacity(a)),waterFull=clamp(a.socialWater/.75);
+  const recruited=kind=>local[kind+'Contact']??0;
+  const forage=needs.forage*(.57+age/35+size*.43)*(1-full*.88)*(1+recruited('food')*.65)/t.forage;
+  const water=needs.water*(.61+age/42+size*.19)*(1-waterFull*.92)*(1+recruited('water')*.65)/t.water;
+  const care=hasBrood?Math.max(needs.care,Math.min(.26,local.brood*.26))*(1.25-age*.017)*(1.2-size*.62)/t.care:0;
+  const dig=(needs.dig*.65+local.construction*.76)*(1+a.skills.dig*.20)/t.dig;
+  const defend=local.alarm>.12?Math.min(2,(local.alarm+a.brain.arousal)*1.7)*(1+size*.6):0;
+  const scores=[['forage',forage],['water',water],['care',care],['dig',dig],['defend',defend]];
+  for(const score of scores){
+    const [job]=score,work=a.brain.recentWork[job];
+    if(work)score[1]*=Math.max(.18,1+work.value*Math.exp(-(time-work.at)/95));
+    if(job===a.lastJob&&time-(a.brain.lastDecision??0)<18)score[1]*=1.12;
+  }
+  return scores;
+}
+
+export function reinforceWork(a,job,time,reward){
+  const recent=a.brain.recentWork[job],retained=recent?recent.value*Math.exp(-(time-recent.at)/95):0;
+  a.brain.recentWork[job]={value:clamp(retained+reward,-.78,.7),at:time};
+}
+
+export function relayLarvalCue(a,queen,time){
+  const cue=a.brain.larvalCue;if(!cue||time-cue.at>60)return;
+  const recent=queen.brain.larvalInput??{value:0,at:time};
+  queen.brain.larvalInput={at:time,value:clamp(recent.value*Math.exp(-(time-recent.at)/(DAY*.65))+cue.value*Math.exp(-(time-cue.at)/30))};
+  delete a.brain.larvalCue;
+}
+
+export function layingDrive(a,time){
+  const cue=a.brain.larvalInput;
+  return cue?cue.value*Math.exp(-(time-cue.at)/(DAY*.65)):0;
+}
+
 export function rememberTask(a,job,time){a.brain.lastDecision=time;a.brain.taskHistory.push({job,time});a.brain.taskHistory=a.brain.taskHistory.slice(-12);}

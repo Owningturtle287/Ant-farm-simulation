@@ -1,4 +1,4 @@
-# Crops, space and groundwater · v0.9
+# Little Colony behavior model · v0.15
 
 The reference species is the red imported fire ant, **Solenopsis invicta**, using the **single-queen (monogyne)** social form. This is a mechanistic, research-informed game model. It is not a reconstruction of neurons, a fitted whole-colony biological model, or an exact ant brain.
 
@@ -6,21 +6,21 @@ The reference species is the red imported fire ant, **Solenopsis invicta**, usin
 
 The queen reproduces; the modeled workers are sterile females. Worker body size is continuous, assigned at emergence, and influenced by larval feeding. Small, medium, and large are descriptive UI categories, not fixed job assignments. Adults do not grow into a different caste. New small/medium/large workers use approximate 30–60 / 60–90 / 90–180 modeled-day lifespans; queens use a much longer range. Migrated adults retain their prior lifespan to avoid an abrupt conversion-related die-off.
 
-Task decisions combine remembered nutritional demand, personal energy/hydration, age, size, experience, contact recruitment, nearby brood cues, construction stimuli, and local alarm. Large workers can collect grain and water, excavate, provision the queen, or attend brood. There is no permanent soldier/patrol branch. Short alarm investigations end as the stimulus fades. Recruitable reserves and grooming/resting remain normal behavior.
+Workers estimate food and water needs from crops observed nearby and food parcels within reach of their senses. Individual estimates retain recent observations. Separate food and water recruitment cues rise with returning-forager contact and fade independently. A finite pickup, nursing visit, or successful dig reinforces the task temporarily. An empty search or blocked dig reduces its priority. Age and size bias the choices without assigning occupations. Large workers can collect grain and water, excavate, provision the queen, or attend brood. There is no permanent soldier/patrol branch. Short alarm investigations end as the stimulus fades. Recruitable reserves and grooming/resting remain normal behavior.
 
 The nominal warm, well-fed development schedule is 8 days as an egg, 10 as a larva, and 12 as a pupa. Temperature, moisture, care and larval nutrition alter it. The thermal curve loosely spans published warm/cool developmental differences; it is not a fitted physiological model. Larval feeding uses protein intake. Poor nutrition slows development and severe deprivation reduces vitality.
 
-The default egg target rises with workers (`0.75 × worker count`, bounded at 3–1500 per modeled day), then the player multiplier applies. This is a small-colony gameplay scaling curve, not a measured fecundity regression. Food, water, queen health and supportable brood limit actual laying. The adult ceiling does not stop the colony maintaining replacement brood. Ready pupae wait when adult capacity is full—an explicit game limit, not natural fire-ant development.
+The queen has a baseline production drive. Workers acquire a cue by tending a late-stage larva and relay it during close contact with the queen. Its influence accumulates and fades between visits. Her own crop, health, nearby laying space and sustained alarm shape whether she lays or seeks a quieter site. The production rate and cue timescale are game parameters. The player multiplier and overall brood capacity still apply. The adult ceiling does not stop the colony maintaining replacement brood. Ready pupae wait when adult capacity is full—an explicit game limit, not natural fire-ant development.
 
 ## Perception, recognition and learning
 
-Workers sample local signal concentrations and nearby resources. Short-distance body contact compares a familiar composite colony-odor template with the encountered ant's cues. Recognized contact can update that template, activate recruits, share bounded food/water, and relay previously acquired demand information. Recognition is not an ID comparison. The three-component odor vector and acceptance threshold are computational abstractions; the chemistry of recognition is more complex and not uniquely established by hydrocarbons alone.
+Workers sample local signal concentrations and nearby resources. Short-distance body contact compares a familiar composite colony-odor template with the encountered ant's cues. Recognized contact can update that template, activate recruits, relay a recently acquired late-larval cue to the queen, and support physical provisioning. Recognition is not an ID comparison. The three-component odor vector and acceptance threshold are computational abstractions; the chemistry of recognition is more complex and not uniquely established by hydrocarbons alone.
 
 Returning carriers lay fading trails. Antennae sample neighboring cells and gradients influence movement, with recent-cell avoidance and stochastic exploration. Contact activates resource search without transmitting a remote coordinate. A worker learns a grain or water location through discovery. Failed visits reduce reliability, impose a cooldown, and eventually remove the memory. Satiation dampens recruitment to prevent a self-sustaining hoarding loop.
 
 Food, water, home, alarm, queen and brood are **functional signal channels**, not claims about six separate chemical compounds in this species. Strengths, evaporation, diffusion and thresholds are game units. Food/water colors distinguish destinations for observation; the known trail chemistry is not recreated molecule by molecule. Queen and brood cues fade if their sources disappear. Disturbing ground near workers prompts a bounded alarm response; a click in empty ground creates no worker alarm.
 
-Remembered passages and shared aggregate reserves still simplify navigation and nutrition. Brood memories and nursery geometry are abstracted. Learning means bounded successful-work gains, source reliability, contact templates and recent experience, not machine-learned neural weights.
+Recognized worker contacts can stimulate a trip without providing a remote source position or changing the crop. Crop contents still require physical pickups or, for the queen, a meal offered by an attendant. Learning is individual experience that changes future decisions during play. Workers use a shared navigation graph, and architecture and brood capacity still have colony-wide limits.
 
 ## Finite resources and nutrition
 
@@ -32,7 +32,7 @@ Grass dieback after complete seed harvest is retained from the requested game de
 
 ## Nest construction
 
-New colonies start with a compact nest and a seeded, narrow **peripheral mouth**, linked by irregular subsurface passages. The center of the future mound is not a protected open canyon. Used passages, remembered space pressure, builder experience and accumulated soil prompt worker construction proposals. A shared queue and reservations coordinate their execution.
+New colonies start in a sealed chamber. Workers choose a reachable roof face and open the first exit through excavation. They set aside the excavated pellets inside, then carry them out and build a mound near the mouth. The center of the future mound is not a protected open canyon. Used passages, remembered space pressure, builder experience and accumulated soil prompt worker construction proposals. A shared queue and reservations coordinate their execution.
 
 Deposited soil can be excavated again to produce narrow interior mound galleries. Existing roofs remain visible as cutaway back walls. Peripheral exits and mound passages are procedurally selected and physically dug, not instant teleports. Nursery selection considers stage-specific moisture/temperature and crowding, with hysteresis to avoid endless brood shuttling. All ground remains soft and diggable as requested. Deposition rejects protected galleries and unreachable candidates; route searches include the existing mound roof and known nest extent. Foraging can continue through aboveground galleries when the mound surrounds an older mouth. Loaded workers can interrupt work to replenish energy and hydration without losing cargo or transported brood.
 
@@ -40,7 +40,7 @@ This is still a candidate-plan architecture model, not fully emergent stigmergy 
 
 For soil accounting, excavation of original earth increases `soilExcavated`. Re-excavating deposited soil moves it from `soilDeposited` into cargo without manufacturing new earth; `soilRehandled` records that work. Always preserve:
 
-`soilExcavated = soilDeposited + living soil cargo + soilAbandoned`
+`soilExcavated = soilDeposited + living soil cargo + staged soil + soilAbandoned`
 
 Existing colonies retain their original excavation records. Unstable older mounds and oversized shallow openings receive the soil-preserving correction described below. Their behavior and resource system upgrade in place, and old indefinite patrol jobs are released. Start a new colony for the fully revised founder nest. Developmental migration preserves both stage and within-stage progress.
 
@@ -51,6 +51,10 @@ These sources support mechanisms and plausible ranges; none validates the exact 
 - [Tschinkel, 2011: The Organization of Foraging in the Fire Ant, Solenopsis invicta](https://pmc.ncbi.nlm.nih.gov/articles/PMC3391925/) — scouts, recruitable reserves, local activation from foraging tunnels, worker age and the underground foraging network.
 - [Family before work: task reversion in S. invicta](https://www.nature.com/articles/s41598-023-29246-z) — brood-associated stimuli and task changes. This does not imply unlimited flexibility in every task or species.
 - [Cassill & Tschinkel: Task selection by workers of the fire ant](https://digitalcommons.usf.edu/fac_publications/1000/) — worker task selection and the participation of large workers in food recruitment/storage.
+- [Tschinkel, 1988. Social control of egg laying](https://doi.org/10.1111/j.1365-3032.1988.tb00484.x) — fourth-instar larvae stimulated queen oviposition in manipulation experiments, whereas worker numbers alone did not.
+- [Tschinkel, 1995. Stimulation of queen fecundity by a highly specific brood stage](https://www.bio.fsu.edu/~tschink/publications/1995-6.pdf) — suggests that attending workers relay a cue from a narrow late-larval stage.
+- [Aguilar et al., 2018. Collective clog control](https://crablab.gatech.edu/pages/publications/2018-Collective-clog.html) — uneven excavation effort and reversals near crowding informed the persistence and blocked-dig responses.
+- [Gravish et al., 2013. Climbing, falling, and jamming](https://pubmed.ncbi.nlm.nih.gov/23690589/) — documents traction and contact during fire-ant locomotion in confined spaces. The surface step-over uses a simplified height above the ground plane, with separate collision checks for terrain and for bodies at the same height.
 - [Vander Meer, Alvarez & Lofgren, 1988: Isolation of trail recruitment pheromone](https://www.ars.usda.gov/ARSUserFiles/60360510/publications/Vander_Meer_et_al-1988%28M-1986%29.pdf) — orientation and recruitment components of trail signaling.
 - [Vander Meer et al., 1989: Temporal changes in colony chemical patterns](https://pubmed.ncbi.nlm.nih.gov/24272300/) and [Obin, 1986: Environment and nestmate recognition](https://pubmed.ncbi.nlm.nih.gov/24305971/) — chemical context, environmental effects and changing recognition templates.
 - [Anderson & Vander Meer, 2001: Experimental evidence concerning recognition cues](https://www.ars.usda.gov/arsuserfiles/60360510/publications/Anderson_and_Vander_Meer-2001%28M-3649%29.pdf) — a reason not to equate a hydrocarbon profile with a complete identity code.

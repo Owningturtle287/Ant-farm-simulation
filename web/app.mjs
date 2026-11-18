@@ -77,7 +77,7 @@ function buildRoster(){
   $('growth-status').textContent=colony.ants.length>=colony.settings.populationCap?'Population ceiling reached. Ready brood waits for an adult vacancy.':!colony.alive?'The queen has died.':colony.settings.eggRate===0?'New eggs are disabled in reproduction settings.':hungry?`${hungry} hungry larvae need care and protein from grain.`:colony.canLay()?'Growth is proceeding through egg, larva, and pupa stages. Development takes modeled weeks.':'Laying is paused by nutrition or brood-care capacity. The colony must support existing brood first.';
   const counts={egg:0,larva:0,pupa:0};for(const b of colony.brood)counts[broodStage(b)]++;
   $('brood-breakdown').textContent=`${counts.egg} eggs · ${counts.larva} larvae · ${counts.pupa} pupae · ${colony.broodMoved} brood deliveries`;
-  $('queen-laying').textContent=`Queen laying target: ${(DAY/colony.eggInterval).toFixed(1)} eggs / colony day · ${colony.eggsLaid} laid. Capacity and resources can pause laying.`;
+  $('queen-laying').textContent=`Queen laying target: ${(DAY/colony.eggInterval).toFixed(1)} eggs / colony day · ${colony.eggsLaid} laid. Recent larval cues affect the rate. Food, water, space and alarm can pause laying.`;
   $('colony-summary').replaceChildren();
   for(const [label,value] of [['Workers',colony.ants.filter(a=>a.caste!=='queen').length],['Brood',colony.brood.length],['New ants',colony.births],['Day',colony.day]]){
     const div=document.createElement('div'),strong=document.createElement('strong'),span=document.createElement('span');strong.textContent=value;span.textContent=label;div.append(strong,span);$('colony-summary').append(div);

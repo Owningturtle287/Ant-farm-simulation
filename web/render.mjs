@@ -2,7 +2,7 @@ import {paintBrood} from './brood-art.mjs';
 import {bedPosition} from './provisions.mjs';
 import {buildGrainAtlas,drawGrain,drawGrass,paintWater} from './resource-art.mjs';
 import {TerrainCache} from './render-cache.mjs';
-import {surfaceProfile,surfaceContact} from './geometry.mjs';
+import {surfaceProfile,groundBody} from './geometry.mjs';
 import {rasterRows,coarseTerrain,snapshotTerrain} from './terrain-raster.mjs';
 import {cell,key,broodStage} from './sim.mjs';
 import {resourceTiles} from './resources.mjs';
@@ -169,17 +169,20 @@ export class Renderer {
     }
     const carriedBrood=new Map(colony.brood.filter(b=>b.carriedBy!=null).map(b=>[b.carriedBy,b]));
     const live=new Set();
-    for(const ant of colony.ants) {
-      live.add(ant.id);if(ant.pos[0]<min[0]-3||ant.pos[0]>max[0]+3||ant.pos[1]<min[1]-3||ant.pos[1]>max[1]+3)continue;const bucket=Math.floor((this.width/2+(ant.pos[0]-this.camera.x)*u)/crowdWidth)+','+Math.floor((this.height*.3+(ant.pos[1]-this.camera.y)*u)/crowdHeight),count=crowd.get(bucket)??0;if(count>=(z<1.3?1:3)&&ant.id!==options.selected&&ant.caste!=='queen'){this.renderStats.crowdSkipped++;continue;}crowd.set(bucket,count+1);this.renderStats.drawnAnts++;if(z<.5&&ant.id!==options.selected&&ant.caste!=='queen'){const [sx,sy]=this.screen(ant.pos);c.fillStyle='#b45a32';c.fillRect(Math.round(sx),Math.round(sy),1,1);this.renderStats.simpleSprites++;continue;}let p=this.positions.get(ant.id);if(!p){p={x:ant.pos[0],y:ant.pos[1],angle:ant.motion?.angle??0,neck:ant.motion?.neck??0,waist:ant.motion?.waist??0,gait:0,scan:ant.motion?.phase??0,hatchAt:ant.bornAt>0&&colony.time-ant.bornAt<4?clock:null};this.positions.set(ant.id,p);}
+    const bodies=colony.ants.some(a=>a.motion?.climbHeight>0)?[...colony.ants].sort((a,b)=>(a.motion?.climbHeight??0)-(b.motion?.climbHeight??0)):colony.ants;
+    for(const ant of bodies) {
+      live.add(ant.id);if(ant.pos[0]<min[0]-3||ant.pos[0]>max[0]+3||ant.pos[1]<min[1]-3||ant.pos[1]>max[1]+3)continue;const bucket=Math.floor((this.width/2+(ant.pos[0]-this.camera.x)*u)/crowdWidth)+','+Math.floor((this.height*.3+(ant.pos[1]-this.camera.y)*u)/crowdHeight),count=crowd.get(bucket)??0;if(count>=(z<1.3?1:3)&&!ant.motion?.climbHeight&&ant.id!==options.selected&&ant.caste!=='queen'){this.renderStats.crowdSkipped++;continue;}crowd.set(bucket,count+1);this.renderStats.drawnAnts++;if(z<.5&&ant.id!==options.selected&&ant.caste!=='queen'){const [sx,sy]=this.screen(ant.pos);c.fillStyle='#b45a32';c.fillRect(Math.round(sx),Math.round(sy),1,1);this.renderStats.simpleSprites++;continue;}let p=this.positions.get(ant.id);if(!p){p={x:ant.pos[0],y:ant.pos[1],angle:ant.motion?.angle??0,neck:ant.motion?.neck??0,waist:ant.motion?.waist??0,gait:0,scan:ant.motion?.phase??0,hatchAt:ant.bornAt>0&&colony.time-ant.bornAt<4?clock:null};this.positions.set(ant.id,p);}
       if(p.frame!==this.frameID-1){p.x=ant.pos[0];p.y=ant.pos[1];p.angle=ant.motion?.angle??0;}p.frame=this.frameID;
       const oldX=p.x,oldY=p.y,blend=options.speed>4?1:1-Math.exp(-dt*22);p.x+=(ant.pos[0]-p.x)*blend;p.y+=(ant.pos[1]-p.y)*blend;
       const motion=ant.motion,angle=motion?.angle??p.angle;if(!options.paused){p.angle=wrapAngle(p.angle+wrapAngle(angle-p.angle)*blend);p.scan=wrapAngle(p.scan+wrapAngle((motion?.phase??0)-p.scan)*blend);if((motion?.speed??0)>.06&&(ant.route.length||motion?.recovering))p.gait=((p.gait+Math.min(Math.hypot(p.x-oldX,p.y-oldY),dt*4)*2.7*GAIT_FRAMES*(motion?.gaitDirection??1))%GAIT_FRAMES+GAIT_FRAMES)%GAIT_FRAMES;}else{p.angle=angle;p.scan=motion?.phase??0;}
-      const jointBlend=options.paused?1:blend;p.neck+=((motion?.neck??0)-(p.neck??0))*jointBlend;p.waist+=((motion?.waist??0)-(p.waist??0))*jointBlend;const contact=colony.world.onSurface(ant.cell)?surfaceContact(colony.world,p.x,p.y,ant.caste==='queen'?.22:.17):null;
-      const offset=contact?contact.y-p.y:0;
-      p.groundOffset??=offset;p.groundOffset+=(offset-p.groundOffset)*(options.paused?1:1-Math.exp(-dt*24));
-      const [x,y]=this.screen([p.x,p.y+p.groundOffset]);if(x<-50 || y<-50 || x>this.width+50 || y>this.height+50)continue;
+      const jointBlend=options.paused?1:blend;p.neck+=((motion?.neck??0)-(p.neck??0))*jointBlend;p.waist+=((motion?.waist??0)-(p.waist??0))*jointBlend;
+      const {contact,y:grounded}=groundBody(colony.world,p,ant.caste==='queen'?.22:.17,options.paused?1:1-Math.exp(-dt*22));
+      const lift=motion?.climbHeight??0;
+      p.climbHeight??=lift;
+      p.climbHeight+=(lift-p.climbHeight)*(options.paused?1:1-Math.exp(-dt*22));
+      const [x,y]=this.screen([p.x,grounded-p.climbHeight]);if(x<-50 || y<-50 || x>this.width+50 || y>this.height+50)continue;
       if(contact&&z>=.65){
-        c.fillStyle='#30211746';c.beginPath();c.ellipse(x,y+1.7*z,3*z,.65*z,contact.slope,0,Math.PI*2);c.fill();
+        c.fillStyle='#30211746';c.beginPath();c.ellipse(x,y+p.climbHeight*u+1.7*z,3*z,.65*z,contact.slope,0,Math.PI*2);c.fill();
       }
       if(ant.id===options.selected){c.strokeStyle='#ebc381';c.lineWidth=1.3;c.beginPath();c.arc(x,y,(ant.caste==='queen'?20:14)*z,0,Math.PI*2);c.stroke();}
       if(this.renderStats.drawnAnts>richBudget&&ant.id!==options.selected&&ant.caste!=='queen'){c.fillStyle='#b45a32';c.fillRect(Math.round(x),Math.round(y),Math.max(1,2*z),Math.max(1,z));this.renderStats.simpleSprites++;continue;}

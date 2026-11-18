@@ -1,10 +1,12 @@
 // Only adult body segments and surface portions obstruct adult movement.
-import {densityAt} from './geometry.mjs';
+import {densityAt,surfaceFooting} from './geometry.mjs';
 import {broodStage} from './biology.mjs';
 import {bodyRoute} from './body-routing.mjs';
 import {bodyDiscs,bodyPixel} from './body-pose.mjs';
 const key=p=>p.join(','),bin=p=>Math.floor(p[0])+','+Math.floor(p[1]);
 const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+export const CLIMB_HEIGHT=.19;
+const CLIMB_CLEARANCE=.105;
 export const CONTACT_SLACK=.002; // Subpixel outline contact; central body space stays protected.
 export const bodyShape=a=>({half:15*bodyPixel(a),radius:5.4*bodyPixel(a)});
 export const broodRadius=b=>broodStage(b)==='egg'?.16:broodStage(b)==='larva'?.27:.30;
@@ -40,7 +42,7 @@ function around(map,p,r=2){
   }
   return out;
 }
-export function nearbyAdults(w,a,range=1.3){return w.traffic?around(w.traffic.adults,a.pos,1).filter(b=>b.id!==a.id&&dist(a.pos,b.pos)<range):[];}
+export function nearbyAdults(w,a,range=1.3){return w.traffic?around(w.traffic.adults,a.pos,range>1.4?Math.ceil(range):1).filter(b=>b.id!==a.id&&dist(a.pos,b.pos)<range):[];}
 export function beginTraffic(c){
   const w=c.world,old=w.traffic,sameTerrain=old?.geometry===w.revision;
   w.traffic={adults:new Map(),routes:sameTerrain?old.routes:new Map(),bodyNavigation:sameTerrain?old.bodyNavigation:null,geometry:w.revision,colony:c};
@@ -51,7 +53,7 @@ export function terrainFree(w,p){
   if(densityAt(p[0],p[1],(x,y)=>w.solid([x,y]))>=.49)return false;
   if(!w.walkable(p.map(n=>Math.round(n)||0))){const x=Math.floor(p[0]),y=Math.floor(p[1]);let supported=false;for(let dy=0;dy<=1;dy++)for(let dx=0;dx<=1;dx++)if(Math.hypot(p[0]-x-dx,p[1]-y-dy)<.81&&w.walkable([x+dx,y+dy]))supported=true;if(!supported)return false;}return true;
 }
-export function canOccupy(w,a,p,angle=a.motion?.angle??0,ignoreBrood=null,ignoreAdults=false,escaping=false,joints=a.motion){
+export function canOccupy(w,a,p,angle=a.motion?.angle??0,ignoreBrood=null,ignoreAdults=false,escaping=false,joints=a.motion,lift=a.motion?.climbHeight??0){
   if(!escaping&&!terrainFree(w,p))return false;
   const t=w.traffic;if(!t||ignoreAdults)return true;
   const cx=Math.floor(p[0]),cy=Math.floor(p[1]),radius=bodyPixel(a);
@@ -64,6 +66,7 @@ export function canOccupy(w,a,p,angle=a.motion?.angle??0,ignoreBrood=null,ignore
       if(b.id===a.id)continue;
       const dx=p[0]-b.pos[0],dy=p[1]-b.pos[1],bound=(radius+bodyPixel(b))*21;
       if(dx*dx+dy*dy>bound*bound)continue;
+      if(Math.abs(lift-(b.motion?.climbHeight??0))>=CLIMB_CLEARANCE&&surfaceFooting(w,p)&&surfaceFooting(w,b.pos))continue;
       pose??=bodyDiscs(a,p,angle,joints);
       if(poseGap(pose,bodyDiscs(b))<-CONTACT_SLACK)return false;
     }

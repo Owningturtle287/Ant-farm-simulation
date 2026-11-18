@@ -748,3 +748,70 @@ test('continuous movement deposits readable chemical trails without heading coor
  senseAntennae(a,w,0,new Map());assert.ok(a.brain.antennae.right.food>a.brain.antennae.left.food);assert.ok(a.motion.turn>0,'An antenna must be able to read and steer toward the actual deposited trail.');
  w.excavated.delete(key([1,21]));w.changed([1,21]);w.signals.food.clear();emit(w,'food',[.75,20.8,Math.PI/2],2);assert.equal(w.signals.food.has('1,21'),false);assert.ok(Math.abs([...w.signals.food.values()].reduce((s,n)=>s+n,0)-2)<1e-9);
 });
+
+test('workers respond to nearby crop contents, local brood, and recent outcomes rather than remote reserves',async()=>{
+  const {taskScores,reinforceWork}=await import('../web/fire-ant.mjs');
+  const c=establishedColony(287),[a,b]=c.ants.slice(1,3);
+  c.ants=[a,b];clearBrood(c);a.pos=a.cell=[0,11];b.pos=b.cell=[1,11];beginTraffic(c);
+  const empty=c.needsFor(a);
+  c.demand={forage:0,water:0,care:0,dig:10};a.knownNeeds=null;
+  assert.deepEqual(c.needsFor(a),empty);
+  primeCrop(c,b,1.2,.6,.7);c.time=10;
+  const fed=c.needsFor(a);
+  assert.ok(fed.forage<empty.forage&&fed.water<empty.water);
+  b.pos=b.cell=[8,11];beginTraffic(c);c.time=20;
+  assert.ok(c.needsFor(a).forage>fed.forage);
+  const local={brood:0,alarm:0,construction:0},scores=()=>Object.fromEntries(taskScores(a,empty,local,c.time,false));
+  const initial=scores();reinforceWork(a,'water',c.time,.2);reinforceWork(a,'forage',c.time,-.4);
+  const trained=scores();
+  assert.ok(trained.water>initial.water&&trained.forage<initial.forage);
+  c.time+=DAY;assert.ok(Math.abs(scores().water-initial.water)<.005);
+});
+
+test('the queen accelerates laying after a nurse physically relays a late-larval cue',()=>{
+  const c=establishedColony(287),q=c.ants[0],n=c.ants[1],larva=c.brood[1];
+  c.ants=[q,n];q.pos=q.cell=[0,11];n.pos=n.cell=[-3,11];larva.cell=[-3,11];delete larva.bed;
+  larva.age=DAY*17;larva.nutrition=.8;n.broodID=larva.id;n.task='nursing';n.route=[];c.time=25;
+  c.occupancy=new Map([[key(q.cell),[q]],[key(n.cell),[n]]]);beginTraffic(c);
+  const initial=c.eggInterval;
+  c.updateAnt(n,.1);assert.ok(n.brain.larvalCue?.value>0);
+  n.encounterAt=0;c.encounter(n);assert.equal(c.eggInterval,initial,'Being in the same nest is insufficient.');
+  n.pos=[.57,11];n.cell=[1,11];c.occupancy=new Map([[key(q.cell),[q]],[key(n.cell),[n]]]);n.encounterAt=0;
+  c.encounter(n);assert.ok(c.eggInterval<initial);assert.equal(n.brain.larvalCue,undefined);
+  c.time+=DAY*4;assert.ok(Math.abs(c.eggInterval-initial)<1);
+});
+
+test('a surface worker climbs over a blocking worker, with no projected overlap while grounded',async()=>{
+  const {bodyGap}=await import('../web/traffic.mjs'),{moveAnt,updateMotion}=await import('../web/locomotion.mjs');
+  const c=establishedColony(287),[a,b]=c.ants.slice(1,3),w=c.world;
+  w.surface=()=>1;w.baseSurface=w.surface;w.solid=([,y])=>y>=1;
+  w.pathCache.clear();w.neighborCache.clear();w.excavated.clear();
+  c.ants=[a,b];c.brood=[];w.patches=[];
+  for(const [x,ant] of [[0,a],[1,b]]){ant.pos=ant.cell=[x,0];ant.motion.angle=0;}
+  a.route=[[3,0]];a.task='returningFood';a.carried=1;beginTraffic(c);
+  let overlap=false,prior=0;
+  for(let i=0;i<200;i++){
+    const time=i*.1;updateMotion(a,w,time,.1,new Map());moveAnt(a,w,time,.1);
+    const lift=a.motion.climbHeight??0;
+    assert.ok(Math.abs(lift-prior)<=.084);prior=lift;
+    if(bodyGap(a,b)<-.003){assert.ok(lift>=.105);overlap=true;}
+    assert.ok(canOccupy(w,a,a.pos));
+  }
+  assert.ok(overlap&&a.pos[0]>2.9);assert.equal(a.motion.climbHeight,0);assert.deepEqual(b.pos,[1,0]);
+});
+
+test('grounded display follows a trench profile without overshooting at the bottom',async()=>{
+  const {groundBody,surfaceProfile}=await import('../web/geometry.mjs'),w={
+    surface:x=>Math.abs(x)<=1?2:1,
+    solid([x,y]){return y>=this.surface(x);},
+  };
+  const p={x:-3,y:0},samples=[];
+  for(let i=0;i<=120;i++){
+    p.x=-3+i*.05;
+    p.y=surfaceProfile(w,p.x)-.48+.06*Math.sin(i*.43);
+    samples.push(groundBody(w,p,.17,.25).y);
+  }
+  assert.ok(Math.max(...samples)<=1.33+1e-8);
+  assert.ok(Math.abs(samples[60]-1.33)<1e-8);
+  assert.ok(samples.slice(1).every((y,i)=>Math.abs(y-samples[i])<.08));
+});

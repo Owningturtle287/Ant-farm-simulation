@@ -49,3 +49,17 @@ export function surfaceContact(world,x,y,clearance){
   if(y<ground-1.25||y>ground+.08||!world.solid([column,top]))return null;
   return {y:ground-clearance,slope:Math.atan2(surfaceProfile(world,x+.18)-surfaceProfile(world,x-.18),.36)};
 }
+
+export function surfaceFooting(world,p){
+  if(!world.surface)return null;
+  return surfaceContact(world,p[0],p[1],0);
+}
+
+export function groundBody(world,pose,clearance,blend){
+  const contact=surfaceFooting(world,[pose.x,pose.y]);
+  const target=contact?1:0;
+  pose.groundWeight??=target;
+  pose.groundWeight+=(target-pose.groundWeight)*blend;
+  if(contact)pose.footingOffset=contact.y-clearance-pose.y;
+  return {y:pose.y+(pose.footingOffset??0)*pose.groundWeight,contact};
+}

@@ -17,7 +17,7 @@ The first online visit caches the game for offline reopening. Progress saves loc
 
 - Animated pixel ants on seeded, contoured grassland. Bare, asymmetrical mound pellets contrast with rooted dirt and soft earth. Trees and hard/stone layers are removed.
 - A single reproductive queen and continuously sized small, medium, and large red imported fire-ant workers. White eggs, segmented larvae, and ant-shaped pupae develop through local care, protein from grain, and nest conditions. The queen moves within sheltered rooms, visibly lays eggs, and receives food from attendants; nurses physically carry eggs and relocate brood.
-- Stimulus-driven task selection using nutritional need, local signals, age, size and experience. Large workers are not locked into guarding. Antennal recognition, deliberate queen provisioning, recruitment, fallible source memories, and short alarm responses.
+- Workers choose tasks using local crop and brood cues, contact with recent foragers, and the results of their own trips. Size and age influence preferences. The queen adjusts her laying rate in response to physical provisioning and late-larval cues relayed by attendants.
 - **More → Fire ant behavior** explains the model; **More → Disturb the ground** demonstrates a local alarm. Trails shows food, water, brood, queen, home and alarm cues.
 - All ground is diggable. Transported soil retains its origin, and colony-specific deposition preferences and slopes shape uneven mounds. Workers propose and dig narrow peripheral mouths and passages through mound soil. Rehandled soil is conserved.
 - Grain is the sole food source. Each kernel supplies energy and protein. Grain and water portions shrink as workers collect them.
@@ -90,3 +90,5 @@ v0.13 uses grain for natural and placed food, eases exterior slopes, keeps new a
 
 
 v0.14 starts new colonies in one sealed chamber. Workers respond to the missing exit by excavating at a shared upward face, stage the earth inside, and favor deposits near the exit when they reach the surface. Grain stays attached to seed heads as the grass sways, grows, and withers.
+
+v0.15 gives workers local observations and changing task preferences. Nurses relay a late-larval cue to the queen, which changes how quickly she lays. Workers can climb over one another above ground and follow the terrain contour into shallow dips.

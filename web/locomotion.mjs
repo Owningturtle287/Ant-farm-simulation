@@ -1,7 +1,7 @@
-import {sweptFree,reindexAdult,canOccupy,terrainFree,nearbyAdults,bodyGap} from './traffic.mjs';
+import {sweptFree,reindexAdult,canOccupy,terrainFree,nearbyAdults,bodyGap,CLIMB_HEIGHT} from './traffic.mjs';
 // Local sensorimotor approximation, not a reconstruction of an ant nervous system.
 import {clamp} from './biology.mjs';
-import {densityAt} from './geometry.mjs';
+import {densityAt,surfaceFooting} from './geometry.mjs';
 import {sampleChemicals,resourceOdor} from './signals.mjs';
 import {bodyPixel,bodyDiscs,NECK_LIMIT,WAIST_LIMIT} from './body-pose.mjs';
 export const wrapAngle=a=>Math.atan2(Math.sin(a),Math.cos(a));
@@ -49,6 +49,10 @@ export function senseAntennae(a,w,time,occupancy){
 }
 export function updateMotion(a,w,time,dt,occupancy){
   const m=a.motion;w.motionRevisions??=new Map();const revision=w.revision;if(w.motionRevisions.get(a.id)!==revision){w.motionRevisions.set(a.id,revision);if(!terrainFree(w,a.pos))m.recovering=true;}m.phase=wrapAngle(m.phase+dt*(m.mode==='sampling'?11:6.5)+(a.brain.arousal??0)*dt*2);
+  if(m.climbHeight>0&&time>=(m.climbUntil??0)&&canOccupy(w,a,a.pos,m.angle,null,false,false,m,0)){
+    m.climbHeight=Math.max(0,m.climbHeight-dt*.75);
+  }
+
   if(time>=m.nextVariation){m.wander=m.wander*.6+(random(m)-.5)*.32;m.pace=.87+random(m)*.26;m.nextVariation=time+.45+random(m)*.7;}
   senseAntennae(a,w,time,occupancy);
   updateArticulation(a,w,time,dt);
@@ -123,9 +127,19 @@ export function moveAnt(a,w,time,dt,traffic=0){
   if(alignment<.45||waiting||sampling)speed=0;
   const step=Math.min(length,speed*dt),delta=wrapAngle(angle-previousAngle),origin=[...a.pos];
   const arc=(t,travel=step,turn=delta)=>Math.abs(turn)<1e-8?[origin[0]+Math.cos(previousAngle)*travel*t,origin[1]+Math.sin(previousAngle)*travel*t]:[origin[0]+travel/turn*(Math.sin(previousAngle+turn*t)-Math.sin(previousAngle)),origin[1]+travel/turn*(Math.cos(previousAngle)-Math.cos(previousAngle+turn*t))];
-  const free=(t,travel=step,turn=delta)=>{const count=Math.max(1,Math.ceil(Math.abs(turn*t)/.12),Math.ceil(travel*t/.10));let p=origin,prior=previousAngle;for(let i=1;i<=count;i++){const fraction=t*i/count,q=arc(fraction,travel,turn),heading=previousAngle+turn*fraction;if(!sweptFree(w,a,p,q,heading,prior))return false;p=q;prior=heading;}return true;};
+  const free=(t,travel=step,turn=delta,ignoreAdults=false)=>{const count=Math.max(1,Math.ceil(Math.abs(turn*t)/.12),Math.ceil(travel*t/.10));let p=origin,prior=previousAngle;for(let i=1;i<=count;i++){const fraction=t*i/count,q=arc(fraction,travel,turn),heading=previousAngle+turn*fraction;if(!sweptFree(w,a,p,q,heading,prior,false,ignoreAdults))return false;p=q;prior=heading;}return true;};
+  let clear=free(1);
+  if(!clear&&step>.018&&a.caste!=='queen'&&!a.carryingBrood&&surfaceFooting(w,origin)&&surfaceFooting(w,arc(1))&&free(1,step,delta,true)){
+    const end=arc(1);
+    const blocker=nearbyAdults(w,a,.8).find(b=>b.caste!=='queen'&&!b.motion?.climbHeight&&surfaceFooting(w,b.pos)&&bodyGap(a,b,end,angle)<0);
+    if(blocker){
+      m.climbHeight=Math.min(CLIMB_HEIGHT,(m.climbHeight??0)+dt*.82);
+      m.climbUntil=time+.27;
+      clear=free(1);
+    }
+  }
   let fraction=1,travelStep=step,turnStep=delta;
-  if(!free(1)){let low=0,high=1;for(let i=0;i<7;i++){const t=(low+high)/2;if(free(t))low=t;else high=t;}fraction=low;
+  if(!clear){let low=0,high=1;for(let i=0;i<7;i++){const t=(low+high)/2;if(free(t))low=t;else high=t;}fraction=low;
     if(fraction<.02){if(free(1,0,delta)){fraction=1;travelStep=0;}else if(step>0&&free(1,step,0)){fraction=1;turnStep=0;}}
   }
   const p=arc(fraction,travelStep,turnStep);m.angle=wrapAngle(previousAngle+turnStep*fraction);m.turnVelocity=wrapAngle(m.angle-previousAngle)/dt;
