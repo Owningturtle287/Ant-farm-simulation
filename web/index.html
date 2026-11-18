@@ -82,7 +82,7 @@
   <h2 id="guide-title">A whole world, one small colony.</h2><p class="intro muted">Give them a little care, then watch their world take shape.</p>
   <div class="guide-grid">
     <article><svg><use href="#i-nest"/></svg><h3>Look a little closer</h3><p>Drag to explore. Pinch to zoom. Tap an ant to meet it.</p></article>
-    <article><svg><use href="#i-food"/></svg><h3>Leave a little care</h3><p>Fire ants collect energy-rich nectar and protein-rich insect pieces. Visible food and water squares disappear as they are carried away. Rain and plant growth add new supplies.</p></article>
+    <article><svg><use href="#i-food"/></svg><h3>Leave a little care</h3><p>Fire ants collect energy-rich nectar and protein-rich insect pieces. Individual grains and food portions disappear as ants collect them. Pools shrink as ants drink. Rain and plant growth add new supplies.</p></article>
     <article><svg><use href="#i-ant"/></svg><h3>Let the colony build</h3><p>Workers dig narrow passages, carry brood, and change jobs in response to nutrition, contact, scent, age, and body size.</p></article>
   </div>
   <button id="enter" class="primary full">Enter the clearing</button><p class="guide-note muted">Saves on this device. The colony rests while the app is closed.</p>
@@ -94,7 +94,7 @@
 <dialog id="menu" class="panel menu-dialog" aria-labelledby="menu-title">
   <div class="dialog-heading"><h2 id="menu-title">A little care</h2><button data-close="menu" class="icon-button" aria-label="Close menu"><svg><use href="#i-close"/></svg></button></div>
   <div class="menu-actions"><button id="species-button" class="secondary">Fire ant behavior</button><button id="disturb-button" class="secondary">Disturb the ground</button><button id="settings-button" class="secondary">Colony &amp; reproduction</button><button id="performance-button" class="secondary">Show performance</button><button id="materials-button" class="secondary">Terrain guide</button><button id="save-now" class="secondary">Save colony now</button><button id="install-button" class="secondary">Save to my Home Screen</button><button id="help" class="secondary">How to play</button><button id="export" class="secondary">Export colony backup</button><button id="reset" class="danger">Start a new colony</button></div>
-  <p id="offline-state" class="offline-state muted" role="status">Preparing offline play…</p><p class="muted small">Jointed movement · v0.11<br>Solenopsis invicta · single-queen fire ants. Large workers forage, build, share food, and respond to local alarms. Growth follows resources, brood care, and nest conditions. Use Colony &amp; reproduction to control growth.</p>
+  <p id="offline-state" class="offline-state muted" role="status">Preparing offline play…</p><p class="muted small">Foraging and brood · v0.12<br>Solenopsis invicta · single-queen fire ants. Workers forage, build, provision the queen, and respond to local alarms. Growth follows resources, brood care, and nest conditions. Use Colony &amp; reproduction to control growth.</p>
 </dialog>
 <dialog id="settings" class="panel settings-dialog" aria-labelledby="settings-title">
   <div class="dialog-heading"><div><span class="eyebrow">GROW AT YOUR OWN PACE</span><h2 id="settings-title">Colony &amp; reproduction</h2></div><button data-close="settings" class="icon-button" aria-label="Close colony settings"><svg><use href="#i-close"/></svg></button></div>
@@ -120,12 +120,12 @@
   <p>One reproductive queen and a range of sterile female worker sizes. Large workers are not a separate permanent soldier caste.</p>
   <p>Workers weigh nutritional signals, brood contact, antennal encounters, local chemical trails, age, size, and experience. Young workers tend toward brood care; older workers are more likely to forage. These are tendencies that can change with need.</p>
   <p>Nestmates recognize a familiar blend of contact odors. Returning foragers activate nearby recruits. Food and water trails fade; an unsuccessful trip lowers a remembered source’s reliability.</p>
-  <p>Food and water have separate crop bars. Bigger ants carry more. Workers first feed themselves and share by contact, then carry excess solid food to individual dry cache spaces. Liquid water remains inside ants. Each brood item needs its own bed; crowded nests must expand.</p>
+  <p>Food and water have separate crop bars. Workers fill their crops by collecting from a source or dry food cache. The queen can take a meal brought by an attendant. New colonies start with empty crops and caches. Grains stay separate in storage, and each brood item has its own bed.</p>
   <p>During drought, workers can explore and excavate short downward moisture probes. Reaching an exposed water-table fringe creates finite, replenishing seepage. Fully saturated space is not a dry nursery. Adjust groundwater depth in Colony &amp; reproduction.</p>
   <p>Each antenna samples its own local chemical and touch cues. Workers compare left and right, cast wider when a trail weakens, and sometimes pause briefly to sample. Carrying food, soil or brood takes priority over wandering. Open an ant to see its current readings.</p>
   <p>Use <strong>More → Disturb the ground</strong> at 1× to see a brief local alarm response. With no threat, large workers return to useful work or wait as recruitable reserves.</p>
   <p>Narrow peripheral mouths connect to shallow foraging passages. The mound above them can contain its own tunnel network. New colonies generate the revised layout; established colonies keep their ground.</p>
-  <p class="muted small">A research-informed behavioral approximation, not an exact ant brain. Timings, distance, nutrition, the population ceiling, and resource squares use game-scale units. Full mating flights, multiple-queen societies, rival colonies, and detailed neural/chemical physiology are not modeled.</p>
+  <p class="muted small">A research-informed behavioral approximation, not an exact ant brain. Timings, distance, nutrition, the population ceiling, and resource portions use game-scale units. Full mating flights, multiple-queen societies, rival colonies, and detailed neural/chemical physiology are not modeled.</p>
 </dialog>
 <dialog id="install" class="panel install-dialog" aria-labelledby="install-title">
   <div class="dialog-heading"><span class="eyebrow">YOUR OWN LITTLE CLEARING</span><button data-close="install" class="icon-button" aria-label="Close installation guide"><svg><use href="#i-close"/></svg></button></div>

@@ -134,7 +134,7 @@ canvas.addEventListener('pointermove',event=>{
 canvas.addEventListener('pointerup',async event=>{
   const p=localPoint(event);pointers.delete(event.pointerId);
   if(!moved && pointers.size===0){const world=renderer.world(p);
-    if(state.tool){await settleForEdit();const kind=state.tool;let responders=0;if(kind==='disturb')responders=colony.disturb(world.map(Math.round));else colony.place(kind,world[0]);state.tool=null;updateTools();toast(kind==='disturb'?(responders?'Nearby workers raised an alarm. Watch at 1×.':'Ground disturbed. No workers were close enough to react.'):kind==='food'?'Food placed. Insect pieces supply protein; nectar supplies energy.':'Water placed. Its finite squares disappear as workers collect it.');}
+    if(state.tool){await settleForEdit();const kind=state.tool;let responders=0;if(kind==='disturb')responders=colony.disturb(world.map(Math.round));else colony.place(kind,world[0]);state.tool=null;updateTools();toast(kind==='disturb'?(responders?'Nearby workers raised an alarm. Watch at 1×.':'Ground disturbed. No workers were close enough to react.'):kind==='food'?'Food placed. Insect pieces supply protein; nectar supplies energy.':'Water placed. The pool shrinks as workers drink.');}
     else{const ants=colony.ants.filter(a=>distance(renderer.screen(a.pos),p)<26).sort((a,b)=>a.id-b.id),current=ants.findIndex(a=>a.id===state.selected);select(ants.length?ants[(current+1)%ants.length].id:null);}
   }
   if(pointers.size===1){lastPoint=[...pointers.values()][0];moved=true;}else{start=null;lastPoint=null;}pinchDistance=0;

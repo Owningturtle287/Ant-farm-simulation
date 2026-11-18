@@ -6,7 +6,7 @@ const row=()=>({created:0,harvested:0,evaporated:0,buried:0,decayed:0,drained:0,
 export function initLedger(w){w.resourceLedger={food:row(),water:row()};}
 export function restoreLedger(w,d){if(d.resourceLedger){w.resourceLedger=structuredClone(d.resourceLedger);return;}initLedger(w);for(const p of w.patches)w.resourceLedger[p.kind].created+=p.amount;}
 export function addStock(w,p,amount){const n=Math.max(0,Math.min(amount,Math.max(0,(p.capacity??Infinity)-p.amount)));const placed=w.spaceReady?allocatePieces(w,p,n):n;p.amount+=placed;if(w.resourceLedger)w.resourceLedger[p.kind].created+=placed;return placed;}
-export function removeStock(w,p,amount,why='harvested'){const n=Math.max(0,Math.min(amount,p.amount));consumePieces(w,p,n,p.activePieceID);p.amount=Math.max(0,p.amount-n);if(w.resourceLedger)w.resourceLedger[p.kind][why]=(w.resourceLedger[p.kind][why]??0)+n;return n;}
+export function removeStock(w,p,amount,why='harvested',pieceID=p.activePieceID){const n=Math.max(0,Math.min(amount,p.amount));consumePieces(w,p,n,pieceID);p.amount=Math.max(0,p.amount-n);if(w.resourceLedger)w.resourceLedger[p.kind][why]=(w.resourceLedger[p.kind][why]??0)+n;return n;}
 export function resourceBalance(w,kind){const l=w.resourceLedger[kind],available=w.patches.filter(p=>p.kind===kind).reduce((s,p)=>s+p.amount,0);return {available,...l,error:l.created-available-l.harvested-l.evaporated-l.buried-(l.decayed??0)-(l.drained??0)-(l.runoff??0)};}
 export function resourceTiles(w,p){
   if(!(p.amount>1e-7))return [];

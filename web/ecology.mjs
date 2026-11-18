@@ -45,8 +45,8 @@ export function addPuddle(w,basin,amount){
   if(!p){p={id:w.nextPatchID++,kind:'water',origin:'puddle',cell:[basin.x,w.surface(basin.x)-1],amount:0,left:basin.left,right:basin.right,capacity:18*Math.max(1,basin.right-basin.left+1)};w.patches.push(p);}
   addStock(w,p,amount);p.left=basin.left;p.right=basin.right;return p;
 }
-export function harvest(w,p,amount,time){
-  const taken=removeStock(w,p,amount);
+export function harvest(w,p,amount,time,pieceID){
+  const taken=removeStock(w,p,amount,'harvested',pieceID);
   if(p.amount<.001)p.depletedAt=time;
   if(p.amount<.001&&p.origin!=='grass'&&p.renewable!==false)p.regrowAt=time+DAY*(p.origin==='prey'?2+w.ecologyRng.float()*3:1+w.ecologyRng.float());
   if(p.origin==='grass'&&p.amount<.001){removeStock(w,p,p.amount,'decayed');p.stage='dead';p.growth=0;p.regrowAt=time+DAY*(.6+(terrainHash(p.cell[0],w.seed)%10)/10);w.changed([p.cell[0],w.baseSurface(p.cell[0])]);}

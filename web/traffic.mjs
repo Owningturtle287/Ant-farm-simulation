@@ -23,13 +23,27 @@ export function bodyGap(a,b,p=a.pos,angle=a.motion?.angle??0,joints=a.motion){co
 function insert(map,o,p){const k=bin(p);if(!map.has(k))map.set(k,new Set());map.get(k).add(o);}
 function around(map,p,r=2){const out=[];for(let y=Math.floor(p[1])-r;y<=Math.floor(p[1])+r;y++)for(let x=Math.floor(p[0])-r;x<=Math.floor(p[0])+r;x++)for(const o of map.get(x+','+y)??[])out.push(o);return out;}
 export function nearbyAdults(w,a,range=1.3){return w.traffic?around(w.traffic.adults,a.pos,1).filter(b=>b.id!==a.id&&dist(a.pos,b.pos)<range):[];}
-export function refreshItems(c,force=true){const t=c.world.traffic;if(!t||(!force&&!t.itemDirty))return;t.itemDirty=false;const list=[];for(const b of c.brood)if(b.carriedBy==null)list.push({pos:b.cell,radius:.31,kind:'brood',id:b.id});for(const p of c.foodItems)list.push({pos:p.pos,radius:.115,kind:'cache',id:p.id});for(const p of c.world.patches)for(const q of p.pieces??[])list.push({pos:q.pos,radius:.10,kind:p.kind,id:p.id});
-  let hash=2166136261;for(const o of list){hash=Math.imul(hash^Math.round(o.pos[0]*300),16777619);hash=Math.imul(hash^Math.round(o.pos[1]*300+o.radius*1000),16777619);}hash^=list.length;
-  if(t.itemHash!==hash){t.itemHash=hash;t.items=new Map();t.obstacles=new Map();for(const o of list){insert(t.items,o,o.pos);if(o.kind!=='brood'&&o.kind!=='cache')insert(t.obstacles,o,o.pos);}t.routes.clear();t.bodyNavigation=null;c.world.neighborCache.clear();c.world.pathCache.clear();}
+export function refreshItems(c,force=true){
+  const t=c.world.traffic;if(!t||(!force&&!t.itemDirty))return;
+  t.itemDirty=false;
+  // Loose grain and liquid do not supply footing or block a walking ant.
+  const obstacles=[];
+  for(const p of c.world.patches)if(p.kind==='food'&&p.origin!=='grass')for(const piece of p.pieces??[])obstacles.push(piece.pos);
+  let hash=2166136261;
+  for(const [x,y] of obstacles){hash=Math.imul(hash^Math.round(x*300),16777619);hash=Math.imul(hash^Math.round(y*300),16777619);}
+  hash^=obstacles.length;
+  if(t.itemHash===hash)return;
+  t.itemHash=hash;t.obstacles=new Map();
+  for(const pos of obstacles)insert(t.obstacles,{pos,radius:.10},pos);
+  t.routes.clear();t.bodyNavigation=null;c.world.neighborCache.clear();c.world.pathCache.clear();
 }
-export function beginTraffic(c){const w=c.world,old=w.traffic,changed=!old||old.broodRef!==c.brood||old.foodRef!==c.foodItems||old.patchRef!==w.patches||old.broodCount!==c.brood.length||old.foodCount!==c.foodItems.length||old.patchCount!==w.patches.length;w.traffic={adults:new Map(),items:old?.items??new Map(),obstacles:old?.obstacles??new Map(),routes:old?.geometry===w.revision?old.routes:new Map(),bodyNavigation:old?.geometry===w.revision?old.bodyNavigation:null,itemHash:old?.itemHash,itemDirty:changed||old?.itemDirty,broodRef:c.brood,foodRef:c.foodItems,patchRef:w.patches,broodCount:c.brood.length,foodCount:c.foodItems.length,patchCount:w.patches.length,geometry:w.revision,colony:c};refreshItems(c,false);for(const a of c.ants)insert(w.traffic.adults,a,a.pos);}
+export function beginTraffic(c){
+  const w=c.world,old=w.traffic,changed=!old||old.patchRef!==w.patches||old.patchCount!==w.patches.length;
+  w.traffic={adults:new Map(),obstacles:old?.obstacles??new Map(),routes:old?.geometry===w.revision?old.routes:new Map(),bodyNavigation:old?.geometry===w.revision?old.bodyNavigation:null,itemHash:old?.itemHash,itemDirty:changed||old?.itemDirty,patchRef:w.patches,patchCount:w.patches.length,geometry:w.revision,colony:c};
+  refreshItems(c,false);for(const a of c.ants)insert(w.traffic.adults,a,a.pos);
+}
 export function reindexAdult(w,a,old){if(!w.traffic)return;w.traffic.adults.get(bin(old))?.delete(a);insert(w.traffic.adults,a,a.pos);}
-export function foodSupport(w,p){return !!w.traffic&&around(w.traffic.items,p,1).some(o=>['food','cache'].includes(o.kind)&&Math.abs(o.pos[0]-p[0])<1.05&&Math.abs(o.pos[1]-p[1])<1.15);}
+export function foodSupport(w,p){return !!w.traffic&&around(w.traffic.obstacles,p,1).some(o=>Math.abs(o.pos[0]-p[0])<1.05&&Math.abs(o.pos[1]-p[1])<1.15);}
 export function terrainFree(w,p){
   p=[p[0],p[1]];if(densityAt(...p,(x,y)=>w.solid([x,y]))>=.49)return false;
   if(!w.walkable(p.map(n=>Math.round(n)||0))){const x=Math.floor(p[0]),y=Math.floor(p[1]);let supported=false;for(let dy=0;dy<=1;dy++)for(let dx=0;dx<=1;dx++)if(Math.hypot(p[0]-x-dx,p[1]-y-dy)<.81&&w.walkable([x+dx,y+dy]))supported=true;if(!supported)return false;}return true;
@@ -40,7 +54,7 @@ export function canOccupy(w,a,p,angle=a.motion?.angle??0,ignoreBrood=null,ignore
   const discs=bodyDiscs(a,p,angle,joints);
   // Small surface portions constrain the thorax; head and gaster may reach over them.
   // Nestmate contact below still protects every connected body segment.
-  for(const o of around(t.obstacles??t.items,p,1))if(o.kind!=='brood'&&o.kind!=='cache'&&Math.hypot(o.pos[0]-discs[0].x,o.pos[1]-discs[0].y)<discs[0].radius+o.radius-.002)return false;
+  for(const o of around(t.obstacles,p,1))if(Math.hypot(o.pos[0]-discs[0].x,o.pos[1]-discs[0].y)<discs[0].radius+o.radius-.002)return false;
   if(!ignoreAdults)for(const b of around(t.adults,p,a.caste==='queen'?2:1))if(b.id!==a.id&&dist(b.pos,p)<1.4&&bodyGap(a,b,p,angle,joints)<-CONTACT_SLACK)return false;
   return true;
 }

@@ -1,4 +1,6 @@
 import {paintBrood} from './brood-art.mjs';
+import {bedPosition} from './provisions.mjs';
+import {paintGrain,paintWater} from './resource-art.mjs';
 import {TerrainCache} from './render-cache.mjs';
 import {rasterRows,coarseTerrain,snapshotTerrain} from './terrain-raster.mjs';
 import {cell,key,broodStage} from './sim.mjs';
@@ -98,10 +100,26 @@ export class Renderer {
       }
       if(p.kind==='water'||p.origin==='prey'||p.origin==='nectar'||p.origin==='grass'&&p.stage==='seed'){
         const tiles=resourceTiles(world,p);
-        for(const tile of tiles){const [tx,ty]=this.screen([tile.x,tile.y]);
-          c.globalAlpha=Math.min(1,tile.amount/2);const shimmer=p.kind==='water'?.88+Math.sin(clock*2+tile.x*.7)*.12:1;c.globalAlpha*=shimmer;c.fillStyle=p.kind==='water'?'#74bdcd':p.origin==='prey'?'#ba755b':'#ecc56b';
-          const size=p.kind==='water'?u/3-.3:u*.20;c.fillRect(Math.round(tx-size/2),Math.round(ty-size/2),size,size);
-          c.fillStyle=p.kind==='water'?'#c2e6e9':p.origin==='prey'?'#e2a982':'#fff0b1';c.fillRect(Math.round(tx-size/2),Math.round(ty-size/2),Math.max(1,size*.6),Math.max(1,z));c.globalAlpha=1;
+        if(p.kind==='water'){
+          const sorted=tiles.sort((a,b)=>b.y-a.y||a.x-b.x);
+          for(let i=0;i<sorted.length;){
+            const first=sorted[i++];let last=first,total=first.amount,count=1;
+            while(i<sorted.length&&sorted[i].y===first.y&&sorted[i].x-last.x<.35){
+              last=sorted[i++];total+=last.amount;count++;
+            }
+            const [tx,ty]=this.screen([(first.x+last.x)/2,first.y]);
+            if(ty<-u||ty>this.height+u)continue;
+            const portion=Math.sqrt(total/(2*count));
+            paintWater(c,tx,ty,Math.max(1,u*(last.x-first.x+.34*portion)),Math.max(1,u*.29*portion),clock*3+p.id*.7+first.x*.4);
+          }
+        }else for(const tile of tiles){
+          const [tx,ty]=this.screen([tile.x,tile.y]);if(ty<-u||ty>this.height+u)continue;
+          if(p.origin==='grass'){paintGrain(c,tx,ty,u*.24,tile.id??0,tile.amount/2);continue;}
+          const size=u*.20;c.globalAlpha=Math.min(1,tile.amount/2);
+          c.fillStyle=p.origin==='prey'?'#ba755b':'#ecc56b';
+          c.fillRect(Math.round(tx-size/2),Math.round(ty-size/2),size,size);
+          c.fillStyle=p.origin==='prey'?'#e2a982':'#fff0b1';
+          c.fillRect(Math.round(tx-size/2),Math.round(ty-size/2),Math.max(1,size*.6),Math.max(1,z));c.globalAlpha=1;
         }
         if(p.origin==='nectar'&&p.renewable!==false){c.strokeStyle='#577d46';c.lineWidth=Math.max(1,z);c.beginPath();c.moveTo(x,y);c.lineTo(x-2*z,y-12*z);c.stroke();c.fillStyle='#c1a3bd';c.fillRect(x-4*z,y-14*z,5*z,3*z);}
       }
@@ -137,8 +155,8 @@ export class Renderer {
     if(options.trails)this.chemicals.draw(c,colony.world,this,performance.now());
     const visualClock=options.paused?colony.time:clock;
     this.surfaceLife(colony.world,visualClock);
-    for(const baby of colony.brood)if(baby.carriedBy==null&&baby.cell[0]>=min[0]-1&&baby.cell[0]<=max[0]+1&&baby.cell[1]>=min[1]-1&&baby.cell[1]<=max[1]+1){const [x,y]=this.screen(baby.cell);let pose=this.broodPoses.get(baby.id);const stage=broodStage(baby);if(!pose){pose={stage,changed:clock};this.broodPoses.set(baby.id,pose);}if(pose.stage!==stage){pose.previous=pose.stage;pose.stage=stage;pose.changed=clock;}paintBrood(c,baby,x,y,z,visualClock,Math.min(1,(clock-pose.changed)/.85),pose.previous);}
-    for(const item of colony.foodItems){const [x,y]=this.screen(item.pos);if(x<-u||y<-u||x>this.width+u||y>this.height+u)continue;const d=Math.max(1,u*.23);c.fillStyle=item.protein>item.energy?'#b97950':'#d4b56d';c.fillRect(Math.round(x-d/2),Math.round(y-d/2),d,d*.7);c.fillStyle='#efd39a';c.fillRect(Math.round(x-d/2),Math.round(y-d/2),Math.max(1,d*.6),Math.max(1,z*.6));}
+    for(const baby of colony.brood)if(baby.carriedBy==null&&baby.cell[0]>=min[0]-1&&baby.cell[0]<=max[0]+1&&baby.cell[1]>=min[1]-1&&baby.cell[1]<=max[1]+1){const [x,y]=this.screen(bedPosition(baby));let pose=this.broodPoses.get(baby.id);const stage=broodStage(baby);if(!pose){pose={stage,changed:clock};this.broodPoses.set(baby.id,pose);}if(pose.stage!==stage){pose.previous=pose.stage;pose.stage=stage;pose.changed=clock;}paintBrood(c,baby,x,y,z,visualClock,Math.min(1,(clock-pose.changed)/.85),pose.previous);}
+    for(const item of colony.foodItems){const [x,y]=this.screen(item.pos);if(x<-u||y<-u||x>this.width+u||y>this.height+u)continue;if(item.origin==='grass'){paintGrain(c,x,y,u*.24,item.id,(item.energy+item.protein)/2);continue;}const d=Math.max(1,u*.23);c.fillStyle=item.protein>item.energy?'#b97950':'#d4b56d';c.fillRect(Math.round(x-d/2),Math.round(y-d/2),d,d*.7);c.fillStyle='#efd39a';c.fillRect(Math.round(x-d/2),Math.round(y-d/2),Math.max(1,d*.6),Math.max(1,z*.6));}
     const carriedBrood=new Map(colony.brood.filter(b=>b.carriedBy!=null).map(b=>[b.carriedBy,b]));
     const live=new Set();
     for(const ant of colony.ants) {
@@ -159,7 +177,8 @@ export class Renderer {
       if(ant.task==='laying'&&colony.time>ant.layUntil-2){c.fillStyle='#fff0cb';c.fillRect(-width*.55,-z,3*z,3*z);}
       if(carriedBrood.has(ant.id)||ant.carried){c.save();c.translate(width*4/SPRITE_W,0);c.rotate(z>=.95||ant.id===options.selected||ant.caste==='queen'?p.neck??0:0);
         if(carriedBrood.has(ant.id))paintBrood(c,carriedBrood.get(ant.id),width*.32,0,z,visualClock);
-        if(ant.carried){c.fillStyle=ant.cargoKind==='soil'?'#c29a61':ant.cargoKind==='water'?'#93ccda':ant.cargoNutrition?.protein>.5?'#ba755b':'#ecc56b';for(let unit=0;unit<Math.ceil(ant.carried/2);unit++)c.fillRect(width*.28+unit*3*z,-height*.3,3*z,3*z);}c.restore();}c.restore();
+        if(ant.carried&&ant.cargoKind==='food'&&ant.cargoOrigin==='grass')paintGrain(c,width*.34,-height*.2,u*.24,ant.id,ant.carried/2);
+        else if(ant.carried){c.fillStyle=ant.cargoKind==='soil'?'#c29a61':ant.cargoKind==='water'?'#93ccda':ant.cargoNutrition?.protein>.5?'#ba755b':'#ecc56b';for(let unit=0;unit<Math.ceil(ant.carried/2);unit++)c.fillRect(width*.28+unit*3*z,-height*.3,3*z,3*z);}c.restore();}c.restore();
     }
     const broodIDs=new Set(colony.brood.map(b=>b.id));for(const id of this.broodPoses.keys())if(!broodIDs.has(id))this.broodPoses.delete(id);
     for(const id of this.positions.keys())if(!live.has(id))this.positions.delete(id);
