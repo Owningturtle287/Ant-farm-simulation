@@ -321,7 +321,10 @@ export class Colony{
     if(!working||this.time<a.busyUntil||!waypointStalled&&this.time-(a.lastProgressAt??0)<18)return;
     this.world.runtime.recoveries++;a.lastProgressAt=this.time;this.world.pathCache.clear();a.route=[];
 
-    if(a.task==='toDig')reinforceWork(a,'dig',this.time,-.38);
+    if(a.task==='toDig'){
+      reinforceWork(a,'dig',this.time,-.38);
+      if(a.shaftWork){delete a.shaftWork;a.shaftRetryAt=this.time+12;}
+    }
     if(a.task==='toDig'&&this.world.founding&&!this.world.entrances.length){
       a.brain.foundingRetryAt=this.time+8;
       this.chooseJob(a);return;
@@ -497,7 +500,7 @@ export class Colony{
         this.headOut(a);break;
       }
       case 'haulingSoil':{
-        if(!this.world.onSurface(a.cell)){const exit=this.exitFor(a);if(exit){a.route=exit.route;a.destination=exit.point;}else{a.motion.trafficBlocked=2;unjam(this,a);}break;}
+        if(!this.world.onSurface(a.cell)){if(a.shaftWork){this.headOut(a);break;}const exit=this.exitFor(a);if(exit){a.route=exit.route;a.destination=exit.point;}else{a.motion.trafficBlocked=2;unjam(this,a);}break;}
         if(!a.depositTarget||this.world.solid(a.depositTarget)||!spaceForItem(this.world,a.depositTarget,.45)){
           a.depositTarget=this.world.depositSite(a.cell,a);
         }
@@ -506,7 +509,7 @@ export class Colony{
           const stance=this.world.neighbors(site).filter(p=>distance(p,site)>=.9&&canOccupy(this.world,a,p)).sort((p,q)=>distance(p,a.pos)-distance(q,a.pos))[0];
           if(stance)this.send(a,stance);else{a.motion.trafficBlocked=2;unjam(this,a);}break;
         }
-        if(this.world.deposit(site,a.cargoMaterial)){a.carried=0;a.cargoKind=null;a.cargoMaterial=null;a.depositTarget=null;delete a.retrievingSpoil;a.trips++;a.cell=a.pos.map(n=>Math.round(n)||0);if(this.world.soilDeposited===1)this.record('The first loose-soil mound is forming.');this.chooseJob(a);}else a.depositTarget=null;break;
+        if(this.world.deposit(site,a.cargoMaterial)){a.carried=0;a.cargoKind=null;a.cargoMaterial=null;a.depositTarget=null;delete a.retrievingSpoil;delete a.shaftWork;a.trips++;a.cell=a.pos.map(n=>Math.round(n)||0);if(this.world.soilDeposited===1)this.record('The first loose-soil mound is forming.');this.chooseJob(a);}else a.depositTarget=null;break;
       }
       case 'exploring':if(!this.discover(a))this.explore(a);break;
       case 'toQueenStore':if(!this.assignCache(a,'queen',true))this.chooseJob(a);break;
@@ -551,6 +554,10 @@ export class Colony{
       a.decision='Leaving a pellet in the chamber until there is a way outside.';return;
     }
     if(w.onSurface(a.cell)){a.route=[];return;}
+    if(a.shaftWork&&a.cell[1]>w.nest[1]+4){
+      const [x,y]=a.cell,waypoint=[x,Math.max(w.nest[1]+3,y-6)];
+      if(w.walkable(waypoint)&&this.send(a,waypoint))return;
+    }
     const exit=this.exitFor(a);
     if(exit){a.route=exit.route;a.destination=exit.point;}
     else{a.route=[];a.busyUntil=this.time+.5;}
@@ -633,11 +640,15 @@ export class Colony{
       if(this.world.founding.tip&&distance(a.pos,this.world.founding.tip)<1.7){const waiting=idlePlace(this.world,a);if(waiting)this.send(a,waiting);}
       return;
     }
-    const needsGroundwater=!this.world.surfaceWater&&this.waterPressure>.3;
-    if(needsGroundwater&&!a.carried&&!a.carryingBrood&&!this.world.onSurface(a.cell)){
+    if(a.shaftWork&&!a.carried)delete a.shaftWork;
+    const w=this.world,needsGroundwater=!w.surfaceWater&&this.waterPressure>.3;
+    if(needsGroundwater&&!a.carried&&!a.carryingBrood&&!w.onSurface(a.cell)){
       this.proposeConstruction(a,this.needsFor(a));
-      const shaft=this.world.waterDig?.cells??[];
-      if(shaft.some(c=>this.world.solid(c)&&!this.reserved.has(key(c)))&&this.assignDig(a,shaft)){
+      const shaft=w.waterDig?.cells??[];
+      // Let the loaded digger clear the confined shaft before another enters.
+      const occupied=this.ants.some(b=>b!==a&&b.shaftWork&&(!b.carried||b.cell[1]>w.nest[1]+3));
+      if(!occupied&&this.time>=(a.shaftRetryAt??0)&&this.assignDig(a,shaft)){
+        a.shaftWork=true;
         a.decision='Following moisture at the working face to open a groundwater shaft.';
         rememberTask(a,'dig',this.time);return;
       }
@@ -721,7 +732,9 @@ export class Colony{
     if(gradient[0]&&senseSignal(this.world,'brood',gradient[0])>.04){a.task='nursing';a.broodID=null;this.send(a,gradient[0]);return true;}return false;
   }
   assignDig(a,restrictTo=null){
-    const sites=this.world.frontier().filter(c=>!this.reserved.has(key(c))&&(!restrictTo||restrictTo.some(target=>same(c,target)))).sort((x,y)=>distance(x,a.cell)-distance(y,a.cell));
+    const shaft=!this.world.surfaceWater&&this.waterPressure>.3?this.world.waterDig?.cells??[]:[];
+    const allowed=c=>restrictTo?restrictTo.some(target=>same(c,target)):!shaft.some(target=>same(c,target));
+    const sites=this.world.frontier().filter(c=>!this.reserved.has(key(c))&&allowed(c)).sort((x,y)=>distance(x,a.cell)-distance(y,a.cell));
     for(const site of sites.slice(0,8))for(const neighbor of nearbyStances(this.world,a,site,1.2).slice(0,8)){
       const route=routeAroundItems(this.world,a,neighbor);if(route){a.task='toDig';a.route=route;a.destination=[...neighbor];a.target=[...site];a.lastJob='dig';this.reserved.add(key(site));return true;}
     }return false;

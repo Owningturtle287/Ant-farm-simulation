@@ -831,15 +831,18 @@ test('grounded display follows a trench profile without overshooting at the bott
   assert.ok(samples.slice(1).every((y,i)=>Math.abs(y-samples[i])<.08));
 });
 
-test('groundwater-only workers dig through saturated soil and bring back water',()=>{
-  const c=new Colony(287,{surfaceWater:false,rainMode:'off',waterTableDepth:24});
-  assert.equal(c.place('water',3),false);
-  while(c.time<900&&c.waterDelivered===0)c.step();
-  const w=c.world,seep=w.patches.find(p=>p.origin==='seep');
-  assert.ok(c.waterDelivered>0);assert.ok(seep&&w.path(w.nest,seep.cell));
-  assert.ok(w.excavated.has(key([seep.cell[0],seep.cell[1]+1])));
-  assert.ok(w.patches.every(p=>p.kind!=='water'||p.origin==='seep'));
-  assert.ok(Math.abs(resourceBalance(w,'water').error)<1e-7);
+test('groundwater-only workers complete shallow and deep shafts and bring back water',()=>{
+  for(const [seed,waterTableDepth,deadline] of [[287,24,900],[17,56,2000]]){
+    const c=new Colony(seed,{surfaceWater:false,rainMode:'off',waterTableDepth});
+    assert.equal(c.place('water',3),false);
+    while(c.time<deadline&&c.waterDelivered===0)c.step();
+    const w=c.world,seep=w.patches.find(p=>p.origin==='seep');
+    assert.ok(c.waterDelivered>0,`Seed ${seed} should deliver water from a ${waterTableDepth}-cell shaft.`);
+    assert.ok(seep&&w.path(w.nest,seep.cell));
+    assert.ok(w.excavated.has(key([seep.cell[0],seep.cell[1]+1])));
+    assert.ok(w.patches.every(p=>p.kind!=='water'||p.origin==='seep'));
+    assert.ok(Math.abs(resourceBalance(w,'water').error)<1e-7);
+  }
 });
 test('weather controls persist and separate rain from surface water',()=>{
   const c=new Colony(287);
