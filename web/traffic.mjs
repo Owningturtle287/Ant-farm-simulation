@@ -108,7 +108,7 @@ export function settleAdults(c){
     }insert(w.traffic.adults,a,a.pos);
   }c.trafficVersion=1;
 }
-function passagePriority(a,time){return (a.caste==='queen'?10000:a.carryingBrood?40:a.carried?12:0)+Math.max(0,time-(a.motion.waitingSince??time))*6-a.id*.0001;}
+function passagePriority(a,time,shut){return (a.caste==='queen'?10000:a.carryingBrood?40:a.carried?12:shut&&a.task==='toDig'?10:0)+Math.max(0,time-(a.motion.waitingSince??time))*6-a.id*.0001;}
 function passingPlace(w,a,other){
   const angle=a.motion.angle,co=Math.cos(angle),si=Math.sin(angle),candidates=[];
   // These are walking destinations, never lateral position corrections.
@@ -140,9 +140,10 @@ function yieldTo(c,a,winner,bay){const m=a.motion;m.resumeGoal=['resting','groom
 export function unjam(c,a){
   const w=c.world,m=a.motion;if((m.trafficBlocked??0)<.45||m.yieldingRoute||c.time<(m.nextTrafficPlanAt??0))return;m.nextTrafficPlanAt=c.time+.65;m.waitingSince??=c.time;
   const near=nearbyAdults(w,a,1.2).sort((b,d)=>dist(b.pos,a.pos)-dist(d.pos,a.pos));
+  const sealed=!!w.founding&&!w.entrances.length;
   for(const b of near.slice(0,3)){
     const trusted=a.recognitionTemplate&&b.odor&&Math.hypot(...a.recognitionTemplate.map((v,i)=>v-b.odor[i]))<.2;if(!trusted)continue;
-    const winner=passagePriority(a,c.time)>=passagePriority(b,c.time)?a:b,yielder=winner===a?b:a;
+    const winner=passagePriority(a,c.time,sealed)>=passagePriority(b,c.time,sealed)?a:b,yielder=winner===a?b:a;
     a.brain.traffic={partner:b.id,signal:winner===a?'Requesting passage':'Making room',at:c.time,until:c.time+3};b.brain.traffic={partner:a.id,signal:winner===b?'Requesting passage':'Making room',at:c.time,until:c.time+3};
     a.motion.examineAngle=Math.atan2(b.pos[1]-a.pos[1],b.pos[0]-a.pos[0]);a.motion.examineUntil=c.time+.6;b.motion.examineAngle=Math.atan2(a.pos[1]-b.pos[1],a.pos[0]-b.pos[0]);b.motion.examineUntil=c.time+.6;
     if(yielder.caste==='queen'||yielder.motion.yieldingRoute)continue;
@@ -152,5 +153,5 @@ export function unjam(c,a){
   }
   const retreat=clearancePlace(w,a,c.time)??(near.length?backingPlace(w,a,c.time):null);if(retreat){yieldTo(c,a,near[0]??a,retreat);a.brain.traffic={partner:near[0]?.id??null,signal:'Taking a short step clear to turn',at:c.time,until:c.time+1};return;}
   const goal=m.yieldTarget??a.destination;if(goal){const stance=canOccupy(w,a,goal)?goal:nearestStance(w,a,goal),detour=stance?routeAroundItems(w,a,stance,true):null;if(detour?.length&&JSON.stringify(detour)!==JSON.stringify(a.route)){a.route=detour;m.trafficBlocked=0;return;}}
-  if(c.time-(m.waitingSince??c.time)>6&&w.neighbors(a.cell).length<=3){c.congestionUntil=c.time+15;if(a.cell[1]>w.baseSurface(a.cell[0])+3)for(const dx of[-1,1]){const p=[a.cell[0]+dx,a.cell[1]];if(w.solid(p)&&!w.construction.some(q=>key(q)===key(p))){w.construction.push(p,[p[0],p[1]+1]);w.frontierVersion=-1;break;}}}
+  if(!sealed&&c.time-(m.waitingSince??c.time)>6&&w.neighbors(a.cell).length<=3){c.congestionUntil=c.time+15;if(a.cell[1]>w.baseSurface(a.cell[0])+3)for(const dx of[-1,1]){const p=[a.cell[0]+dx,a.cell[1]];if(w.solid(p)&&!w.construction.some(q=>key(q)===key(p))){w.construction.push(p,[p[0],p[1]+1]);w.frontierVersion=-1;break;}}}
 }

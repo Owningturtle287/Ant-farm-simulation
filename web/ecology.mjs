@@ -62,7 +62,7 @@ export function tickHabitat(w,time){
     if(p.origin==='seep')continue;const y=w.surface(p.cell[0])-1;if(p.cell[1]!==y){p.cell[1]=y;}
     const buried=w.surface(p.cell[0])<w.baseSurface(p.cell[0]);
     if(p.origin==='grass'){
-      if(buried){removeStock(w,p,p.amount,'buried');p.stage='dead';p.growth=0;p.regrowAt=time+DAY;continue;}
+      if(buried||!w.solid([p.cell[0],w.baseSurface(p.cell[0])])){removeStock(w,p,p.amount,'buried');p.stage='dead';p.growth=0;p.regrowAt=time+DAY;continue;}
       if(p.stage==='dead'&&time>=p.regrowAt){p.stage='sprout';p.growth=.02;w.changed([p.cell[0],w.baseSurface(p.cell[0])]);}
       if(p.stage==='sprout'){
         p.growth=clamp(p.growth+elapsed/(DAY*1.4)*(.3+weather.wetness));

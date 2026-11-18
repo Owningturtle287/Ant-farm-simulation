@@ -58,11 +58,12 @@ test('128x remains interactive, records actual performance, and builds a disting
   // Exercise live deposition after the worker has excavated and carried a real pellet.
   const colony=new Colony(287);
   let ready=false;
-  for(let i=0;i<1000&&!ready;i++){
+  for(let i=0;i<4500&&!ready;i++){
     colony.step();
     ready=colony.ants.some(a=>a.cargoKind==='soil'&&a.depositTarget&&!a.route.length&&colony.time>=a.busyUntil&&distance(a.pos,a.depositTarget)>=.8&&distance(a.pos,a.depositTarget)<=1.45);
   }
-  expect(ready).toBe(true);expect(colony.world.soilDeposited).toBe(0);
+  expect(ready).toBe(true);expect(colony.world.entrances[0]?.primary).toBe(true);
+  const priorDeposits=colony.world.soilDeposited;
   const raw=JSON.stringify({version:4,colony});
   await page.addInitScript(value=>localStorage.setItem('little-colony.web.v1',value),raw);await page.reload();
   for(const speed of [1,2,4,8,16,32,64])await page.getByRole('button',{name:'Simulation speed: '+speed+' times',exact:true}).click();
@@ -70,7 +71,7 @@ test('128x remains interactive, records actual performance, and builds a disting
   await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Show performance',exact:true}).click();
   await expect(page.getByRole('complementary',{name:'Live performance'})).toBeVisible();
   await expect.poll(async()=>Number(await page.locator('#perf-fps').textContent()),{timeout:15000}).toBeGreaterThan(0);
-  await expect.poll(async()=>Number(await page.locator('#perf-mound').textContent()),{timeout:15000}).toBeGreaterThan(0);
+  await expect.poll(async()=>Number(await page.locator('#perf-mound').textContent()),{timeout:15000}).toBeGreaterThan(priorDeposits);
   await expect(page.locator('#perf-speed')).toContainText('/ 128×');await page.screenshot({path:info.outputPath('living-soil-mound.png')});
   await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});await expect(page.getByRole('button',{name:'Resume simulation',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Terrain guide',exact:true}).click();await expect(page.getByRole('heading',{name:'Loose mound soil',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Diggable earth',exact:true})).toBeVisible();

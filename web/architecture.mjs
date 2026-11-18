@@ -31,6 +31,39 @@ export function founderNest(w){
   for(const c of route)if(c[1]>=w.baseSurface(c[0]))w.excavated.add(key(c));
   w.entrances=[{mouth,state:'open',createdAt:0}];w.moundTunnels=new Set();w.soilRehandled=0;w.lastAccessPlan=0;w.lastMoundPlan=0;
 }
+export function closedFounderNest(w){
+  w.rooms=[{kind:'queen',center:[...w.nest],rx:5.8,ry:3.2}];
+  w.carve(w.nest,5.8,3.2);
+  w.entrances=[];w.moundTunnels=new Set();w.soilRehandled=0;w.lastAccessPlan=0;w.lastMoundPlan=0;
+  w.founding={tip:null,target:null,stockpile:[w.nest[0],w.nest[1]+1],pellets:[]};
+}
+
+export function planFirstExit(w,worker){
+  const founding=w.founding;
+  if(founding.target&&w.solid(founding.target)){
+    queuePassage(w,[founding.target]);return true;
+  }
+  // The first worker chooses a reachable ceiling. Later workers extend its work face.
+  const roof=founding.tip?[founding.tip]:[...w.excavated].map(id=>id.split(',').map(Number));
+  let target=null,score=Infinity;
+  for(const [x,y] of roof){
+    const above=[x,y-1];
+    if(!w.solid(above)||!w.path(worker.cell,[x,y]))continue;
+    const effort=Math.hypot(x-worker.cell[0],y-worker.cell[1])*.24+w.digTime(above,worker.skills.dig);
+    const cost=y*2+effort+w.conditions(above).humidity*.35;
+    if(cost<score){target=above;score=cost;}
+  }
+  if(!target)return false;
+  if(!founding.tip){
+    const stock=[...w.excavated].map(id=>id.split(',').map(Number))
+      .filter(([x,y])=>Math.abs(x-target[0])>=1&&y>=target[1]+2&&w.neighbors([x,y]).length>=5)
+      .sort((a,b)=>Math.hypot(a[0]-target[0],a[1]-target[1])-Math.hypot(b[0]-target[0],b[1]-target[1]));
+    if(stock[0])founding.stockpile=stock[0];
+  }
+  founding.target=target;worker.brain.lastProposal='an upward step at the shared digging face';
+  queuePassage(w,[target]);return true;
+}
+
 export function queuePassage(w,route){
   const known=new Set(w.construction.map(key));
   for(const c of route)if(w.solid(c)&&!known.has(key(c))){w.construction.push(c);known.add(key(c));}

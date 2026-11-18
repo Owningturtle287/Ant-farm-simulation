@@ -29,7 +29,7 @@ The first online visit caches the game for offline reopening. Progress saves loc
 - Food/water placement, colony roster, local autosaves, recovery copy, and JSON export.
 - Portrait and landscape phone layouts, Home Screen icon, and offline reopening.
 
-New colonies start with **12 workers and one queen**, plus three brood and empty food caches and crops. The default population ceiling is **120**, adjustable through 20, 40, 60, 100, 120, 200, 250, 500, 750, 1,000, 2,000, 2,500, 5,000, 7,500 and 10,000. Higher ceilings are experimental; they do not establish a tested iPhone capacity. Existing saves keep their ants, terrain and settings while behaviors upgrade and old patrol loops are released. **Start a new colony for the revised fire-ant founder nest and peripheral mouth.**
+New colonies start with **12 workers and one queen** in a sealed chamber, plus three brood and empty food caches and crops. Workers dig toward the surface and set their earth aside until they can carry it outside. The default population ceiling is **120**, adjustable through 20, 40, 60, 100, 120, 200, 250, 500, 750, 1,000, 2,000, 2,500, 5,000, 7,500 and 10,000. Higher ceilings are experimental; they do not establish a tested iPhone capacity. Existing saves keep their ants, terrain and settings while behaviors upgrade and old patrol loops are released. **Start a new colony to watch the workers open their first exit.**
 
 This is a research-informed, accelerated model of **Solenopsis invicta**, using its single-queen social form. It does not reproduce an exact neural brain. Its biological time and physical scale are gameplay approximations. Quantitative biological calibration, a complete trophallaxis/larval-processing network, rival colonies, reproductive flights, flooding physics, and persistent world streaming remain future milestones. The colony rests while the page is closed, hidden, or a menu is open. See [model and research notes](docs/REALISM.md).
 
@@ -84,4 +84,9 @@ v0.11 replaces sliding collision recovery with curved forward walking, deliberat
 
 
 v0.12 lets ants walk through loose grain on supported ground. Workers fill their crops from nearby portions and stored food, and attendants bring meals directly to the queen. Individual grain kernels stay visible through gathering, carrying, and storage. Pools have moving highlights and shrink as water is collected. Closer brood beds make better use of the nursery.
-\n\nv0.13 uses grain for natural and placed food, eases exterior slopes, keeps new approaches below ground until the mouth, and draws surface ants against the ground contour. Time lapse uses the same simulation ticks with cheaper route and collision checks.\n
+
+
+v0.13 uses grain for natural and placed food, eases exterior slopes, keeps new approaches below ground until the mouth, and draws surface ants against the ground contour. Time lapse uses the same simulation ticks with cheaper route and collision checks.
+
+
+v0.14 starts new colonies in one sealed chamber. Workers respond to the missing exit by excavating at a shared upward face, stage the earth inside, and favor deposits near the exit when they reach the surface. Grain stays attached to seed heads as the grass sways, grows, and withers.

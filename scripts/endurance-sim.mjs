@@ -8,7 +8,7 @@ import {canOccupy} from '../web/traffic.mjs';
 const seed=Number(process.argv[3]??287),c=new Colony(seed),began=performance.now(),checkpoints=[];
 const inspect=()=>{
   const soilCargo=c.ants.filter(a=>a.cargoKind==='soil').reduce((n,a)=>n+a.carried,0);
-  assert.equal(c.world.soilExcavated,c.world.soilDeposited+c.world.soilAbandoned+soilCargo,'Soil must remain conserved.');
+  assert.equal(c.world.soilExcavated,c.world.soilDeposited+c.world.soilAbandoned+soilCargo+(c.world.founding?.pellets.length??0),'Soil must remain conserved.');
   for(const kind of ['food','water'])assert.ok(Math.abs(resourceBalance(c.world,kind).error)<1e-5,kind+' must remain conserved.');
   assert.ok(c.ants.every(a=>c.world.walkable(a.cell)),'Adults must occupy traversable ground.');
   assert.ok(c.ants.every(a=>canOccupy(c.world,a,a.pos,a.motion.angle,null,false,true)),'Adult bodies must keep clear of other adults and grounded brood or supplies.');
@@ -25,5 +25,5 @@ const inspect=()=>{
 };
 inspect();for(let i=0;i<120*DAY/.1;i++){c.step(.1);if((i+1)%(20*DAY/.1)===0)inspect();}
 assert.ok(c.alive,'The default colony must survive a long run.');assert.ok(c.births>=30,'Normal reproduction must replace the founder generation.');assert.ok(c.ants.length>=25,'The colony must grow beyond its founders.');
-const report={version:'0.12',seed,simulatedDays:120,tickSeconds:.1,settings:c.settings,wallSeconds:(performance.now()-began)/1000,checkpoints,balances:['food','water'].map(kind=>({kind,...resourceBalance(c.world,kind)})),scope:'One seeded CPU simulation; not a biological validation or a real-iPhone performance limit.'};
+const report={version:'0.14',seed,simulatedDays:120,tickSeconds:.1,settings:c.settings,wallSeconds:(performance.now()-began)/1000,checkpoints,balances:['food','water'].map(kind=>({kind,...resourceBalance(c.world,kind)})),scope:'One seeded CPU simulation; not a biological validation or a real-iPhone performance limit.'};
 if(process.argv[2])writeFileSync(process.argv[2],JSON.stringify(report,null,2));
