@@ -108,6 +108,11 @@ export function planMoistureShaft(w,time){
   const origin=known.find(([x,y])=>w.solid([x,y+1])&&w.path(w.nest,[x,y]));
   if(!origin)return false;
   const [x,y]=origin,route=[];
+  if(!w.surfaceWater&&!w.waterSpoil){
+    const storage=known.filter(c=>Math.abs(c[0]-x)>1&&Math.abs(c[0]-w.nest[0])>1&&w.neighbors(c).length>=5)
+      .sort((a,b)=>Math.hypot(a[0]-x,a[1]-y)-Math.hypot(b[0]-x,b[1]-y))[0];
+    w.waterSpoil={stockpile:storage??[...w.nest],pellets:[]};
+  }
   for(let step=1;step<=3;step++){
     const c=[x,y+step];route.push(c);
     if(c[1]>=w.waterTable(x)-.25)break;

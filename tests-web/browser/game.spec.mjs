@@ -213,9 +213,9 @@ test('water-table depth and a much wider camera view work on a phone',async({pag
   await page.getByLabel('Surface temperature (°C)').fill('34');
   await page.getByLabel('Surface temperature (°C)').press('Tab');
   await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.settings.surfaceTemp)).toBe(34);
-  await page.getByLabel('Rain',{exact:true}).selectOption('on');
+  await page.locator('#rain-mode').selectOption('on');
   await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.settings.rainMode)).toBe('on');
-  await page.getByLabel('Surface water').selectOption('off');
+  await page.locator('#surface-water').selectOption('off');
   await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('little-colony.web.v1')).colony.settings.surfaceWater)).toBe(false);
   await page.getByRole('button',{name:'Back to the colony',exact:true}).click();
   await expect(page.getByRole('button',{name:'Place water',exact:true})).toBeDisabled();

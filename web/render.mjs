@@ -190,8 +190,7 @@ export class Renderer {
     const visualClock=options.paused?colony.time:clock;
     this.surfaceLife(colony.world,visualClock);
     for(const baby of colony.brood)if(baby.carriedBy==null&&baby.cell[0]>=min[0]-1&&baby.cell[0]<=max[0]+1&&baby.cell[1]>=min[1]-1&&baby.cell[1]<=max[1]+1){const [x,y]=this.screen(bedPosition(baby));let pose=this.broodPoses.get(baby.id);const stage=broodStage(baby);if(!pose){pose={stage,changed:clock};this.broodPoses.set(baby.id,pose);}if(pose.stage!==stage){pose.previous=pose.stage;pose.stage=stage;pose.changed=clock;}paintBrood(c,baby,x,y,z,visualClock,Math.min(1,(clock-pose.changed)/.85),pose.previous);}
-    const stockpile=colony.world.founding;
-    if(stockpile?.pellets.length){
+    for(const stockpile of [colony.world.founding,colony.world.waterSpoil])if(stockpile?.pellets.length){
       const [x,y]=this.screen(stockpile.stockpile);
       for(let i=0;i<Math.min(stockpile.pellets.length,12);i++){
         const px=x+(i%5-2)*u*.11,py=y+(Math.floor(i/5)-.5)*u*.12;
