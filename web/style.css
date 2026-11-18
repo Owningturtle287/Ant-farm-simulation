@@ -10,3 +10,4 @@
 .odor-signal{color:#e6b968}.moisture-signal{color:#82afda}#ant-sensing{line-height:1.7;margin-top:8px}.trail-legend span:before{content:"";display:inline-block;width:10px;height:2px;background:currentColor;margin-right:5px;vertical-align:middle;border-radius:2px}.trail-legend .odor-signal:before,.trail-legend .moisture-signal:before{height:7px;width:7px;opacity:.55;border-radius:50%}
 
 .crop-heading{margin:18px 0 10px;font:600 9px ui-monospace,monospace;letter-spacing:1px;color:var(--amber)}.crop-heading span{display:block;color:var(--muted);font:9px/1.5 system-ui;letter-spacing:0;margin-top:3px}.track .water-crop{background:var(--blue)}.supply-stats{font-size:11px;line-height:1.8;margin:12px 0}
+.inspector #follow{flex:none;margin-top:8px}

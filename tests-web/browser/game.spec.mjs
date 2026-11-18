@@ -19,7 +19,10 @@ test('colony controls, inspection, food placement, and safe reset',async({page},
   await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:20000});await expect(page.getByRole('button',{name:'Resume simulation'})).toBeVisible();
   await page.getByRole('button',{name:'Resume simulation'}).click();await page.getByRole('button',{name:'Simulation speed: 1 times'}).click();await expect(page.getByRole('button',{name:'Simulation speed: 2 times'})).toBeVisible();
   await page.getByRole('button',{name:'Open colony roster'}).click();await page.locator('[data-ant="0"]').click();await expect(page.locator('#ant-name')).toHaveText('Queen Aurelia');
-  await page.screenshot({path:info.outputPath('individual-ant.png')});await page.getByRole('button',{name:'Follow this ant',exact:true}).click();await expect(page.getByRole('button',{name:'Following ant',exact:true})).toBeVisible();
+  await page.screenshot({path:info.outputPath('individual-ant.png')});
+  const follow=page.getByRole('button',{name:'Follow this ant',exact:true});
+  await expect(follow).toBeInViewport();await follow.click();
+  await expect(page.getByRole('button',{name:'Following ant',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Return to nest'}).click();await page.getByRole('button',{name:'Place food',exact:true}).click();
   const size=page.viewportSize();await page.locator('#world').click({position:{x:size.width*.28,y:size.height*.48}});await expect(page.getByRole('status').filter({hasText:'Food placed.'})).toBeVisible();
   await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Start a new colony',exact:true}).click();await expect(page.getByRole('dialog',{name:'A new beginning?'})).toBeVisible();await page.getByRole('button',{name:'Keep my colony'}).click();
