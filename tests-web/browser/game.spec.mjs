@@ -215,7 +215,17 @@ test('water-table depth and a much wider camera view work on a phone',async({pag
 test('crowded older colonies unpack adults and keep physical body space while working',async({page},info)=>{
   test.setTimeout(90000);const raw=readFileSync(new URL('../fixtures/v6-mature.json',import.meta.url),'utf8');await page.addInitScript(raw=>localStorage.setItem('little-colony.web.v1',raw),raw);await page.reload();await expect(page.locator('#game')).toHaveAttribute('data-ready','true');await page.waitForTimeout(3000);await page.getByRole('button',{name:'Pause simulation',exact:true}).click();await expect(page.locator('#world')).toHaveAttribute('data-terrain-ready','true',{timeout:30000});
   await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Save colony now'}).click();await expect(page.getByRole('status').filter({hasText:'Your colony is saved'})).toBeVisible();
-  const check=await page.evaluate(async()=>{const {bodyGap}=await import('./traffic.mjs'),c=JSON.parse(localStorage.getItem('little-colony.web.v1')).colony;let overlaps=0;for(let i=0;i<c.ants.length;i++)for(let j=i+1;j<c.ants.length;j++)if(bodyGap(c.ants[i],c.ants[j])<-.015)overlaps++;return {adults:c.ants.length,overlaps,trafficVersion:c.trafficVersion};});
-  expect(check.adults).toBeGreaterThan(80);expect(check.overlaps).toBe(0);expect(check.trafficVersion).toBe(1);await info.attach('physical-body-spacing.json',{body:JSON.stringify(check),contentType:'application/json'});await page.screenshot({path:info.outputPath('physical-traffic-and-brood.png')});
+  const check=await page.evaluate(async()=>{
+    const {bodyGap,surfacePassingClearance}=await import('./traffic.mjs');
+    const {World}=await import('./sim.mjs');
+    const c=JSON.parse(localStorage.getItem('little-colony.web.v1')).colony,w=World.fromJSON(c.world);
+    let collisions=0,climbingCrossings=0;
+    for(const [i,a] of c.ants.entries())for(let j=i+1;j<c.ants.length;j++){
+      const b=c.ants[j];if(bodyGap(a,b)>=-.015)continue;
+      if(surfacePassingClearance(w,a,b))climbingCrossings++;else collisions++;
+    }
+    return {adults:c.ants.length,collisions,climbingCrossings,trafficVersion:c.trafficVersion};
+  });
+  expect(check.adults).toBeGreaterThan(80);expect(check.collisions).toBe(0);expect(check.trafficVersion).toBe(1);await info.attach('physical-body-spacing.json',{body:JSON.stringify(check),contentType:'application/json'});await page.screenshot({path:info.outputPath('physical-traffic-and-brood.png')});
 });
 

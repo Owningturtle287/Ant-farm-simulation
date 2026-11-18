@@ -53,6 +53,9 @@ export function terrainFree(w,p){
   if(densityAt(p[0],p[1],(x,y)=>w.solid([x,y]))>=.49)return false;
   if(!w.walkable(p.map(n=>Math.round(n)||0))){const x=Math.floor(p[0]),y=Math.floor(p[1]);let supported=false;for(let dy=0;dy<=1;dy++)for(let dx=0;dx<=1;dx++)if(Math.hypot(p[0]-x-dx,p[1]-y-dy)<.81&&w.walkable([x+dx,y+dy]))supported=true;if(!supported)return false;}return true;
 }
+export function surfacePassingClearance(w,a,b,p=a.pos,lift=a.motion?.climbHeight??0){
+  return Math.abs(lift-(b.motion?.climbHeight??0))>=CLIMB_CLEARANCE&&!!surfaceFooting(w,p)&&!!surfaceFooting(w,b.pos);
+}
 export function canOccupy(w,a,p,angle=a.motion?.angle??0,ignoreBrood=null,ignoreAdults=false,escaping=false,joints=a.motion,lift=a.motion?.climbHeight??0){
   if(!escaping&&!terrainFree(w,p))return false;
   const t=w.traffic;if(!t||ignoreAdults)return true;
@@ -66,7 +69,7 @@ export function canOccupy(w,a,p,angle=a.motion?.angle??0,ignoreBrood=null,ignore
       if(b.id===a.id)continue;
       const dx=p[0]-b.pos[0],dy=p[1]-b.pos[1],bound=(radius+bodyPixel(b))*21;
       if(dx*dx+dy*dy>bound*bound)continue;
-      if(Math.abs(lift-(b.motion?.climbHeight??0))>=CLIMB_CLEARANCE&&surfaceFooting(w,p)&&surfaceFooting(w,b.pos))continue;
+      if(surfacePassingClearance(w,a,b,p,lift))continue;
       pose??=bodyDiscs(a,p,angle,joints);
       if(poseGap(pose,bodyDiscs(b))<-CONTACT_SLACK)return false;
     }
