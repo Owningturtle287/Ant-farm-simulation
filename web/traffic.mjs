@@ -8,57 +8,77 @@ const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
 export const CONTACT_SLACK=.002; // Subpixel outline contact; central body space stays protected.
 export const bodyShape=a=>({half:15*bodyPixel(a),radius:5.4*bodyPixel(a)});
 export const broodRadius=b=>broodStage(b)==='egg'?.16:broodStage(b)==='larva'?.27:.30;
-function axis(a,p=a.pos,angle=a.motion?.angle??0){const s=bodyShape(a),dx=Math.cos(angle)*s.half,dy=Math.sin(angle)*s.half;return [[p[0]-dx,p[1]-dy],[p[0]+dx,p[1]+dy]];}
-function pointSegment(p,a,b){const x=b[0]-a[0],y=b[1]-a[1],t=Math.max(0,Math.min(1,((p[0]-a[0])*x+(p[1]-a[1])*y)/(x*x+y*y||1)));return Math.hypot(p[0]-a[0]-x*t,p[1]-a[1]-y*t);}
-function discsGap(first,second){let gap=Infinity;for(const u of first)for(const v of second)gap=Math.min(gap,Math.hypot(u.x-v.x,u.y-v.y)-u.radius-v.radius);return gap;}
-export function bodyGap(a,b,p=a.pos,angle=a.motion?.angle??0,joints=a.motion){const bound=(bodyPixel(a)+bodyPixel(b))*21,distance=dist(p,b.pos);if(distance>bound)return distance-bound;const first=bodyDiscs(a,p,angle,joints),second=bodyDiscs(b);let gap=discsGap(first,second);
-  // The neck and waist are occupied too: a continuous body cannot interlock through a joint gap.
-  const segments=ds=>[ds.slice(0,2),[ds[0],ds[2]]];
-  for(const [u,v] of segments(first))for(const [x,y] of segments(second)){
-    const A=[u.x,u.y],B=[v.x,v.y],C=[x.x,x.y],D=[y.x,y.y],cross=(p,q,r)=>(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]);
-    const intersects=Math.max(Math.min(A[0],B[0]),Math.min(C[0],D[0]))<=Math.min(Math.max(A[0],B[0]),Math.max(C[0],D[0]))&&Math.max(Math.min(A[1],B[1]),Math.min(C[1],D[1]))<=Math.min(Math.max(A[1],B[1]),Math.max(C[1],D[1]))&&cross(A,B,C)*cross(A,B,D)<=0&&cross(C,D,A)*cross(C,D,B)<=0;
-    const d=intersects?0:Math.min(pointSegment(A,C,D),pointSegment(B,C,D),pointSegment(C,A,B),pointSegment(D,A,B));
-    gap=Math.min(gap,d-Math.min(u.radius,v.radius)-Math.min(x.radius,y.radius));
-  }return gap;}
-function insert(map,o,p){const k=bin(p);if(!map.has(k))map.set(k,new Set());map.get(k).add(o);}
-function around(map,p,r=2){const out=[];for(let y=Math.floor(p[1])-r;y<=Math.floor(p[1])+r;y++)for(let x=Math.floor(p[0])-r;x<=Math.floor(p[0])+r;x++)for(const o of map.get(x+','+y)??[])out.push(o);return out;}
-export function nearbyAdults(w,a,range=1.3){return w.traffic?around(w.traffic.adults,a.pos,1).filter(b=>b.id!==a.id&&dist(a.pos,b.pos)<range):[];}
-export function refreshItems(c,force=true){
-  const t=c.world.traffic;if(!t||(!force&&!t.itemDirty))return;
-  t.itemDirty=false;
-  // Loose grain and liquid do not supply footing or block a walking ant.
-  const obstacles=[];
-  for(const p of c.world.patches)if(p.kind==='food'&&p.origin!=='grass')for(const piece of p.pieces??[])obstacles.push(piece.pos);
-  let hash=2166136261;
-  for(const [x,y] of obstacles){hash=Math.imul(hash^Math.round(x*300),16777619);hash=Math.imul(hash^Math.round(y*300),16777619);}
-  hash^=obstacles.length;
-  if(t.itemHash===hash)return;
-  t.itemHash=hash;t.obstacles=new Map();
-  for(const pos of obstacles)insert(t.obstacles,{pos,radius:.10},pos);
-  t.routes.clear();t.bodyNavigation=null;c.world.neighborCache.clear();c.world.pathCache.clear();
+function cross(a,b,c){return (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);}
+function pointSegment(p,a,b){
+  const x=b.x-a.x,y=b.y-a.y,t=Math.max(0,Math.min(1,((p.x-a.x)*x+(p.y-a.y)*y)/(x*x+y*y||1)));
+  return Math.hypot(p.x-a.x-x*t,p.y-a.y-y*t);
 }
+function segmentGap(a,b,c,d){
+  const intersects=Math.max(Math.min(a.x,b.x),Math.min(c.x,d.x))<=Math.min(Math.max(a.x,b.x),Math.max(c.x,d.x))
+    &&Math.max(Math.min(a.y,b.y),Math.min(c.y,d.y))<=Math.min(Math.max(a.y,b.y),Math.max(c.y,d.y))
+    &&cross(a,b,c)*cross(a,b,d)<=0&&cross(c,d,a)*cross(c,d,b)<=0;
+  const distance=intersects?0:Math.min(pointSegment(a,c,d),pointSegment(b,c,d),pointSegment(c,a,b),pointSegment(d,a,b));
+  return distance-Math.min(a.radius,b.radius)-Math.min(c.radius,d.radius);
+}
+function poseGap(first,second){
+  let gap=Infinity;
+  for(const a of first)for(const b of second)gap=Math.min(gap,Math.hypot(a.x-b.x,a.y-b.y)-a.radius-b.radius);
+  // The neck and waist close the gaps between the three contact discs.
+  for(let i=1;i<3;i++)for(let j=1;j<3;j++)gap=Math.min(gap,segmentGap(first[0],first[i],second[0],second[j]));
+  return gap;
+}
+export function bodyGap(a,b,p=a.pos,angle=a.motion?.angle??0,joints=a.motion){
+  const bound=(bodyPixel(a)+bodyPixel(b))*21,distance=dist(p,b.pos);
+  return distance>bound?distance-bound:poseGap(bodyDiscs(a,p,angle,joints),bodyDiscs(b));
+}
+function insert(map,o,p){const k=bin(p);if(!map.has(k))map.set(k,new Set());map.get(k).add(o);}
+function around(map,p,r=2){
+  const out=[],cx=Math.floor(p[0]),cy=Math.floor(p[1]);
+  for(let y=cy-r;y<=cy+r;y++)for(let x=cx-r;x<=cx+r;x++){
+    const bucket=map.get(x+','+y);
+    if(bucket)for(const o of bucket)out.push(o);
+  }
+  return out;
+}
+export function nearbyAdults(w,a,range=1.3){return w.traffic?around(w.traffic.adults,a.pos,1).filter(b=>b.id!==a.id&&dist(a.pos,b.pos)<range):[];}
 export function beginTraffic(c){
-  const w=c.world,old=w.traffic,changed=!old||old.patchRef!==w.patches||old.patchCount!==w.patches.length;
-  w.traffic={adults:new Map(),obstacles:old?.obstacles??new Map(),routes:old?.geometry===w.revision?old.routes:new Map(),bodyNavigation:old?.geometry===w.revision?old.bodyNavigation:null,itemHash:old?.itemHash,itemDirty:changed||old?.itemDirty,patchRef:w.patches,patchCount:w.patches.length,geometry:w.revision,colony:c};
-  refreshItems(c,false);for(const a of c.ants)insert(w.traffic.adults,a,a.pos);
+  const w=c.world,old=w.traffic,sameTerrain=old?.geometry===w.revision;
+  w.traffic={adults:new Map(),routes:sameTerrain?old.routes:new Map(),bodyNavigation:sameTerrain?old.bodyNavigation:null,geometry:w.revision,colony:c};
+  for(const a of c.ants)insert(w.traffic.adults,a,a.pos);
 }
 export function reindexAdult(w,a,old){if(!w.traffic)return;w.traffic.adults.get(bin(old))?.delete(a);insert(w.traffic.adults,a,a.pos);}
-export function foodSupport(w,p){return !!w.traffic&&around(w.traffic.obstacles,p,1).some(o=>Math.abs(o.pos[0]-p[0])<1.05&&Math.abs(o.pos[1]-p[1])<1.15);}
 export function terrainFree(w,p){
-  p=[p[0],p[1]];if(densityAt(...p,(x,y)=>w.solid([x,y]))>=.49)return false;
+  if(densityAt(p[0],p[1],(x,y)=>w.solid([x,y]))>=.49)return false;
   if(!w.walkable(p.map(n=>Math.round(n)||0))){const x=Math.floor(p[0]),y=Math.floor(p[1]);let supported=false;for(let dy=0;dy<=1;dy++)for(let dx=0;dx<=1;dx++)if(Math.hypot(p[0]-x-dx,p[1]-y-dy)<.81&&w.walkable([x+dx,y+dy]))supported=true;if(!supported)return false;}return true;
 }
 export function canOccupy(w,a,p,angle=a.motion?.angle??0,ignoreBrood=null,ignoreAdults=false,escaping=false,joints=a.motion){
-  p=[p[0],p[1]];if(!escaping&&!terrainFree(w,p))return false;
-  const t=w.traffic;if(!t)return true;
-  const discs=bodyDiscs(a,p,angle,joints);
-  // Small surface portions constrain the thorax; head and gaster may reach over them.
-  // Nestmate contact below still protects every connected body segment.
-  for(const o of around(t.obstacles,p,1))if(Math.hypot(o.pos[0]-discs[0].x,o.pos[1]-discs[0].y)<discs[0].radius+o.radius-.002)return false;
-  if(!ignoreAdults)for(const b of around(t.adults,p,a.caste==='queen'?2:1))if(b.id!==a.id&&dist(b.pos,p)<1.4&&bodyGap(a,b,p,angle,joints)<-CONTACT_SLACK)return false;
+  if(!escaping&&!terrainFree(w,p))return false;
+  const t=w.traffic;if(!t||ignoreAdults)return true;
+  const cx=Math.floor(p[0]),cy=Math.floor(p[1]),radius=bodyPixel(a);
+  const r=a.caste==='queen'?2:1;
+  let pose;
+  for(let y=cy-r;y<=cy+r;y++)for(let x=cx-r;x<=cx+r;x++){
+    const bucket=t.adults.get(x+','+y);
+    if(!bucket)continue;
+    for(const b of bucket){
+      if(b.id===a.id)continue;
+      const dx=p[0]-b.pos[0],dy=p[1]-b.pos[1],bound=(radius+bodyPixel(b))*21;
+      if(dx*dx+dy*dy>bound*bound)continue;
+      pose??=bodyDiscs(a,p,angle,joints);
+      if(poseGap(pose,bodyDiscs(b))<-CONTACT_SLACK)return false;
+    }
+  }
   return true;
 }
-export function sweptFree(w,a,from,to,angle,oldAngle=a.motion?.angle??angle,escaping=false,ignoreAdults=false){const n=Math.max(1,Math.ceil(dist(from,to)/.09),bodyShape(a).half?Math.ceil(Math.abs(Math.atan2(Math.sin(angle-oldAngle),Math.cos(angle-oldAngle)))/.15):1);for(let i=1;i<=n;i++){const t=i/n,delta=Math.atan2(Math.sin(angle-oldAngle),Math.cos(angle-oldAngle));if(!canOccupy(w,a,[from[0]+(to[0]-from[0])*t,from[1]+(to[1]-from[1])*t],oldAngle+delta*t,null,ignoreAdults,escaping))return false;}return true;}
+export function sweptFree(w,a,from,to,angle,oldAngle=a.motion?.angle??angle,escaping=false,ignoreAdults=false){
+  const delta=Math.atan2(Math.sin(angle-oldAngle),Math.cos(angle-oldAngle));
+  const dx=to[0]-from[0],dy=to[1]-from[1],n=Math.max(1,Math.ceil(Math.hypot(dx,dy)/.09),Math.ceil(Math.abs(delta)/.15));
+  for(let i=1;i<=n;i++){
+    const t=i/n;
+    if(!canOccupy(w,a,[from[0]+dx*t,from[1]+dy*t],oldAngle+delta*t,null,ignoreAdults,escaping))return false;
+  }
+  return true;
+}
 export function nearbyStances(w,a,target,range=1.2){
   const candidates=[];if(dist(a.pos,target)<=range&&canOccupy(w,a,a.pos))candidates.push([...a.pos]);for(let y=-2;y<=2;y++)for(let x=-2;x<=2;x++){const p=[target[0]+x*.5,target[1]+y*.5];if(dist(p,target)<=range+.001&&(canOccupy(w,a,p)||canOccupy(w,a,p,0)||canOccupy(w,a,p,Math.PI/2)))candidates.push(p);}
   candidates.sort((x,y)=>dist(x,a.pos)-dist(y,a.pos)||dist(x,target)-dist(y,target));return candidates;
@@ -68,7 +88,7 @@ function cacheRoute(w,id,route){const m=w.traffic.routes;if(m.size>=256)m.delete
 export function routeAroundItems(w,a,target,dynamic=false){
   if(!w.traffic)return w.path(a.cell,target.slice(0,2));let probe={id:a.id,caste:a.caste,bodySize:Math.ceil((a.bodySize??.4)*5)/5,pos:a.pos,motion:dynamic?a.motion:{...a.motion,neck:0,waist:0}};
   const headings=[a.motion?.angle??0,0,Math.PI/2,Math.PI,-Math.PI/2];if(!canOccupy(w,probe,a.pos,headings[0],null,!dynamic)||!headings.some(angle=>canOccupy(w,probe,target,angle,null,!dynamic)))probe=a;
-  const queen=w.traffic.colony.ants.find(b=>b.caste==='queen'),id=key(a.pos)+'@'+a.motion?.angle+'>'+key(target.slice(0,2))+':'+probe.caste+':'+probe.bodySize+':'+(probe.motion.neck??0)+':'+(probe.motion.waist??0)+':'+(queen?key(queen.pos)+'@'+queen.motion?.angle:'none');
+  const id=key(a.pos)+'@'+a.motion?.angle+'>'+key(target.slice(0,2))+':'+probe.caste+':'+probe.bodySize+':'+(probe.motion.neck??0)+':'+(probe.motion.waist??0);
   if(!dynamic&&w.traffic.routes.has(id))return w.traffic.routes.get(id)?.map(p=>[...p])??null;
   const planned=bodyRoute(w,probe,target,{canOccupy,sweptFree},dynamic),route=planned?.map(p=>p[3]!=null?[p[0],p[1],null,.04]:p.slice(0,2)).filter((p,i,all)=>i?dist(p,all[i-1])>.03:dist(p,a.pos)>.03)??null;if(!dynamic)cacheRoute(w,id,route);return route;
 }

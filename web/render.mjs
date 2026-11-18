@@ -1,7 +1,8 @@
 import {paintBrood} from './brood-art.mjs';
 import {bedPosition} from './provisions.mjs';
-import {paintGrain,paintWater} from './resource-art.mjs';
+import {buildGrainAtlas,drawGrain,paintWater} from './resource-art.mjs';
 import {TerrainCache} from './render-cache.mjs';
+import {surfaceProfile,surfaceContact} from './geometry.mjs';
 import {rasterRows,coarseTerrain,snapshotTerrain} from './terrain-raster.mjs';
 import {cell,key,broodStage} from './sim.mjs';
 import {resourceTiles} from './resources.mjs';
@@ -16,7 +17,7 @@ export class Renderer {
     this.broodPoses=new Map();this.chemicals=new ChemicalOverlay();this.chunks=new TerrainCache();this.sprites={};this.bodyParts={};this.positions=new Map();this.frameID=0;this.epoch=0;this.active=null;this.requests=new Map();this.fallback=null;this.renderStats={worker:false,built:0,hits:0,misses:0,mainRasterMs:0,workerRasterMs:0,drawnAnts:0};
     try{this.worker=new Worker(new URL('./terrain-worker.mjs',import.meta.url),{type:'module'});this.renderStats.worker=true;this.worker.onmessage=e=>this.acceptTerrain(e.data);this.worker.onerror=()=>this.workerFailed();}catch{this.worker=null;}
     for(const caste of ['queen','worker','major']){this.sprites[caste]=buildAntAtlas(caste);this.bodyParts[caste]=buildAntParts(caste);}
-    this.resize();this.home();
+    this.grainAtlas=buildGrainAtlas();this.resize();this.home();
   }
   resize() {
     const rect=this.canvas.getBoundingClientRect();this.width=rect.width;this.height=rect.height;this.nativeDpr=Math.min(2,window.devicePixelRatio||1);this.resolution(this.nativeDpr);
@@ -88,7 +89,7 @@ export class Renderer {
   surfaceLife(world,clock){
     const c=this.ctx,z=this.camera.zoom,u=this.unit;
     for(const p of world.patches){
-      const [x,y]=this.screen([p.cell[0],world.surface(p.cell[0])-.5]);if(x<-100||x>this.width+100)continue;
+      const [x,y]=this.screen([p.cell[0],surfaceProfile(world,p.cell[0])]);if(x<-100||x>this.width+100)continue;
       if(p.kind==='food'&&p.origin==='grass'){
         if(world.surface(p.cell[0])<world.baseSurface(p.cell[0]) )continue;
         const alive=p.stage!=='dead',growth=p.stage==='sprout'?Math.max(.15,p.growth):1;
@@ -98,7 +99,7 @@ export class Renderer {
           if(alive){c.strokeStyle='#82a454';c.beginPath();c.moveTo(x+dx,y-h*.35);c.lineTo(x+dx+(i%2?4:-4)*z,y-h*.65);c.stroke();}
         }
       }
-      if(p.kind==='water'||p.origin==='prey'||p.origin==='nectar'||p.origin==='grass'&&p.stage==='seed'){
+      if(p.kind==='water'||p.kind==='food'&&(p.origin!=='grass'||p.stage==='seed')){
         const tiles=resourceTiles(world,p);
         if(p.kind==='water'){
           const sorted=tiles.sort((a,b)=>b.y-a.y||a.x-b.x);
@@ -114,14 +115,8 @@ export class Renderer {
           }
         }else for(const tile of tiles){
           const [tx,ty]=this.screen([tile.x,tile.y]);if(ty<-u||ty>this.height+u)continue;
-          if(p.origin==='grass'){paintGrain(c,tx,ty,u*.24,tile.id??0,tile.amount/2);continue;}
-          const size=u*.20;c.globalAlpha=Math.min(1,tile.amount/2);
-          c.fillStyle=p.origin==='prey'?'#ba755b':'#ecc56b';
-          c.fillRect(Math.round(tx-size/2),Math.round(ty-size/2),size,size);
-          c.fillStyle=p.origin==='prey'?'#e2a982':'#fff0b1';
-          c.fillRect(Math.round(tx-size/2),Math.round(ty-size/2),Math.max(1,size*.6),Math.max(1,z));c.globalAlpha=1;
+          drawGrain(c,this.grainAtlas,tx,ty,u*.24,tile.id??0,tile.amount/2);
         }
-        if(p.origin==='nectar'&&p.renewable!==false){c.strokeStyle='#577d46';c.lineWidth=Math.max(1,z);c.beginPath();c.moveTo(x,y);c.lineTo(x-2*z,y-12*z);c.stroke();c.fillStyle='#c1a3bd';c.fillRect(x-4*z,y-14*z,5*z,3*z);}
       }
     }
   }
@@ -135,7 +130,7 @@ export class Renderer {
     if(!world.weather.raining)return;const c=this.ctx,z=this.camera.zoom,intensity=world.weather.intensity??.7;
     c.fillStyle='#6d889720';c.fillRect(0,0,this.width,this.height);c.lineWidth=Math.max(.7,z*.7);
     const count=Math.min(240,Math.floor(this.width/(8+8*(1-intensity))));for(let i=0;i<count;i++){
-      const speed=210+(i%7)*18,wind=8+Math.sin(clock*.23)*8,x=((i*97-clock*wind)%(this.width+60)+this.width+60)%(this.width+60)-30,y=(i*61+clock*speed)%(this.height+100)-50,wx=this.world([x,y])[0],ground=this.screen([wx,world.surface(Math.round(wx))-.5])[1];
+      const speed=210+(i%7)*18,wind=8+Math.sin(clock*.23)*8,x=((i*97-clock*wind)%(this.width+60)+this.width+60)%(this.width+60)-30,y=(i*61+clock*speed)%(this.height+100)-50,wx=this.world([x,y])[0],ground=this.screen([wx,surfaceProfile(world,wx)])[1];
       if(y>ground)continue;c.strokeStyle=i%3?'#b3d3df80':'#d2e3e899';c.beginPath();c.moveTo(x,y);c.lineTo(x-3*z,y+(7+i%4*2)*z);c.stroke();
       const phase=(clock*2+i*.37)%1;if(ground>0&&ground<this.height&&phase<.3){const r=(1-phase/.3)*2.5*z;c.fillStyle='#bedad370';c.fillRect(x-r,ground-phase*7*z,Math.max(1,z),Math.max(1,z));c.fillRect(x+r,ground-phase*5*z,Math.max(1,z),Math.max(1,z));}
     }
@@ -149,14 +144,24 @@ export class Renderer {
     this.requests.clear();this.previewDeadline=performance.now()+1.5;this.renderStats.drawnAnts=0;this.renderStats.crowdSkipped=0;this.renderStats.simpleSprites=0;const crowd=new Map(),crowdWidth=Math.max(4,8*z),crowdHeight=Math.max(4,5*z),richBudget=Math.max(400,Math.min(1500,Math.ceil(this.width*this.height/800)));const density=u*this.dpr,lod=this.worker&&density>=13?16:density>=6?8:density>=4?4:2;
     const min=this.world([-u,-u]),max=this.world([this.width+u,this.height+u]);
     for(let cy=Math.floor(min[1]/16);cy<=Math.floor(max[1]/16);cy++) for(let cx=Math.floor(min[0]/16);cx<=Math.floor(max[0]/16);cx++) {
-      const [x,y]=this.screen([cx*16-.5,cy*16-.5]),image=this.chunk(colony.world,cx,cy,lod);if(image)c.drawImage(image,Math.round(x),Math.round(y),Math.ceil(u*16)+.2,Math.ceil(u*16)+.2);else{const ground=this.screen([cx*16,colony.world.baseSurface(cx*16)-.5])[1],top=Math.max(y,ground);if(top<y+u*16){c.fillStyle='#806446';c.fillRect(x,top,u*16,y+u*16-top);}}
+      const [x,y]=this.screen([cx*16-.5,cy*16-.5]),image=this.chunk(colony.world,cx,cy,lod);if(image)c.drawImage(image,Math.round(x),Math.round(y),Math.ceil(u*16)+.2,Math.ceil(u*16)+.2);else{
+        c.fillStyle='#806446';
+        for(let column=0;column<16;column++){
+          const top=Math.max(y,this.screen([0,surfaceProfile(colony.world,cx*16+column)])[1]);
+          if(top<y+u*16)c.fillRect(x+column*u,top,Math.ceil(u),y+u*16-top);
+        }
+      }
     }
     this.serviceTerrain(colony.world);this.groundwater(colony.world,visualClockForWater(options,colony,clock));
     if(options.trails)this.chemicals.draw(c,colony.world,this,performance.now());
     const visualClock=options.paused?colony.time:clock;
     this.surfaceLife(colony.world,visualClock);
     for(const baby of colony.brood)if(baby.carriedBy==null&&baby.cell[0]>=min[0]-1&&baby.cell[0]<=max[0]+1&&baby.cell[1]>=min[1]-1&&baby.cell[1]<=max[1]+1){const [x,y]=this.screen(bedPosition(baby));let pose=this.broodPoses.get(baby.id);const stage=broodStage(baby);if(!pose){pose={stage,changed:clock};this.broodPoses.set(baby.id,pose);}if(pose.stage!==stage){pose.previous=pose.stage;pose.stage=stage;pose.changed=clock;}paintBrood(c,baby,x,y,z,visualClock,Math.min(1,(clock-pose.changed)/.85),pose.previous);}
-    for(const item of colony.foodItems){const [x,y]=this.screen(item.pos);if(x<-u||y<-u||x>this.width+u||y>this.height+u)continue;if(item.origin==='grass'){paintGrain(c,x,y,u*.24,item.id,(item.energy+item.protein)/2);continue;}const d=Math.max(1,u*.23);c.fillStyle=item.protein>item.energy?'#b97950':'#d4b56d';c.fillRect(Math.round(x-d/2),Math.round(y-d/2),d,d*.7);c.fillStyle='#efd39a';c.fillRect(Math.round(x-d/2),Math.round(y-d/2),Math.max(1,d*.6),Math.max(1,z*.6));}
+    for(const item of colony.foodItems){
+      const [x,y]=this.screen(item.pos);
+      if(x<-u||y<-u||x>this.width+u||y>this.height+u)continue;
+      drawGrain(c,this.grainAtlas,x,y,u*.24,item.id,(item.energy+item.protein)/2);
+    }
     const carriedBrood=new Map(colony.brood.filter(b=>b.carriedBy!=null).map(b=>[b.carriedBy,b]));
     const live=new Set();
     for(const ant of colony.ants) {
@@ -164,21 +169,29 @@ export class Renderer {
       if(p.frame!==this.frameID-1){p.x=ant.pos[0];p.y=ant.pos[1];p.angle=ant.motion?.angle??0;}p.frame=this.frameID;
       const oldX=p.x,oldY=p.y,blend=options.speed>4?1:1-Math.exp(-dt*22);p.x+=(ant.pos[0]-p.x)*blend;p.y+=(ant.pos[1]-p.y)*blend;
       const motion=ant.motion,angle=motion?.angle??p.angle;if(!options.paused){p.angle=wrapAngle(p.angle+wrapAngle(angle-p.angle)*blend);p.scan=wrapAngle(p.scan+wrapAngle((motion?.phase??0)-p.scan)*blend);if((motion?.speed??0)>.06&&(ant.route.length||motion?.recovering))p.gait=((p.gait+Math.min(Math.hypot(p.x-oldX,p.y-oldY),dt*4)*2.7*GAIT_FRAMES*(motion?.gaitDirection??1))%GAIT_FRAMES+GAIT_FRAMES)%GAIT_FRAMES;}else{p.angle=angle;p.scan=motion?.phase??0;}
-      const jointBlend=options.paused?1:blend;p.neck+=((motion?.neck??0)-(p.neck??0))*jointBlend;p.waist+=((motion?.waist??0)-(p.waist??0))*jointBlend;const [x,y]=this.screen([p.x,p.y]);if(x<-50 || y<-50 || x>this.width+50 || y>this.height+50)continue;
+      const jointBlend=options.paused?1:blend;p.neck+=((motion?.neck??0)-(p.neck??0))*jointBlend;p.waist+=((motion?.waist??0)-(p.waist??0))*jointBlend;const contact=colony.world.onSurface(ant.cell)?surfaceContact(colony.world,p.x,p.y,ant.caste==='queen'?.22:.17):null;
+      const offset=contact?contact.y-p.y:0;
+      p.groundOffset??=offset;p.groundOffset+=(offset-p.groundOffset)*(options.paused?1:1-Math.exp(-dt*24));
+      const [x,y]=this.screen([p.x,p.y+p.groundOffset]);if(x<-50 || y<-50 || x>this.width+50 || y>this.height+50)continue;
+      if(contact&&z>=.65){
+        c.fillStyle='#30211746';c.beginPath();c.ellipse(x,y+1.7*z,3*z,.65*z,contact.slope,0,Math.PI*2);c.fill();
+      }
       if(ant.id===options.selected){c.strokeStyle='#ebc381';c.lineWidth=1.3;c.beginPath();c.arc(x,y,(ant.caste==='queen'?20:14)*z,0,Math.PI*2);c.stroke();}
       if(this.renderStats.drawnAnts>richBudget&&ant.id!==options.selected&&ant.caste!=='queen'){c.fillStyle='#b45a32';c.fillRect(Math.round(x),Math.round(y),Math.max(1,2*z),Math.max(1,z));this.renderStats.simpleSprites++;continue;}
       const moving=(motion?.speed??0)>.06&&(ant.route.length||motion?.recovering),frame=moving?Math.floor(p.gait):GAIT_FRAMES;
       const scan=Math.floor(((p.scan/(Math.PI*2)+1)%1)*SCAN_FRAMES)%SCAN_FRAMES,wide=['searching','sampling','resting'].includes(motion?.mode),row=scan+(wide?SCAN_FRAMES:0);
       const width=(ant.caste==='queen'?18:9.5+ant.bodySize*4.5)*z,height=width*SPRITE_H/SPRITE_W;
-      c.save();c.translate(x,y);c.rotate(p.angle);if(p.hatchAt!=null&&clock-p.hatchAt<1.3){c.filter='brightness(1.45) saturate(.55)';c.fillStyle='#e8d6ad';c.fillRect(-8*z,3*z,2*z,z);c.fillRect(-5*z,4*z,2*z,z);}if(ant.task==='laying')c.scale(1+Math.sin(visualClock*7)*.045,1);if(z>=.95||ant.id===options.selected||ant.caste==='queen'){
+      const heading=Math.cos(p.angle);
+      const slope=contact&&Math.abs(heading)>.6?contact.slope+(heading<0?Math.PI:0):p.angle;
+      c.save();c.translate(x,y);c.rotate(p.angle+wrapAngle(slope-p.angle)*.65);if(p.hatchAt!=null&&clock-p.hatchAt<1.3){c.filter='brightness(1.45) saturate(.55)';c.fillStyle='#e8d6ad';c.fillRect(-8*z,3*z,2*z,z);c.fillRect(-5*z,4*z,2*z,z);}if(ant.task==='laying')c.scale(1+Math.sin(visualClock*7)*.045,1);if(z>=.95||ant.id===options.selected||ant.caste==='queen'){
         const parts=this.bodyParts[ant.caste],px=width/SPRITE_W,draw=(source,sx=0,sy=0,pivot=26)=>c.drawImage(source,sx,sy,SPRITE_W,SPRITE_H,-pivot*px,-17*px,width,height);
         draw(parts.legs,frame*SPRITE_W);draw(parts.thorax);c.save();c.translate(-6*px,0);c.rotate(p.waist??0);draw(parts.abdomen,0,0,20);c.restore();c.save();c.translate(4*px,0);c.rotate(p.neck??0);draw(parts.head,scan*SPRITE_W,wide?SPRITE_H:0,30);c.restore();
       }else c.drawImage(this.sprites[ant.caste],frame*SPRITE_W,row*SPRITE_H,SPRITE_W,SPRITE_H,-width*26/SPRITE_W,-height/2,width,height);
       if(ant.task==='laying'&&colony.time>ant.layUntil-2){c.fillStyle='#fff0cb';c.fillRect(-width*.55,-z,3*z,3*z);}
       if(carriedBrood.has(ant.id)||ant.carried){c.save();c.translate(width*4/SPRITE_W,0);c.rotate(z>=.95||ant.id===options.selected||ant.caste==='queen'?p.neck??0:0);
         if(carriedBrood.has(ant.id))paintBrood(c,carriedBrood.get(ant.id),width*.32,0,z,visualClock);
-        if(ant.carried&&ant.cargoKind==='food'&&ant.cargoOrigin==='grass')paintGrain(c,width*.34,-height*.2,u*.24,ant.id,ant.carried/2);
-        else if(ant.carried){c.fillStyle=ant.cargoKind==='soil'?'#c29a61':ant.cargoKind==='water'?'#93ccda':ant.cargoNutrition?.protein>.5?'#ba755b':'#ecc56b';for(let unit=0;unit<Math.ceil(ant.carried/2);unit++)c.fillRect(width*.28+unit*3*z,-height*.3,3*z,3*z);}c.restore();}c.restore();
+        if(ant.carried&&(ant.cargoKind==='food'||ant.cargoKind==='broodMeal'||ant.cargoKind==='queenMeal'))drawGrain(c,this.grainAtlas,width*.34,-height*.2,u*.24,ant.id,ant.carried/2);
+        else if(ant.carried){c.fillStyle=ant.cargoKind==='soil'?'#c29a61':'#93ccda';for(let unit=0;unit<Math.ceil(ant.carried/2);unit++)c.fillRect(width*.28+unit*3*z,-height*.3,3*z,3*z);}c.restore();}c.restore();
     }
     const broodIDs=new Set(colony.brood.map(b=>b.id));for(const id of this.broodPoses.keys())if(!broodIDs.has(id))this.broodPoses.delete(id);
     for(const id of this.positions.keys())if(!live.has(id))this.positions.delete(id);

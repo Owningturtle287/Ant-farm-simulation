@@ -2,13 +2,32 @@ import {Random} from './biology.mjs';
 const key=c=>c.join(','),same=(a,b)=>key(a)===key(b);
 export {curvedPassage as passage} from './geometry.mjs';
 import {curvedPassage as passage} from './geometry.mjs';
+function entrancePassage(w,anchor,elbow,mouth,rng){
+  const sheltered=[];
+  let previous=anchor;
+  for(const [x,y] of passage(anchor,elbow,rng)){
+    const point=[x,Math.max(y,w.baseSurface(x)+2)];
+    if(x!==previous[0]){
+      // Cross between columns at the deeper endpoint to preserve the roof.
+      const depth=Math.max(previous[1],point[1]);
+      for(let by=previous[1]+1;by<=depth;by++)sheltered.push([previous[0],by]);
+      for(let by=depth;by>point[1];by--)sheltered.push([x,by]);
+    }else{
+      for(let by=Math.min(point[1],previous[1])+1;by<Math.max(point[1],previous[1]);by++)sheltered.push([x,by]);
+    }
+    sheltered.push(point);previous=point;
+  }
+  // Only the mouth column breaks the exterior.
+  for(let y=previous[1]-1;y>=mouth[1];y--)sheltered.push([mouth[0],y]);
+  return sheltered;
+}
 export function founderNest(w){
   const rng=new Random(w.seed^0x192fa),side=rng.float()<.5?-1:1,mouthX=side*rng.int(8,13),depth=rng.int(2,4);
   w.rooms=[{kind:'queen',center:[0,11],rx:2,ry:1},{kind:'nursery',center:[-4,12],rx:2,ry:1},{kind:'storage',center:[4,10],rx:2,ry:1}];
   for(const room of w.rooms)w.carve(room.center,room.rx,room.ry);
   for(const room of w.rooms)for(const c of passage(w.nest,room.center,rng))w.excavated.add(key(c));
   const mouth=[mouthX,w.baseSurface(mouthX)-1],elbow=[mouthX,w.baseSurface(mouthX)+depth];
-  const route=[...passage(w.nest,elbow,rng),...passage(elbow,mouth,rng)];
+  const route=entrancePassage(w,w.nest,elbow,mouth,rng);
   for(const c of route)if(c[1]>=w.baseSurface(c[0]))w.excavated.add(key(c));
   w.entrances=[{mouth,state:'open',createdAt:0}];w.moundTunnels=new Set();w.soilRehandled=0;w.lastAccessPlan=0;w.lastMoundPlan=0;
 }
@@ -27,7 +46,7 @@ export function planPeripheralExit(w,rng,time){
   }
   candidates.sort((a,b)=>a.score-b.score);const best=candidates[0];if(!best)return false;
   const anchor=w.rooms.filter(r=>w.walkable(r.center)).sort((a,b)=>Math.abs(a.center[0]-best.mouth[0])-Math.abs(b.center[0]-best.mouth[0]))[0];
-  queuePassage(w,[...passage(anchor?.center??w.nest,best.elbow,rng),...passage(best.elbow,best.mouth,rng)]);
+  queuePassage(w,entrancePassage(w,anchor?.center??w.nest,best.elbow,best.mouth,rng));
   w.entrances.push({mouth:best.mouth,state:'planned',createdAt:time});w.lastAccessPlan=time;return true;
 }
 export function planMoundPassage(w,rng,time){

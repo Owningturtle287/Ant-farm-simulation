@@ -38,3 +38,14 @@ export function terrainMask(world,cx,cy,samples=CONTOUR_SAMPLES){
   for(let y=0;y<size;y++)for(let x=0;x<size;x++)result[y*size+x]=densityAt(ox+(x+.5)/samples,oy+(y+.5)/samples,solid)>=.5?1:0;
   return result;
 }
+
+// Interpolate the same terrain columns used by navigation.
+export function surfaceProfile(world,x){
+  const left=Math.floor(x),t=x-left,height=world.surface(left);
+  return height-.5+(world.surface(left+1)-height)*t*t*(3-2*t);
+}
+export function surfaceContact(world,x,y,clearance){
+  const column=Math.round(x),top=world.surface(column),ground=surfaceProfile(world,x);
+  if(y<ground-1.25||y>ground+.08||!world.solid([column,top]))return null;
+  return {y:ground-clearance,slope:Math.atan2(surfaceProfile(world,x+.18)-surfaceProfile(world,x-.18),.36)};
+}

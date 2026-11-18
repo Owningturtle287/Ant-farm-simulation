@@ -34,7 +34,7 @@ For device tests: use More → Show performance and Export readings. Record the 
 
 Movement uses `destination` for the walkable route endpoint, separately from a solid dig target. Do not route diggers to the solid tile they plan to remove. Cargo has an explicit `cargoKind`; food/water must never become excavated soil during replanning. Purposeful resting/grooming and busy intervals are not stalled routes. The movement auditor only resets active work after actual lack of positional progress.
 
-Resource stock must balance environmental inputs against remaining amounts, harvest, evaporation, decay and burial. Never refill a harvested insect entity: ecological arrivals create a new ID. Food cargo carries its nutrient composition so nectar cannot become protein during transfer.
+Resource stock must balance environmental inputs against remaining amounts, harvest, evaporation, decay and burial. Placed grain is finite. Grain cargo retains its nutrient composition through transfer and storage.
 
 The queen's position is independent of the central store. Attendants must visit the store and then reach her before feeding. Newly laid brood exists at her current position. `carriedBy` and each carrier's `carryingBrood` must agree; release brood on carrier death and avoid adult emergence during transit. Nursery candidate scores are cached for five seconds with terrain-revision invalidation and included in save state to preserve deterministic continuation.
 

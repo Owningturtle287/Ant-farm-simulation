@@ -1,7 +1,7 @@
 import {ITEM_UNIT,allocatePieces,consumePieces} from './item-space.mjs';
 // Resource quantities are conserved when taken. Renewals are explicit ecological inputs.
 export const RESOURCE_UNIT=ITEM_UNIT;
-export const NUTRITION=Object.freeze({grass:{energy:.85,protein:.15},nectar:{energy:1,protein:0},prey:{energy:.15,protein:.85},mixed:{energy:.5,protein:.5}});
+export const NUTRITION=Object.freeze({grain:{energy:.70,protein:.30},mixed:{energy:.5,protein:.5}});
 const row=()=>({created:0,harvested:0,evaporated:0,buried:0,decayed:0,drained:0,runoff:0});
 export function initLedger(w){w.resourceLedger={food:row(),water:row()};}
 export function restoreLedger(w,d){if(d.resourceLedger){w.resourceLedger=structuredClone(d.resourceLedger);return;}initLedger(w);for(const p of w.patches)w.resourceLedger[p.kind].created+=p.amount;}
@@ -20,4 +20,23 @@ export function resourceTiles(w,p){
   }else{
     for(let i=0;i<n;i++)tiles.push({x:p.cell[0]+(i%5-2)*.23,y:w.surface(p.cell[0])-.65-Math.floor(i/5)*.23,amount:Math.min(RESOURCE_UNIT,p.amount-i*RESOURCE_UNIT)});
   }return tiles;
+}
+
+// Index individual portions, since a wide puddle can extend well beyond its patch center.
+export function* resourcePiecesNear(w,kind,[x,y],reach){
+  if(w.pickupPatches!==w.patches||w.pickupPatchCount!==w.patches.length||w.pickupRevision!==w.resourceRevision){
+    w.pickupPatches=w.patches;w.pickupPatchCount=w.patches.length;w.pickupRevision=w.resourceRevision;
+    w.pickupBins={food:new Map(),water:new Map()};
+    let order=0;
+    for(const patch of w.patches)for(const piece of patch.pieces??[]){
+      const id=Math.floor(piece.pos[0])+','+Math.floor(piece.pos[1]),bins=w.pickupBins[patch.kind];
+      if(!bins.has(id))bins.set(id,[]);
+      bins.get(id).push({patch,piece,order:order++});
+    }
+  }
+  const bins=w.pickupBins[kind],maxX=Math.floor(x+reach),maxY=Math.floor(y+reach);
+  for(let by=Math.floor(y-reach);by<=maxY;by++)for(let bx=Math.floor(x-reach);bx<=maxX;bx++){
+    const bucket=bins.get(bx+','+by);
+    if(bucket)yield* bucket;
+  }
 }

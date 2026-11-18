@@ -1,4 +1,4 @@
-import {spaceForItem} from './traffic.mjs';
+
 // A shared third-cell lattice prevents ground items and brood beds from overlapping.
 import {densityAt} from './geometry.mjs';
 export const ITEM_UNIT=2,SUB=3;
@@ -44,16 +44,16 @@ export function allocatePieces(w,p,amount){
   // A partially consumed item can refill, but never exceeds its own finite unit.
   for(const item of p.pieces){const n=Math.min(amount-placed,ITEM_UNIT-item.amount);if(n>0){item.amount+=n;placed+=n;}if(placed>=amount-1e-9)return placed;}
   for(const pos of resourcePositions(w,p)){
-    if(placed>=amount-1e-9)break;if(w.itemSlots.has(slotKey(pos))||(p.kind==='food'&&p.origin!=='grass'&&!spaceForItem(w,pos,.10)))continue;
+    if(placed>=amount-1e-9)break;if(w.itemSlots.has(slotKey(pos)))continue;
     if(densityAt(...pos,(x,y)=>w.solid([x,y]))>=.49)continue;
-    const n=Math.min(ITEM_UNIT,amount-placed),item={id:p.nextPieceID++,pos,amount:n};p.pieces.push(item);if(w.traffic)w.traffic.itemDirty=true;reserveSlot(w,pos,owner(p));placed+=n;
+    const n=Math.min(ITEM_UNIT,amount-placed),item={id:p.nextPieceID++,pos,amount:n};p.pieces.push(item);w.resourceRevision=(w.resourceRevision??0)+1;reserveSlot(w,pos,owner(p));placed+=n;
   }return placed;
 }
 export function consumePieces(w,p,amount,preferred=null){
   if(!p.pieces)return;let remaining=amount;
   const ordered=preferred==null?p.pieces:[...p.pieces.filter(i=>i.id===preferred),...p.pieces.filter(i=>i.id!==preferred)];
   for(const item of ordered){const n=Math.min(remaining,item.amount);item.amount-=n;remaining-=n;if(item.amount<=1e-9)releaseSlot(w,item.pos,owner(p));if(remaining<=1e-9)break;}
-  const count=p.pieces.length;p.pieces=p.pieces.filter(i=>i.amount>1e-9);if(w.traffic&&p.pieces.length!==count)w.traffic.itemDirty=true;
+  const count=p.pieces.length;p.pieces=p.pieces.filter(i=>i.amount>1e-9);if(p.pieces.length!==count)w.resourceRevision=(w.resourceRevision??0)+1;
 }
 export function restorePieces(w){
   for(const p of w.patches){const amount=p.amount;p.pieces??=[];for(const item of p.pieces)if(item.amount>0&&(w.itemSlots.has(slotKey(item.pos))||!reserveSlot(w,item.pos,owner(p))))throw Error('Overlapping resource items in saved ground');if(!p.pieces.length&&amount>0){const placed=allocatePieces(w,p,amount);if(placed<amount-1e-7){p.amount=placed;if(w.resourceLedger)w.resourceLedger[p.kind].buried+=amount-placed;}}}
@@ -87,5 +87,5 @@ export function findBed(w,near,id=null){
 export function cachePositions(w,near){const cells=openNestCells(w);return [...cells].sort((a,b)=>Math.hypot(a[0]-near[0],a[1]-near[1])-Math.hypot(b[0]-near[0],b[1]-near[1])).flatMap(c=>{const out=[];for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++)out.push([c[0]+x/SUB,c[1]+y/SUB]);return out;});}
 export function findCacheSlot(w,near,avoid=null){
   const anchor=cellKey(near);if(w.cachePoolRevision!==w.revision||w.cachePoolAnchor!==anchor){w.cachePoolRevision=w.revision;w.cachePoolAnchor=anchor;w.cachePool=cachePositions(w,near);w.cacheCursor=0;}
-  for(let i=0;i<w.cachePool.length;i++){const p=w.cachePool[i];if((!avoid||Math.hypot(p[0]-avoid[0],p[1]-avoid[1])>=1.5)&&!w.itemSlots.has(slotKey(p))&&!hasNeighborSlot(w,p,isBed)&&w.walkable(p.map(Math.round))&&w.conditions(p.map(Math.round)).humidity<.88&&spaceForItem(w,p,.115,null,'cache')&&densityAt(...p,(x,y)=>w.solid([x,y]))<.42)return [...p];}return null;
+  for(let i=0;i<w.cachePool.length;i++){const p=w.cachePool[i];if((!avoid||Math.hypot(p[0]-avoid[0],p[1]-avoid[1])>=1.5)&&!w.itemSlots.has(slotKey(p))&&!hasNeighborSlot(w,p,isBed)&&w.walkable(p.map(Math.round))&&w.conditions(p.map(Math.round)).humidity<.88&&densityAt(...p,(x,y)=>w.solid([x,y]))<.42)return [...p];}return null;
 }

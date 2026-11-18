@@ -52,7 +52,7 @@ export function setReserve(c,kind,value){
     if(delta<0){let left=-delta;for(const a of c.ants){const n=Math.min(left,a[field]??0);a[field]-=n;left-=n;}for(const p of c.foodItems){const n=Math.min(left,p[kind]);p[kind]-=n;left-=n;}cleanCache(c);}else if(delta>0)addReserve(c,kind,delta,true);
   }updateSupplyTotals(c);if(c.supplyLedger)c.supplyLedger[kind].introduced+=c.nutrition[kind]-before;
 }
-export function cleanCache(c){const count=c.foodItems.length;c.foodItems=c.foodItems.filter(p=>{if(p.energy+p.protein>1e-9)return true;releaseSlot(c.world,p.pos,'f:'+p.id);return false;});if(c.world.traffic&&c.foodItems.length!==count)c.world.traffic.itemDirty=true;}
+export function cleanCache(c){c.foodItems=c.foodItems.filter(p=>{if(p.energy+p.protein>1e-9)return true;releaseSlot(c.world,p.pos,'f:'+p.id);return false;});}
 export function consumeSelf(c,a,dt){
   initCrop(a);const food=Math.min(a.socialFood,(1-a.energy)*.4,dt*.05),water=Math.min(a.socialWater,(1-a.hydration)*.15,dt*.018);
   const protein=a.socialFood<.001?Math.min(a.socialProtein,(1-a.energy)*.6,dt*.02):0;a.socialProtein-=protein;a.energy=clamp(a.energy+protein/.6);if(protein){c.nutrition.protein-=protein;if(c.supplyLedger)c.supplyLedger.protein.consumed+=protein;}
@@ -76,7 +76,7 @@ export function takeQueenMeal(c,donor,queen){
 export function takeCache(c,a,item){
   if(!item||dist(a.pos,item.pos)>1.4)return false;let total=item.energy+item.protein,moved=0,n=Math.min(total,Math.max(0,cropCapacity(a)-foodFill(a)));
   if(n>1e-9){const e=n*item.energy/total,p=n-e;item.energy-=e;item.protein-=p;a.socialFood+=e;a.socialProtein+=p;moved+=n;}
-  // Solid prey can reach larvae in the mandibles even when the nurse's crop is full.
+  // A nurse can bring a grain portion to larvae with a full crop.
   total=item.energy+item.protein;if(a.cachePurpose==='care'&&a.socialProtein<.05&&!a.carried&&!a.carryingBrood&&item.protein>.001&&total>1e-9){n=Math.min(ITEM_UNIT,total,cropCapacity(a));const e=n*item.energy/total,p=n-e;item.energy-=e;item.protein-=p;a.carried=n;a.cargoKind='broodMeal';a.cargoNutrition={energy:e/n,protein:p/n};a.cargoOrigin=item.origin;moved+=n;}
   cleanCache(c);return moved>0;
 }

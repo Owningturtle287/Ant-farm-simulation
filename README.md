@@ -16,11 +16,11 @@ The first online visit caches the game for offline reopening. Progress saves loc
 ## Playable features
 
 - Animated pixel ants on seeded, contoured grassland. Bare, asymmetrical mound pellets contrast with rooted dirt and soft earth. Trees and hard/stone layers are removed.
-- A single reproductive queen and continuously sized small, medium, and large red imported fire-ant workers. White eggs, segmented larvae, and ant-shaped pupae develop through local care, prey protein, and nest conditions. The queen moves within sheltered rooms, visibly lays eggs, and receives food from attendants; nurses physically carry eggs and relocate brood.
+- A single reproductive queen and continuously sized small, medium, and large red imported fire-ant workers. White eggs, segmented larvae, and ant-shaped pupae develop through local care, protein from grain, and nest conditions. The queen moves within sheltered rooms, visibly lays eggs, and receives food from attendants; nurses physically carry eggs and relocate brood.
 - Stimulus-driven task selection using nutritional need, local signals, age, size and experience. Large workers are not locked into guarding. Antennal recognition, deliberate queen provisioning, recruitment, fallible source memories, and short alarm responses.
 - **More → Fire ant behavior** explains the model; **More → Disturb the ground** demonstrates a local alarm. Trails shows food, water, brood, queen, home and alarm cues.
 - All ground is diggable. Transported soil retains its origin, and colony-specific deposition preferences and slopes shape uneven mounds. Workers propose and dig narrow peripheral mouths and passages through mound soil. Rehandled soil is conserved.
-- Discrete water, nectar and insect portions shrink as picked up. Empty carcasses never refill; later wildlife creates a new finite entity. Nutrition separates carbohydrate energy from protein.
+- Grain is the sole food source. Each kernel supplies energy and protein. Grain and water portions shrink as workers collect them.
 - Seed-bearing grass clumps wither when fully harvested, then sprout and mature again. Intermittent rain collects in terrain depressions; puddles refill, evaporate, and are harvested.
 - Tap ants for personal stats, job, experience, and behavior explanations.
 - Drag / pinch navigation, ant following, pause, and 1× / 2× / 4× / 8× / 16× / 32× / 64× / 128× time lapse.
@@ -84,3 +84,4 @@ v0.11 replaces sliding collision recovery with curved forward walking, deliberat
 
 
 v0.12 lets ants walk through loose grain on supported ground. Workers fill their crops from nearby portions and stored food, and attendants bring meals directly to the queen. Individual grain kernels stay visible through gathering, carrying, and storage. Pools have moving highlights and shrink as water is collected. Closer brood beds make better use of the nursery.
+\n\nv0.13 uses grain for natural and placed food, eases exterior slopes, keeps new approaches below ground until the mouth, and draws surface ants against the ground contour. Time lapse uses the same simulation ticks with cheaper route and collision checks.\n

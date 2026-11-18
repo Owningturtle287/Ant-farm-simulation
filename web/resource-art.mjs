@@ -1,4 +1,4 @@
-export function paintGrain(ctx,x,y,size,id,remaining=1){
+function paintGrain(ctx,x,y,size,id,remaining=1){
   const width=Math.max(.8,size)*(.65+.35*Math.sqrt(remaining)),height=Math.max(.65,width*.42);
   ctx.save();ctx.translate(x,y);ctx.rotate((((id*7)%13)-6)*.13);
   ctx.fillStyle='#9c6b33';ctx.beginPath();
@@ -10,6 +10,19 @@ export function paintGrain(ctx,x,y,size,id,remaining=1){
   ctx.strokeStyle='#fff0ac';ctx.lineWidth=Math.max(.35,height*.24);ctx.beginPath();
   ctx.moveTo(-width*.23,-height*.25);ctx.quadraticCurveTo(width*.02,-height*.41,width*.24,-height*.23);
   ctx.stroke();ctx.restore();
+}
+
+const GRAIN_ANGLES=13,GRAIN_TILE=32,GRAIN_WIDTH=20;
+export function buildGrainAtlas(){
+  const canvas=document.createElement('canvas');
+  canvas.width=GRAIN_TILE*GRAIN_ANGLES;canvas.height=GRAIN_TILE;
+  const context=canvas.getContext('2d');
+  for(let id=0;id<GRAIN_ANGLES;id++)paintGrain(context,(id+.5)*GRAIN_TILE,GRAIN_TILE/2,GRAIN_WIDTH,id);
+  return canvas;
+}
+export function drawGrain(ctx,atlas,x,y,size,id,remaining=1){
+  const span=Math.max(.8,size)*(.65+.35*Math.sqrt(remaining))*GRAIN_TILE/GRAIN_WIDTH;
+  ctx.drawImage(atlas,(id%GRAIN_ANGLES)*GRAIN_TILE,0,GRAIN_TILE,GRAIN_TILE,x-span/2,y-span/2,span,span);
 }
 
 export function paintWater(ctx,x,y,width,depth,phase){

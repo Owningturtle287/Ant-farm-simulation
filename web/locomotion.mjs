@@ -32,10 +32,11 @@ export function senseAntennae(a,w,time,occupancy){
   if(a.task==='investigating')m.turn=clamp((right.alarm-left.alarm)/(.12+alarm*2),-1,1)*.5;
   m.touchTurn=(left.touch-right.touch)*.25;m.separation=0;m.yielding=1;
   const others=w.traffic?nearbyAdults(w,a):[...new Set([...(occupancy?.get(a.cell.join(','))??[]),...(occupancy?.get(tips.left.map(n=>Math.round(n)||0).join(','))??[]),...(occupancy?.get(tips.right.map(n=>Math.round(n)||0).join(','))??[])])].filter(b=>b.id!==a.id);
-  for(const other of others.slice(0,8)){const dx=other.pos[0]-a.pos[0],dy=other.pos[1]-a.pos[1],d=Math.hypot(dx,dy),forward=Math.cos(m.angle)*dx+Math.sin(m.angle)*dy;
+  const co=Math.cos(m.angle),si=Math.sin(m.angle);
+  for(const other of others.slice(0,8)){const dx=other.pos[0]-a.pos[0],dy=other.pos[1]-a.pos[1],d=Math.hypot(dx,dy),forward=co*dx+si*dy;
     for(const side of ['left','right'])if(bodyDiscs(other).some(o=>Math.hypot(o.x-tips[side][0],o.y-tips[side][1])<o.radius+.06))({left,right}[side]).touch=1;
     if(d<.9){m.examineAngle=Math.atan2(dy,dx);m.examineUntil=time+.55;}
-    if(d>.1&&d<1.05&&forward>.05){const side=Math.cos(m.angle)*dy-Math.sin(m.angle)*dx;m.separation+=Math.abs(side)<.08?.18:-Math.sign(side)*.14;m.yielding=Math.min(m.yielding,.72+d*.2);if(Math.cos((other.motion?.angle??0)-m.angle)<-.25&&other.route?.length){m.passUntil=time+1;m.passAngle=Math.atan2(dy,dx);}}
+    if(d>.1&&d<1.05&&forward>.05){const side=co*dy-si*dx;m.separation+=Math.abs(side)<.08?.18:-Math.sign(side)*.14;m.yielding=Math.min(m.yielding,.72+d*.2);if(Math.cos((other.motion?.angle??0)-m.angle)<-.25&&other.route?.length){m.passUntil=time+1;m.passAngle=Math.atan2(dy,dx);}}
   }m.separation=clamp(m.separation,-.28,.28);
 
   a.brain.antennae={left,right,tips,kind,strength:sum*.5,contrast:(r-l)/(.12+sum),sampledAt:time};
@@ -47,7 +48,7 @@ export function senseAntennae(a,w,time,occupancy){
   }else m.mode=a.carried||a.carryingBrood?'carrying':a.task==='investigating'?'alert':a.route.length?'travelling':'resting';
 }
 export function updateMotion(a,w,time,dt,occupancy){
-  const m=a.motion;w.motionRevisions??=new Map();const revision=w.revision+':'+(w.traffic?.itemHash??0);if(w.motionRevisions.get(a.id)!==revision){w.motionRevisions.set(a.id,revision);if(!terrainFree(w,a.pos))m.recovering=true;}m.phase=wrapAngle(m.phase+dt*(m.mode==='sampling'?11:6.5)+(a.brain.arousal??0)*dt*2);
+  const m=a.motion;w.motionRevisions??=new Map();const revision=w.revision;if(w.motionRevisions.get(a.id)!==revision){w.motionRevisions.set(a.id,revision);if(!terrainFree(w,a.pos))m.recovering=true;}m.phase=wrapAngle(m.phase+dt*(m.mode==='sampling'?11:6.5)+(a.brain.arousal??0)*dt*2);
   if(time>=m.nextVariation){m.wander=m.wander*.6+(random(m)-.5)*.32;m.pace=.87+random(m)*.26;m.nextVariation=time+.45+random(m)*.7;}
   senseAntennae(a,w,time,occupancy);
   updateArticulation(a,w,time,dt);
@@ -122,7 +123,7 @@ export function moveAnt(a,w,time,dt,traffic=0){
   if(alignment<.45||waiting||sampling)speed=0;
   const step=Math.min(length,speed*dt),delta=wrapAngle(angle-previousAngle),origin=[...a.pos];
   const arc=(t,travel=step,turn=delta)=>Math.abs(turn)<1e-8?[origin[0]+Math.cos(previousAngle)*travel*t,origin[1]+Math.sin(previousAngle)*travel*t]:[origin[0]+travel/turn*(Math.sin(previousAngle+turn*t)-Math.sin(previousAngle)),origin[1]+travel/turn*(Math.cos(previousAngle)-Math.cos(previousAngle+turn*t))];
-  const free=(t,travel=step,turn=delta)=>{const count=Math.max(1,Math.ceil(Math.abs(turn*t)/.12),Math.ceil(travel*t/.10));let p=origin,prior=previousAngle;for(let i=1;i<=count;i++){const fraction=t*i/count,q=arc(fraction,travel,turn),heading=previousAngle+turn*fraction;if(!clearSegment(w,p,q)||!sweptFree(w,a,p,q,heading,prior))return false;p=q;prior=heading;}return true;};
+  const free=(t,travel=step,turn=delta)=>{const count=Math.max(1,Math.ceil(Math.abs(turn*t)/.12),Math.ceil(travel*t/.10));let p=origin,prior=previousAngle;for(let i=1;i<=count;i++){const fraction=t*i/count,q=arc(fraction,travel,turn),heading=previousAngle+turn*fraction;if(!sweptFree(w,a,p,q,heading,prior))return false;p=q;prior=heading;}return true;};
   let fraction=1,travelStep=step,turnStep=delta;
   if(!free(1)){let low=0,high=1;for(let i=0;i<7;i++){const t=(low+high)/2;if(free(t))low=t;else high=t;}fraction=low;
     if(fraction<.02){if(free(1,0,delta)){fraction=1;travelStep=0;}else if(step>0&&free(1,step,0)){fraction=1;turnStep=0;}}

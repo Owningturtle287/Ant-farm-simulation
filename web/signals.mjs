@@ -52,6 +52,6 @@ export function resourceOdor(w,[x,y]){
     if(p.amount<=.001)continue;const distance=Math.hypot(x-p.cell[0],y-p.cell[1]);if(distance>3.2)continue;
     // Food odor and a local moisture cue are separate from deposited trail pheromone.
     const value=Math.min(1,p.amount/6)*(1-distance/3.2)**2;
-    if(p.kind==='water')water=Math.max(water,value);else food=Math.max(food,value*(p.origin==='prey'?1:p.origin==='nectar'?.8:.25));
+    if(p.kind==='water')water=Math.max(water,value);else food=Math.max(food,value*.55);
   }return {food,water};
 }
