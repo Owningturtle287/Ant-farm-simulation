@@ -14,7 +14,7 @@ import {broodStage} from '../web/biology.mjs';
 import {advanceSimulation} from '../web/clock.mjs';
 import {cropCapacity as socialCapacity,waterCapacity,foodFill,consumeSelf,updateSupplyTotals,supplyBalance,accountIntake,storeCargo,takeCache,bedPosition,bedRelease,bedOccupy,initializeSupplies} from '../web/provisions.mjs';
 import {tickGroundwater,tableLevel} from '../web/hydrology.mjs';
-import {freeCell,slotKey,findBed,holdCell,releaseCell,openNestCells,initItemSpace} from '../web/item-space.mjs';
+import {freeCell,slotKey,findBed,holdCell,releaseCell,openNestCells,broodBeds,initItemSpace} from '../web/item-space.mjs';
 import {SaveStore,SAVE_KEY,decodeSave} from '../web/persistence.mjs';
 function primeCrop(c,a,food=0,protein=0,water=0){for(const [field,kind,n] of [['socialFood','energy',food],['socialProtein','protein',protein],['socialWater','water',water]]){c.supplyLedger[kind].introduced+=n-(a[field]??0);a[field]=n;}updateSupplyTotals(c);}
 function clearBrood(c){for(const b of c.brood)bedRelease(c,b);c.brood=[];}
@@ -167,12 +167,12 @@ test('rain gathers in depressions, fills puddles, then stops and water evaporate
   const p=pools[0];w.weather.until=21;tickHabitat(w,22);assert.equal(w.weather.raining,false);const water=p.amount;tickHabitat(w,42);assert.ok(p.amount<water);
 });
 test('queen walks under shelter, lays beside her body, and workers carry single reserved eggs to nursery',()=>{
-  const c=new Colony(287),queen=c.ants[0];clearBrood(c);c.food=80;c.water=60;c.protein=30;c.lastEgg=-1000;primeCrop(c,queen,1,.4,.5);c.updateDemand();
+  const c=new Colony(287),queen=c.ants[0];clearBrood(c);c.food=12;c.water=8;c.protein=5;c.lastEgg=-1000;primeCrop(c,queen,1,.4,.5);c.updateDemand();
   c.updateQueen(queen);assert.equal(queen.task,'laying');const at=[...queen.cell];c.time=queen.layUntil;c.updateQueen(queen);assert.equal(c.brood.length,1);const b=c.brood[0];assert.notDeepEqual(b.cell,at);assert.ok(distance(b.cell,at)<=1.6);assert.equal(broodStage(b),'egg');assert.equal(b.needsTransport,true);
   const nurse=c.ants[1],other=c.ants[2];const contact=[...c.world.excavated].map(k=>k.split(',').map(Number)).find(p=>distance(p,b.cell)<=1.4&&canOccupy(c.world,nurse,p));assert.ok(contact);Object.assign(nurse,{cell:[...contact],pos:[...contact]});c.sense(nurse);assert.equal(c.assignBroodTransport(nurse),true);assert.equal(c.assignBroodTransport(other),false,'A second nurse must not reserve the same egg.');
   let carried=false;for(let i=0;i<2000&&c.broodMoved===0;i++){c.step();if(b.carriedBy!=null){carried=true;const carrier=c.ants.find(a=>a.id===b.carriedBy);assert.deepEqual(b.pos,carrier.pos);}}
   assert.equal(carried,true);assert.equal(c.broodMoved,1);assert.equal(b.carriedBy,null);assert.equal(b.needsTransport,false);assert.notDeepEqual(b.cell,at);
-  c.ants=[queen];for(const p of openNestCells(c.world)){if(distance(p,queen.cell)>.6&&distance(p,queen.cell)<=1.6&&freeCell(c.world,p)){const baby={id:c.nextID++,cell:p,age:0,nutrition:1,vitality:1,lastCare:c.time,carriedBy:null};if(bedOccupy(c,baby,p))c.brood.push(baby);}}
+  c.ants=[queen];for(const p of broodBeds(c.world)){if(distance(p,queen.cell)<=1.6&&freeCell(c.world,p)){const baby={id:c.nextID++,cell:p,age:0,nutrition:1,vitality:1,lastCare:c.time,carriedBy:null};if(bedOccupy(c,baby,p))c.brood.push(baby);}}
   primeCrop(c,queen,1,.4,.5);queen.task='queenRest';queen.route=[];queen.queenCheckAt=0;beginTraffic(c);c.updateQueen(queen);assert.equal(queen.task,'queenMoving','A crowded laying area must prompt a local move.');const positions=new Set();for(let i=0;i<300;i++){c.step();positions.add(key(queen.cell));assert.equal(c.world.onSurface(queen.cell),false);}assert.ok(positions.size>1);
 });
 test('brood retains three distinct stages and a carrier death releases it without duplication',()=>{

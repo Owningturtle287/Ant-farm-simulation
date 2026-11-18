@@ -1,6 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {createStaticServer} from '../../scripts/serve-web.mjs';
 import {readFileSync} from 'node:fs';
+import {Colony,distance} from '../../web/sim.mjs';
 async function zoomCamera(page,browserName,delta){
   if(browserName!=='webkit'){await page.mouse.wheel(0,delta);return;}
   // Mobile WebKit's driver has no wheel API. Exercise the app's two-pointer pinch path.
@@ -54,6 +55,16 @@ test('reproduction settings persist and small new colonies respect the selected 
   await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Start a new colony',exact:true}).click();await page.getByRole('button',{name:'Start new colony',exact:true}).click();await expect(page.locator('#ants-count')).toHaveText('7');
 });
 test('128x remains interactive, records actual performance, and builds a distinguishable mound',async({page},info)=>{
+  // Exercise live deposition after the worker has excavated and carried a real pellet.
+  const colony=new Colony(287);
+  let ready=false;
+  for(let i=0;i<1000&&!ready;i++){
+    colony.step();
+    ready=colony.ants.some(a=>a.cargoKind==='soil'&&a.depositTarget&&!a.route.length&&colony.time>=a.busyUntil&&distance(a.pos,a.depositTarget)>=.8&&distance(a.pos,a.depositTarget)<=1.45);
+  }
+  expect(ready).toBe(true);expect(colony.world.soilDeposited).toBe(0);
+  const raw=JSON.stringify({version:4,colony});
+  await page.addInitScript(value=>localStorage.setItem('little-colony.web.v1',value),raw);await page.reload();
   for(const speed of [1,2,4,8,16,32,64])await page.getByRole('button',{name:'Simulation speed: '+speed+' times',exact:true}).click();
   await expect(page.getByRole('button',{name:'Simulation speed: 128 times',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Open menu'}).click();await page.getByRole('button',{name:'Show performance',exact:true}).click();
